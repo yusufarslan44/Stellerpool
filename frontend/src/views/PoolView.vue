@@ -12,8 +12,8 @@ import { useNow } from '@/composables/useNow'
 import { errorMessage, isUserRejection } from '@/lib/errors'
 import { formatDuration, formatStroops, shortAddress } from '@/lib/format'
 import { sha256 } from '@/lib/hash'
-import { explorerContract, explorerTx, poolAsset, poolContractId } from '@/lib/stellar'
-import { getTokenBalance } from '@/services/account'
+import { explorerContract, explorerTx, poolAsset, poolContractId, poolTokenContractId } from '@/lib/stellar'
+import { getTokenBalance, getTokenSymbol } from '@/services/account'
 import {
   abortPool,
   approvePurchase,
@@ -41,7 +41,18 @@ import type { MemberStatus, PoolInfo, RoundInfo, TxResult } from '@/types/pool'
 const route = useRoute()
 const wallet = useWalletStore()
 const now = useNow()
-const token = poolAsset.getCode()
+/** Havuzun kendi varlığının kodu. Havuzlar farklı varlıklarla kurulabildiğinden zincirden okunur. */
+const token = ref(poolAsset.getCode())
+/** Havuz, arayüzün varsayılan varlığıyla (USDC) mı kurulmuş? Anchor yüklemesi yalnızca o durumda anlamlı. */
+const usesPoolAsset = computed(() => !pool.value || pool.value.token === poolTokenContractId)
+
+async function resolveToken(tokenId: string) {
+  if (tokenId === poolTokenContractId) {
+    token.value = poolAsset.getCode()
+    return
+  }
+  token.value = await getTokenSymbol(tokenId).catch(() => shortAddress(tokenId))
+}
 
 const poolId = computed(() => Number.parseInt(String(route.params.id), 10))
 
@@ -72,6 +83,7 @@ async function load(silent = false) {
   try {
     const p = await getPool(poolId.value)
     pool.value = p
+    await resolveToken(p.token)
 
     if (p.status === 'Filling') {
       // Başlamadan önce sıra = katılım sırası; kurucu değiştirebilir.
@@ -88,7 +100,7 @@ async function load(silent = false) {
 
     const [statuses, balance] = await Promise.all([
       Promise.all(p.members.map((m) => getMemberStatus(p.id, m))),
-      getTokenBalance(poolContractId).catch(() => null),
+      getTokenBalance(poolContractId, p.token).catch(() => null),
     ])
     members.value = statuses
     contractBalance.value = balance
@@ -100,9 +112,11 @@ async function load(silent = false) {
 }
 
 async function loadMyBalance() {
-  myBalance.value = wallet.address ? await getTokenBalance(wallet.address).catch(() => null) : null
+  myBalance.value = wallet.address
+    ? await getTokenBalance(wallet.address, pool.value?.token).catch(() => null)
+    : null
 }
-watch(() => wallet.address, () => void loadMyBalance(), { immediate: true })
+watch(() => [wallet.address, pool.value?.token], () => void loadMyBalance(), { immediate: true })
 
 let poll: ReturnType<typeof setInterval> | undefined
 onMounted(() => {
@@ -397,7 +411,7 @@ const roundSteps = computed<GuideStep[]>(() => {
       detail: `${approvalsCount.value} / ${p.approvalThreshold} onay`,
       done: settled || approvalsOk.value,
     },
-    { key: 'pay', title: 'Tutar satıcıya gider', who: 'Herkes çağırabilir', detail: `${formatStroops(r.pot)} ${token}`, done: settled },
+    { key: 'pay', title: 'Tutar satıcıya gider', who: 'Herkes çağırabilir', detail: `${formatStroops(r.pot)} ${token.value}`, done: settled },
   ]
 })
 
@@ -443,7 +457,7 @@ const banner = computed<Banner | null>(() => {
       title: 'Havuz iptal edildi',
       text:
         isMember.value && myRefundable.value > 0n
-          ? `İade hakkın var: ${formatStroops(myRefundable.value)} ${token}. Aşağıdan iadeni alabilirsin.`
+          ? `İade hakkın var: ${formatStroops(myRefundable.value)} ${token.value}. Aşağıdan iadeni alabilirsin.`
           : 'Yalnızca ödenmemiş turdaki kendi katkıları geri alınabilir. Önceki turların ödemesi geri alınamaz.',
     }
   }
@@ -810,7 +824,7 @@ const countdownLabel = computed(() =>
 
                     <!-- Anchor ile bakiye yükleme: katkıdan önceki gerçek fiat-kapısı adımı -->
                     <details
-                      v-if="isMember && !myFunded && (round.phase === 'Collecting' || round.phase === 'Grace')"
+                      v-if="usesPoolAsset && isMember && !myFunded && (round.phase === 'Collecting' || round.phase === 'Grace')"
                       class="group rounded-2xl border border-stone-200 bg-white p-4"
                       :open="lowBalance"
                     >

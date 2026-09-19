@@ -44,13 +44,14 @@ export async function loadAccount(address: string): Promise<AccountInfo> {
 }
 
 /**
- * Bir adresin havuz asset'i bakiyesini SAC (Stellar Asset Contract) üzerinden okurken
- * hem G-hesaplarını hem de kontrat adreslerini destekler. Kontratın toplam bakiyesini
- * göstermek için kullanılır. Stroop cinsinden bigint döner.
+ * Bir adresin bir token'daki bakiyesini SAC (Stellar Asset Contract) üzerinden okur; hem G-hesaplarını
+ * hem de kontrat adreslerini destekler. `tokenId` verilmezse arayüzün varsayılan havuz varlığı
+ * kullanılır; bir havuzun bakiyesi için o havuzun kendi `token` adresi verilmelidir (havuzlar farklı
+ * varlıklarla kurulabilir). Stroop cinsinden bigint döner.
  */
-export async function getTokenBalance(holder: string): Promise<bigint> {
+export async function getTokenBalance(holder: string, tokenId: string = poolTokenContractId): Promise<bigint> {
   const client = await contract.Client.from({
-    contractId: poolTokenContractId,
+    contractId: tokenId,
     rpcUrl: config.rpcUrl,
     networkPassphrase: config.passphrase,
   })
@@ -88,4 +89,23 @@ export async function addTrustline(address: string, sign: Signer): Promise<strin
   const signed = TransactionBuilder.fromXDR(signedTxXdr, config.passphrase)
   const result = await horizonServer.submitTransaction(signed)
   return result.hash
+}
+
+const symbolCache = new Map<string, string>()
+
+/** Bir SAC token'ının sembolünü (varlık kodu) zincirden okur; sonuç önbelleğe alınır. */
+export async function getTokenSymbol(tokenId: string): Promise<string> {
+  const cached = symbolCache.get(tokenId)
+  if (cached) return cached
+  const client = await contract.Client.from({
+    contractId: tokenId,
+    rpcUrl: config.rpcUrl,
+    networkPassphrase: config.passphrase,
+  })
+  const tx = await (
+    client as unknown as { symbol: () => Promise<contract.AssembledTransaction<string>> }
+  ).symbol()
+  const symbol = String(tx.result)
+  symbolCache.set(tokenId, symbol)
+  return symbol
 }
