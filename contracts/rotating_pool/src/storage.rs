@@ -2,9 +2,9 @@
 // never become the source of truth for an individual pool.
 #![allow(dead_code)]
 
-use soroban_sdk::{contracttype, Address, Env, Vec};
+use soroban_sdk::{contracttype, Address, Env};
 
-use crate::types::{MemberState, Pool, PurchaseState, RoundState, VerifierPolicy};
+use crate::types::{MemberState, Pool, RoundState};
 
 pub const INITIAL_POOL_ID: u64 = 1;
 pub const INSTANCE_TTL_THRESHOLD: u32 = 30 * 17_280;
@@ -17,21 +17,17 @@ pub const PERSISTENT_TTL_EXTEND_TO: u32 = 120 * 17_280;
 pub enum DataKey {
     NextPoolId,
     Pool(u64),
-    PoolMembers(u64),
     Member(u64, Address),
-    RecipientOrder(u64),
-    VerifierPolicy(u64),
     Round(u64, u32),
     Deposit(u64, u32, Address),
-    RoundPot(u64, u32),
-    GuaranteeBalance(u64),
+    AdvanceCovered(u64, u32, Address),
     MemberContributionTotal(u64, Address),
     PoolAssignedBalance(u64),
-    RoundTopUp(u64, u32),
     RefundLiability(u64, Address),
     TotalRefundLiability(u64),
-    Purchase(u64, u32),
-    VerifierApproval(u64, u32, Address),
+    SponsorAdvance(u64, Address),
+    TermsApproval(u64, u32, Address),
+    PurchaseApproval(u64, u32, u32, Address),
     RefundClaimed(u64, Address),
     SponsorRemainderClaimed(u64),
 }
@@ -75,25 +71,6 @@ pub(crate) fn write_pool(env: &Env, pool: &Pool) {
     extend_persistent_ttl(env, &key);
 }
 
-pub(crate) fn read_members(env: &Env, pool_id: u64) -> Vec<Address> {
-    let key = DataKey::PoolMembers(pool_id);
-    let value = env
-        .storage()
-        .persistent()
-        .get(&key)
-        .unwrap_or_else(|| Vec::new(env));
-    if env.storage().persistent().has(&key) {
-        extend_persistent_ttl(env, &key);
-    }
-    value
-}
-
-pub(crate) fn write_members(env: &Env, pool_id: u64, members: &Vec<Address>) {
-    let key = DataKey::PoolMembers(pool_id);
-    env.storage().persistent().set(&key, members);
-    extend_persistent_ttl(env, &key);
-}
-
 pub(crate) fn read_member(env: &Env, pool_id: u64, member: &Address) -> Option<MemberState> {
     let key = DataKey::Member(pool_id, member.clone());
     let value = env.storage().persistent().get(&key);
@@ -109,42 +86,6 @@ pub(crate) fn write_member(env: &Env, pool_id: u64, member: &Address, state: &Me
     extend_persistent_ttl(env, &key);
 }
 
-pub(crate) fn remove_member(env: &Env, pool_id: u64, member: &Address) {
-    env.storage()
-        .persistent()
-        .remove(&DataKey::Member(pool_id, member.clone()));
-}
-
-pub(crate) fn read_recipient_order(env: &Env, pool_id: u64) -> Option<Vec<Address>> {
-    let key = DataKey::RecipientOrder(pool_id);
-    let value = env.storage().persistent().get(&key);
-    if value.is_some() {
-        extend_persistent_ttl(env, &key);
-    }
-    value
-}
-
-pub(crate) fn write_recipient_order(env: &Env, pool_id: u64, order: &Vec<Address>) {
-    let key = DataKey::RecipientOrder(pool_id);
-    env.storage().persistent().set(&key, order);
-    extend_persistent_ttl(env, &key);
-}
-
-pub(crate) fn read_verifier_policy(env: &Env, pool_id: u64) -> Option<VerifierPolicy> {
-    let key = DataKey::VerifierPolicy(pool_id);
-    let value = env.storage().persistent().get(&key);
-    if value.is_some() {
-        extend_persistent_ttl(env, &key);
-    }
-    value
-}
-
-pub(crate) fn write_verifier_policy(env: &Env, pool_id: u64, policy: &VerifierPolicy) {
-    let key = DataKey::VerifierPolicy(pool_id);
-    env.storage().persistent().set(&key, policy);
-    extend_persistent_ttl(env, &key);
-}
-
 pub(crate) fn read_round(env: &Env, pool_id: u64, round: u32) -> Option<RoundState> {
     let key = DataKey::Round(pool_id, round);
     let value = env.storage().persistent().get(&key);
@@ -155,7 +96,7 @@ pub(crate) fn read_round(env: &Env, pool_id: u64, round: u32) -> Option<RoundSta
 }
 
 pub(crate) fn write_round(env: &Env, pool_id: u64, state: &RoundState) {
-    let key = DataKey::Round(pool_id, state.index);
+    let key = DataKey::Round(pool_id, state.round);
     env.storage().persistent().set(&key, state);
     extend_persistent_ttl(env, &key);
 }
@@ -175,48 +116,18 @@ pub(crate) fn write_deposit(env: &Env, pool_id: u64, round: u32, member: &Addres
     extend_persistent_ttl(env, &key);
 }
 
-pub(crate) fn read_round_pot(env: &Env, pool_id: u64, round: u32) -> i128 {
-    let key = DataKey::RoundPot(pool_id, round);
-    let value = env.storage().persistent().get(&key).unwrap_or(0);
-    if env.storage().persistent().has(&key) {
+pub(crate) fn has_advance_covered(env: &Env, pool_id: u64, round: u32, member: &Address) -> bool {
+    let key = DataKey::AdvanceCovered(pool_id, round, member.clone());
+    let covered = env.storage().persistent().get(&key).unwrap_or(false);
+    if covered {
         extend_persistent_ttl(env, &key);
     }
-    value
+    covered
 }
 
-pub(crate) fn write_round_pot(env: &Env, pool_id: u64, round: u32, amount: i128) {
-    let key = DataKey::RoundPot(pool_id, round);
-    env.storage().persistent().set(&key, &amount);
-    extend_persistent_ttl(env, &key);
-}
-
-pub(crate) fn read_round_top_up(env: &Env, pool_id: u64, round: u32) -> i128 {
-    let key = DataKey::RoundTopUp(pool_id, round);
-    let value = env.storage().persistent().get(&key).unwrap_or(0);
-    if env.storage().persistent().has(&key) {
-        extend_persistent_ttl(env, &key);
-    }
-    value
-}
-
-pub(crate) fn write_round_top_up(env: &Env, pool_id: u64, round: u32, amount: i128) {
-    let key = DataKey::RoundTopUp(pool_id, round);
-    env.storage().persistent().set(&key, &amount);
-    extend_persistent_ttl(env, &key);
-}
-
-pub(crate) fn read_guarantee_balance(env: &Env, pool_id: u64) -> i128 {
-    let key = DataKey::GuaranteeBalance(pool_id);
-    let value = env.storage().persistent().get(&key).unwrap_or(0);
-    if env.storage().persistent().has(&key) {
-        extend_persistent_ttl(env, &key);
-    }
-    value
-}
-
-pub(crate) fn write_guarantee_balance(env: &Env, pool_id: u64, amount: i128) {
-    let key = DataKey::GuaranteeBalance(pool_id);
-    env.storage().persistent().set(&key, &amount);
+pub(crate) fn write_advance_covered(env: &Env, pool_id: u64, round: u32, member: &Address) {
+    let key = DataKey::AdvanceCovered(pool_id, round, member.clone());
+    env.storage().persistent().set(&key, &true);
     extend_persistent_ttl(env, &key);
 }
 
@@ -285,28 +196,28 @@ pub(crate) fn write_total_refund_liability(env: &Env, pool_id: u64, amount: i128
     extend_persistent_ttl(env, &key);
 }
 
-pub(crate) fn read_purchase(env: &Env, pool_id: u64, round: u32) -> Option<PurchaseState> {
-    let key = DataKey::Purchase(pool_id, round);
-    let value = env.storage().persistent().get(&key);
-    if value.is_some() {
+pub(crate) fn read_sponsor_advance(env: &Env, pool_id: u64, member: &Address) -> i128 {
+    let key = DataKey::SponsorAdvance(pool_id, member.clone());
+    let value = env.storage().persistent().get(&key).unwrap_or(0);
+    if env.storage().persistent().has(&key) {
         extend_persistent_ttl(env, &key);
     }
     value
 }
 
-pub(crate) fn write_purchase(env: &Env, pool_id: u64, round: u32, purchase: &PurchaseState) {
-    let key = DataKey::Purchase(pool_id, round);
-    env.storage().persistent().set(&key, purchase);
+pub(crate) fn write_sponsor_advance(env: &Env, pool_id: u64, member: &Address, amount: i128) {
+    let key = DataKey::SponsorAdvance(pool_id, member.clone());
+    env.storage().persistent().set(&key, &amount);
     extend_persistent_ttl(env, &key);
 }
 
-pub(crate) fn has_verifier_approval(
+pub(crate) fn has_terms_approval(
     env: &Env,
     pool_id: u64,
-    round: u32,
-    verifier: &Address,
+    version: u32,
+    approver: &Address,
 ) -> bool {
-    let key = DataKey::VerifierApproval(pool_id, round, verifier.clone());
+    let key = DataKey::TermsApproval(pool_id, version, approver.clone());
     let approved = env.storage().persistent().get(&key).unwrap_or(false);
     if approved {
         extend_persistent_ttl(env, &key);
@@ -314,8 +225,35 @@ pub(crate) fn has_verifier_approval(
     approved
 }
 
-pub(crate) fn write_verifier_approval(env: &Env, pool_id: u64, round: u32, verifier: &Address) {
-    let key = DataKey::VerifierApproval(pool_id, round, verifier.clone());
+pub(crate) fn write_terms_approval(env: &Env, pool_id: u64, version: u32, approver: &Address) {
+    let key = DataKey::TermsApproval(pool_id, version, approver.clone());
+    env.storage().persistent().set(&key, &true);
+    extend_persistent_ttl(env, &key);
+}
+
+pub(crate) fn has_purchase_approval(
+    env: &Env,
+    pool_id: u64,
+    round: u32,
+    version: u32,
+    verifier: &Address,
+) -> bool {
+    let key = DataKey::PurchaseApproval(pool_id, round, version, verifier.clone());
+    let approved = env.storage().persistent().get(&key).unwrap_or(false);
+    if approved {
+        extend_persistent_ttl(env, &key);
+    }
+    approved
+}
+
+pub(crate) fn write_purchase_approval(
+    env: &Env,
+    pool_id: u64,
+    round: u32,
+    version: u32,
+    verifier: &Address,
+) {
+    let key = DataKey::PurchaseApproval(pool_id, round, version, verifier.clone());
     env.storage().persistent().set(&key, &true);
     extend_persistent_ttl(env, &key);
 }

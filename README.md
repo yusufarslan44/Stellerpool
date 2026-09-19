@@ -58,12 +58,10 @@ Stellar Testnet, Stellar SDK, RPC ve uygun bir Stellar varlığı kullanılacak.
 
 ## Teslim durumu
 
-- [x] Sponsor güvencesi, tahsisat ve iade değişmezleri test edilmiş Soroban kontratı (29 birim testi, [docs/IMPLEMENTATION_LOG.md](docs/IMPLEMENTATION_LOG.md), Faz 1-7)
-- [ ] Kuruluş ve alım zaman aşımı, koşul onayları, sponsor avansı ve borçlu alıcı engeli testleri — **kontrat henüz bu güncellenmiş plana göre revize edilmedi**, bkz. not aşağıda
-- [x] Testnet contract ID ve yeniden üretilebilir kurulum ([scripts/deploy_testnet.sh](scripts/deploy_testnet.sh); canlı kontrat `CACZQBHHQ3TY33AJIC52MHMCPEKUYO4KQFURHQGPJJ3LNDJZAT6LG4II`)
-- [ ] Kontrat durumlarıyla uyumlu cüzdanlı arayüz ve satıcıya demo ödeme (satıcıya ödeme kontrat seviyesinde Testnet'te doğrulandı; cüzdan arayüzü üzerinden tıklanabilir akış henüz yok)
-- [x] Eksik ödeme → durdurma → iptal/iade demosu ([scripts/demo_testnet.sh](scripts/demo_testnet.sh), kontrat seviyesinde canlı Testnet çalıştırması, [docs/IMPLEMENTATION_LOG.md](docs/IMPLEMENTATION_LOG.md) Faz 10 — bu demo, planın önceki sürümündeki genel top-up/grace/abort kurallarını izliyor; aşağıdaki nota bakın)
+- [x] Sponsor güvencesi, tahsisat, koşul onayı, sponsor avansı ve iade değişmezleri test edilmiş Soroban kontratı (24 birim testi, [docs/IMPLEMENTATION_LOG.md](docs/IMPLEMENTATION_LOG.md))
+- [x] Kuruluş ve alım zaman aşımı, koşul onayları, sponsor avansı ve borçlu alıcı engeli testleri (`propose_terms`/`approve_terms`, `cancel_unstarted_pool`, `top_up`/`repay_advance`, alım için ayrı süre — hepsi kontratta ve testlerde)
+- [x] Testnet contract ID ve yeniden üretilebilir kurulum ([scripts/deploy_testnet.sh](scripts/deploy_testnet.sh); canlı kontrat `CBC5DGFAQMEGVJVC6W3Z3J7SNMMFK5LQO3LMZVVJE5YFOPSF4CKW3U4Q`)
+- [ ] Kontrat durumlarıyla uyumlu cüzdanlı arayüz ve satıcıya demo ödeme (frontend'in kontrat istemcisi [frontend/src/services/pool.ts](frontend/src/services/pool.ts) bu kontratın tam API'siyle birebir doğrulandı; satıcıya ödeme kontrat seviyesinde Testnet'te kanıtlandı; cüzdan arayüzü üzerinden tıklanabilir uçtan uca akış henüz yok)
+- [x] Eksik ödeme → durdurma → iptal/iade demosu ([scripts/demo_testnet.sh](scripts/demo_testnet.sh), kontrat seviyesinde canlı Testnet çalıştırması, [docs/IMPLEMENTATION_LOG.md](docs/IMPLEMENTATION_LOG.md))
 - [ ] Kabul edilen TL anchor giriş veya çıkış akışı
 - [ ] Gerçek ve simüle parçaları ayıran demo/sunum dokümanı
-
-> **Not (19 Eylül):** `docs/plan.md` bu kontrat teslim edildikten sonra önemli ölçüde revize edildi (kuruluş zaman aşımı/`cancel_unstarted_pool`, tüm tarafların onayladığı `propose_terms`/`approve_terms`, kişi-bazlı sponsor avansı ve sıradaki üyenin kendi borcunu kapatmadan tahsisat alamaması, alım için ayrı son tarih, önceden kayıtlı demo satıcısı). Yukarıda işaretli kontrat maddeleri planın **önceki** sürümünü karşılıyor; yeni kurallar henüz kontrata yansıtılmadı. Bkz. `docs/IMPLEMENTATION_PLAN.md` içindeki "Documentation Conflicts / Open Questions".

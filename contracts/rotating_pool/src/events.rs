@@ -12,10 +12,13 @@ pub struct PoolCreated {
     pub sponsor: Address,
     pub token: Address,
     pub contribution_amount: i128,
-    pub guarantee_required: i128,
+    pub required_guarantee: i128,
     pub member_limit: u32,
-    pub round_duration_secs: u64,
-    pub grace_duration_secs: u64,
+    pub round_duration: u64,
+    pub grace_duration: u64,
+    pub purchase_duration: u64,
+    pub setup_deadline: u64,
+    pub demo_seller: Address,
 }
 
 #[contractevent]
@@ -38,12 +41,23 @@ pub struct MemberJoined {
 }
 
 #[contractevent]
-pub struct MemberLeft {
+pub struct TermsProposed {
     #[topic]
     pub pool_id: u64,
     #[topic]
-    pub member: Address,
-    pub left_at: u64,
+    pub creator: Address,
+    pub version: u32,
+    pub verifier_count: u32,
+    pub approval_threshold: u32,
+}
+
+#[contractevent]
+pub struct TermsApproved {
+    #[topic]
+    pub pool_id: u64,
+    #[topic]
+    pub approver: Address,
+    pub version: u32,
 }
 
 #[contractevent]
@@ -56,13 +70,10 @@ pub struct PoolStarted {
 }
 
 #[contractevent]
-pub struct VerifierPolicyConfigured {
+pub struct PoolCancelled {
     #[topic]
     pub pool_id: u64,
-    #[topic]
-    pub creator: Address,
-    pub verifier_count: u32,
-    pub approval_quorum: u32,
+    pub refunded_guarantee: i128,
 }
 
 #[contractevent]
@@ -77,6 +88,39 @@ pub struct ContributionDeposited {
 }
 
 #[contractevent]
+pub struct PaymentCured {
+    #[topic]
+    pub pool_id: u64,
+    #[topic]
+    pub round: u32,
+    #[topic]
+    pub member: Address,
+    pub amount: i128,
+}
+
+#[contractevent]
+pub struct SponsorAdvanced {
+    #[topic]
+    pub pool_id: u64,
+    #[topic]
+    pub round: u32,
+    #[topic]
+    pub member: Address,
+    pub sponsor: Address,
+    pub amount: i128,
+    pub total_advance: i128,
+}
+
+#[contractevent]
+pub struct AdvanceRepaid {
+    #[topic]
+    pub pool_id: u64,
+    #[topic]
+    pub member: Address,
+    pub amount: i128,
+}
+
+#[contractevent]
 pub struct PurchaseProposed {
     #[topic]
     pub pool_id: u64,
@@ -85,7 +129,10 @@ pub struct PurchaseProposed {
     #[topic]
     pub recipient: Address,
     pub seller: Address,
-    pub document_digest: BytesN<32>,
+    pub asset: Address,
+    pub amount: i128,
+    pub doc_hash: BytesN<32>,
+    pub version: u32,
 }
 
 #[contractevent]
@@ -96,6 +143,7 @@ pub struct PurchaseApproved {
     pub round: u32,
     #[topic]
     pub verifier: Address,
+    pub version: u32,
     pub approval_count: u32,
 }
 
@@ -109,7 +157,6 @@ pub struct RoundPaid {
     pub recipient: Address,
     pub seller: Address,
     pub amount: i128,
-    pub sponsor_top_up: i128,
 }
 
 #[contractevent]
@@ -121,32 +168,11 @@ pub struct RoundOverdue {
 }
 
 #[contractevent]
-pub struct PaymentCured {
-    #[topic]
-    pub pool_id: u64,
-    #[topic]
-    pub round: u32,
-    #[topic]
-    pub member: Address,
-    pub amount: i128,
-}
-
-#[contractevent]
-pub struct SponsorTopUp {
-    #[topic]
-    pub pool_id: u64,
-    #[topic]
-    pub round: u32,
-    #[topic]
-    pub sponsor: Address,
-    pub amount: i128,
-}
-
-#[contractevent]
-pub struct PoolPaused {
+pub struct RoundAwaitingPurchase {
     #[topic]
     pub pool_id: u64,
     pub round: u32,
+    pub purchase_deadline: u64,
 }
 
 #[contractevent]

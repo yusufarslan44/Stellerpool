@@ -2,7 +2,7 @@
 
 Source of truth: `docs/plan.md`. This implementation plan translates that product and economic model into phased contract/backend work. When older repository notes conflict with `docs/plan.md`, this plan follows `docs/plan.md`.
 
-Current status: Phase 7 is complete and awaiting review. Deadline enforcement, deterministic Grace, member cure, exact sponsor top-up, safe Active recovery, Paused transition, permissionless abort, delivered/not-delivered member refund claims, and order-independent sponsor remainder claim are implemented. No frontend file is in scope.
+Current status: Phase 11 is complete and awaiting review. The contract has been rewritten (schema/API version 8) to match the current `docs/plan.md` (post `aa0bc42` revision) precisely, field-for-field compatible with the frontend's already-written contract client. Deployed live on Testnet and exercised end to end. See Phase 11 below for full detail; Phases 1-10 below describe the prior (now superseded) contract generation and remain as historical record.
 
 ## 1. Current Repository State
 
@@ -464,6 +464,37 @@ Explicitly out of scope / simulated:
 - The demo's settlement asset, seller, and "purchase document digest" are test fixtures. No real property/vehicle, licensed seller, or legal document verification is implied.
 - No TRY/fiat anchor flow was exercised; `ANCHOR_HOME_DOMAIN` remains unset per Phase 9.
 
+### PHASE 11 - Realign Contract to the Revised docs/plan.md and the Frontend's Client
+
+Status: completed on 2026-09-19.
+
+Between Phase 10 and this phase, `docs/plan.md` was substantially revised by a teammate (commit `aa0bc42`) and the frontend's contract client (`frontend/src/services/pool.ts`, `frontend/src/types/pool.ts`, commit `5060119`) was written against that revised plan's *assumed* function/field names (the frontend's own comments say so explicitly — no contract existed yet for that plan version when it was written). This phase rewrote the contract from scratch to match both exactly, field for field, so the already-written frontend client can call it without any changes on either side.
+
+Scope:
+
+- New pool lifecycle: `PoolStatus` is `Filling -> Active -> Completed | Aborted` (no pool-level `Grace`/`Paused` any more). Deadline handling moves to a round-level `RoundPhase`: `Collecting -> AwaitingPurchase -> Settled`, or `Collecting -> Grace -> AwaitingPurchase` when a round is late.
+- `create_pool` gains `purchase_duration`, `setup_deadline`, and a `demo_seller` fixed at creation (previously the seller was freely chosen per round by the recipient).
+- New `propose_terms`/`approve_terms`: the creator proposes the recipient order and verifier set; every member and the sponsor must each approve that exact version before `start_pool` (now permissionless, callable by anyone) will succeed. Changing the order or verifiers bumps the version and clears every prior approval.
+- New `cancel_unstarted_pool`: permissionless once `setup_deadline` passes while still `Filling`; immediately refunds the sponsor's full guarantee.
+- `top_up` is now scoped to one specific member's one missing contribution (no `amount` argument; always exactly `contribution_amount`), is rejected outright for the current round's recipient, and records a per-member, per-pool `SponsorAdvance` debt instead of contributing to that member's own refund liability. New `repay_advance` lets a member pay that debt back to the sponsor directly and clears it.
+- A round only becomes `AwaitingPurchase` (and starts its own `purchase_duration` countdown) once its pot is fully funded **and** the recipient has personally paid their own contribution **and** the recipient owes no outstanding sponsor advance. `execute_round` re-checks both recipient conditions defensively before paying the seller.
+- `propose_purchase` now also carries `asset` (must equal the pool's token) and `amount` (must equal the round's fixed payout) alongside the seller (must equal `demo_seller`) and document digest; `approve_purchase` binds each approval to a `proposal_version` so a changed proposal cannot be settled by stale approvals.
+- `abort_pool` is permissionless from either round phase once its deadline passes: `Grace` past its deadline emits `AbortReason::SafetyRecovery`; `AwaitingPurchase` past its `purchase_deadline` emits `AbortReason::BlockedSettlement` (this reason, defined but unused since Phase 1, now has a real trigger).
+- `leave_pool` and `configure_verifiers` are removed; neither exists in the revised plan or the frontend client. Verifier approval quorum is no longer creator-chosen — it is computed automatically as the ceiling of 2/3 of the verifier count, per `docs/plan.md`'s "demo için en az 2/3 eşik kullanılır."
+- `MAX_MEMBERS` lowered from 20 to 12, per `docs/plan.md`'s explicit demo cap.
+- `get_pool` and `get_round` now return one denormalized struct each (members/recipient order/verifiers/terms approvals embedded directly on `Pool`; paid/sponsor-advanced/approvals embedded directly on `RoundState`) instead of requiring separate calls, matching the frontend's single-read expectation. New `get_member_status` (`{refundable, received}`) and `get_sponsor_advance` read APIs match the frontend's `MemberStatus`/advance queries exactly.
+- Contract API/schema version bumped from 7 to 8.
+
+Definition of Done:
+
+- Every one of the 22 contract methods the frontend's `EXPECTED_METHODS` list calls exists with matching parameter names; verified both by reading `frontend/src/services/pool.ts` line by line against the Rust signatures and by inspecting `stellar contract info interface` on the built WASM.
+- Every field the frontend's `mapPool`/`mapRound`/`mapMember` functions read (`r.<field>`) exists with that exact name on the corresponding contract type; verified the same way.
+- `PoolStatus` and `RoundPhase` enum variants match the frontend's `POOL_STATUSES`/`ROUND_PHASES` arrays exactly.
+- New unit tests cover: terms propose/approve/version-reset, permissionless full-approval-gated start, setup-deadline cancellation with a full sponsor refund, the recipient-cannot-be-topped-up rule, sponsor-advance creation/repayment and its effect on round readiness, the fixed demo-seller/asset/amount purchase validation, proposal-version-bound approvals, both abort reasons (grace expiry and purchase-deadline expiry), and the existing delivered/not-delivered refund and sponsor-remainder invariants re-verified under the new state machine.
+- Canonical WASM built and **redeployed** to Testnet as a new contract instance (the API is a breaking change from the Phase 9/10 instance, which is left untouched as a historical artifact).
+- The full new lifecycle (join, propose/approve terms, fund guarantee, permissionless start, two funded/proposed/approved/executed rounds paying the fixed demo seller, `Completed`) was run live on Testnet against the new instance, exactly mirroring the calls the frontend would make, with every field of the resulting `get_pool`/`get_round` reads inspected and matching what the frontend expects. See `docs/IMPLEMENTATION_LOG.md` for the transaction hashes.
+- Frontend untouched (compatibility was achieved entirely from the contract side, since the frontend was the fixed target).
+
 ## Documentation Conflicts / Open Questions
 
 - Earlier requirements and Phase 1 placeholders used one-contribution member collateral. `docs/plan.md` explicitly rejects that model; member collateral is removed in Phase 2.
@@ -473,16 +504,7 @@ Explicitly out of scope / simulated:
 - The real Anchor provider, settlement asset, and TRY support remain unknown.
 - `docs/plan.md` leaves one-contract-versus-per-pool deployment open. The current MVP continues with one bounded multi-pool contract because the repository and original architecture already use `pool_id`; all accounting must remain strictly isolated.
 - Sponsor identity, legal status, loss bearer, and off-chain debt creditor require legal/product decisions outside the contract.
-- **2026-09-19, post-Phase 10:** `docs/plan.md` was substantially revised (commit `aa0bc42`, "docs: close pool lifecycle and payout logic gaps") after Phases 1-10 of this contract were already implemented, tested, deployed, and demoed. The contract in this repository matches the **prior** version of `docs/plan.md`, not the current one. Concrete gaps between the deployed contract and the current `docs/plan.md` that a future phase would need to close:
-  - No formation-deadline/`cancel_unstarted_pool` path — a `Filling` pool with a funded guarantee that never fills up or starts has no way to return the sponsor's funds in the current contract.
-  - `start_pool` is creator-only and does not require a `propose_terms`/`approve_terms` round where every member and the sponsor approve the same order/verifier/condition version before start is possible by anyone.
-  - `top_up` is a generic round-level shortfall payment; it is not tracked per member as a repayable "sponsor advance," and nothing prevents it from covering the *current recipient's own* missing contribution — the new plan explicitly requires blocking exactly that ("sıradaki üye adına sponsor katkısı tahsisatı açamaz").
-  - There is no separate purchase/verification-phase deadline distinct from the round contribution deadline; `RoundStatus` has no `AwaitingPurchase` state.
-  - `propose_purchase` lets the current recipient pick any non-participant address as seller each round; the new plan wants one demo seller address fixed at `create_pool` and re-used every round, with `join_pool` rejecting that same address as a member.
-  - `MAX_MEMBERS` is 20; the new plan suggests capping the hackathon demo at 12.
-  - No `repay_advance` or `get_sponsor_advance` read method exists.
-  
-  None of this invalidates the work already shipped (Phases 1-7's accounting/lifecycle core and Phases 9-10's live Testnet deployment/demo remain correct for what they implement); it means the contract needs a follow-up phase to catch up to the revised plan before it can be described as satisfying the current `docs/plan.md`. See `README.md`'s "Teslim durumu" note for the same flag.
+- **2026-09-19, post-Phase 10, resolved by Phase 11:** `docs/plan.md` was substantially revised (commit `aa0bc42`, "docs: close pool lifecycle and payout logic gaps") after Phases 1-10 of this contract were already implemented, tested, deployed, and demoed against the *prior* version of the plan. Separately, a teammate's frontend commit (`5060119`) was written against an *assumed* API for that revised plan, without a matching contract yet exising. Phase 11 rewrote the contract (schema/API version 8) to close every gap between the deployed contract and both the current `docs/plan.md` and the frontend's already-written client (`frontend/src/services/pool.ts`) — see Phase 11 for the full mapping. This entry is kept as a historical record of the divergence that Phase 11 fixed.
 
 ## Frontend Team Action Required
 

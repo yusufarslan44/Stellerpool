@@ -937,3 +937,98 @@ Demo identities (Testnet, Friendbot-funded): sponsor `GBSZZFESXTBXM2KEKTAFHOLGYW
 ### Status
 
 NEEDS REVIEW
+
+## Phase 11 - Realign Contract to the Revised docs/plan.md and the Frontend's Client
+
+### Goal
+
+Reconcile the deployed contract with two things that moved out from under it after Phase 10: a substantially revised `docs/plan.md` (commit `aa0bc42`) and a teammate's frontend contract client (`frontend/src/services/pool.ts`, `frontend/src/types/pool.ts`, commit `5060119`) written against that revised plan's *assumed* API before any matching contract existed. The user's explicit instruction was to revise the contract to match the plan the frontend already follows, so the frontend needs zero changes and the two sides stay in sync going forward.
+
+### Changes Made
+
+- Rewrote `contracts/rotating_pool/src/types.rs`: `PoolStatus` is now `Filling | Active | Completed | Aborted` (Grace/Paused removed from the pool level). New `RoundPhase` (`Collecting | Grace | AwaitingPurchase | Settled`) carries per-round deadline state instead. `Pool` now embeds `members`, `recipient_order`, `verifiers`, `approval_threshold`, `terms_version`, `terms_approvals`, `purchase_duration`, `setup_deadline`, and `demo_seller` directly. `RoundState` embeds `paid`, `sponsor_advanced`, `approvals`, `seller`, `asset`, `amount`, `doc_hash`, `purchase_version`, `collect_deadline`, `grace_deadline`, and `purchase_deadline` directly, matching the frontend's single-read expectation for `get_pool`/`get_round`. Added `MemberStatusView { refundable, received }`.
+- Rewrote `contracts/rotating_pool/src/storage.rs`: added `SponsorAdvance`, `TermsApproval` (keyed by version, so a version bump auto-invalidates stale approvals without an explicit clear step), `PurchaseApproval` (keyed by round *and* purchase version, same auto-invalidation trick), and `AdvanceCovered` (distinguishes a sponsor-covered round contribution from a self-paid one). Removed the old `PoolMembers`/`RecipientOrder`/`VerifierPolicy`/`RoundPot`/`RoundTopUp`/`Purchase`/`VerifierApproval` keys, superseded by the denormalized `Pool`/`RoundState` structs.
+- Rewrote `contracts/rotating_pool/src/error.rs` and `events.rs`: added errors/events for the terms-approval flow, cancellation, sponsor advances/repayment, the purchase-version binding, and the two now-distinct abort reasons.
+- Rewrote `contracts/rotating_pool/src/lib.rs` (every entrypoint): `create_pool` (new `purchase_duration`/`setup_deadline`/`demo_seller` params, validated), `fund_guarantee`, `join_pool` (now rejects the demo seller's address as a member), new `propose_terms`/`approve_terms`, `start_pool` (now permissionless; requires full membership, a fully-approved terms version from every member and the sponsor, sufficient guarantee, and `now < setup_deadline`), new `cancel_unstarted_pool`, `deposit`/`cure_payment` (now gated by `RoundPhase` instead of `PoolStatus`, sharing an `apply_member_payment` helper that also drives the phase transition), new `top_up` (single-member, no amount argument, rejects the current recipient, credits `SponsorAdvance` instead of refund liability) and `repay_advance`, `propose_purchase`/`approve_purchase` (seller pinned to `demo_seller`, asset pinned to `pool.token`, amount pinned to the round's fixed payout, approvals bound to `purchase_version`), `execute_round` (re-validates the recipient personally paid and owes no advance before paying the seller), `mark_overdue` (round-level, no pool-level Grace), `abort_pool` (permissionless from `Grace` past its deadline with `AbortReason::SafetyRecovery`, or from `AwaitingPurchase` past its `purchase_deadline` with `AbortReason::BlockedSettlement`), `claim_refund`/`claim_sponsor_remainder` (sponsor address now an explicit argument, matching the frontend call shape), and read APIs `get_pool`/`get_round`/`get_member_status`/`get_sponsor_advance`/`get_refund_claim`/`get_sponsor_remainder_claimed`. Removed `leave_pool` and `configure_verifiers` (absent from both the revised plan and the frontend client). Verifier quorum is no longer creator-supplied; it is computed as `ceil(2 * verifier_count / 3)`. `MAX_MEMBERS` lowered from 20 to 12.
+- Rewrote `contracts/rotating_pool/src/test.rs` from scratch: 24 tests covering create-pool validation (including the new duration/deadline/demo-seller checks), no-fund join with seller exclusion, terms propose/approve/version-reset/role-eligibility, permissionless start gated on full approval, setup-deadline cancellation with full sponsor refund, deposit/cure round-phase gating and the Collecting->AwaitingPurchase transition, the recipient-cannot-be-topped-up rule and advance bookkeeping, advance repayment unblocking a stalled round, purchase proposal/approval validation (seller/asset/amount/digest/version binding), quorum, full two-round happy-path completion, insufficient-balance and failed-transfer rollback, grace-then-abort (`SafetyRecovery`), cure-during-grace recovery, purchase-deadline-expiry abort (`BlockedSettlement`), delivered/not-delivered refund plus order-independent sponsor remainder, stored-role-auth requirements on both claim entrypoints, multi-pool isolation, and verifier-policy exclusion/bounds.
+- Deployed the rewritten contract to Testnet as a **new** instance (the Phase 9/10 instance is API-incompatible and left untouched as a historical artifact) and ran the full new lifecycle against it live, using the exact call shapes `frontend/src/services/pool.ts` uses.
+- Rewrote `scripts/demo_testnet.sh` to drive the new API (terms propose/approve, the fixed demo seller, `asset`/`amount` on purchase proposals, round-level grace instead of a pool-level pause). `scripts/deploy_testnet.sh` needed no changes — it only builds/deploys the WASM and resolves a settlement asset, it never calls `create_pool`. Recreated `scripts/README.md` (lost from git history in an earlier stash/merge round-trip) and updated it for the new demo flow.
+- Updated `.env` and `frontend/.env` (local, gitignored) with the new contract ID.
+- Updated `README.md`'s delivery checklist and removed the now-resolved plan/contract mismatch warning; updated `docs/IMPLEMENTATION_PLAN.md`'s status header, "Documentation Conflicts" entry, and added this phase to the phase plan.
+
+### Files Changed
+
+- `contracts/rotating_pool/src/types.rs`
+- `contracts/rotating_pool/src/storage.rs`
+- `contracts/rotating_pool/src/error.rs`
+- `contracts/rotating_pool/src/events.rs`
+- `contracts/rotating_pool/src/lib.rs`
+- `contracts/rotating_pool/src/test.rs`
+- `contracts/rotating_pool/test_snapshots/**`
+- `scripts/demo_testnet.sh`
+- `scripts/README.md`
+- `.env` (local only, gitignored)
+- `frontend/.env` (local only, gitignored)
+- `README.md`
+- `docs/IMPLEMENTATION_PLAN.md`
+- `docs/IMPLEMENTATION_LOG.md`
+
+### Commands Run
+
+- `cargo build --workspace`
+- `cargo test --workspace`
+- `cargo fmt --all` / `cargo fmt --all -- --check`
+- `stellar contract build`
+- `stellar contract info interface --wasm target/wasm32v1-none/release/rotating_pool.wasm` (used to cross-check every method/field name and type against `frontend/src/services/pool.ts` and `frontend/src/types/pool.ts` by hand, one by one)
+- `stellar contract deploy --wasm ... --source stellerpool-deployer --network testnet --alias rotating_pool_v2`
+- `stellar contract invoke --id <new contract> ...` for the full live lifecycle: `create_pool`, `join_pool` x2, `propose_terms`, `approve_terms` x3, `fund_guarantee`, `start_pool`, `deposit` x2 per round, `propose_purchase`, `approve_purchase` x2 per round, `execute_round` x2, `get_pool`, `get_round`
+
+### Test Results
+
+- Unit tests passed: 24 passed, 0 failed (down from 29 because `leave_pool`/`configure_verifiers`-specific tests no longer apply; coverage of the equivalent and new behaviors is broader than before per-function).
+- Canonical Protocol 28 WASM build passed. Optimized WASM size: 39,823 bytes. WASM SHA-256: `f60503d00631e6af6e42ef862f5a066708dc07a7edafe40a64260b50b82ab854`. Exported functions: 27 (all 22 the frontend calls, plus 5 extra read/utility methods it doesn't use).
+- `stellar contract info interface` output was compared field-by-field against `frontend/src/services/pool.ts`'s `PoolMethods`/`EXPECTED_METHODS` and `frontend/src/types/pool.ts`'s `PoolInfo`/`RoundInfo`/`MemberStatus`: every method name, parameter name, return type, struct field name, and enum variant (`PoolStatus`, `RoundPhase`) matches exactly.
+- **Live Testnet deployment**: new contract ID `CBC5DGFAQMEGVJVC6W3Z3J7SNMMFK5LQO3LMZVVJE5YFOPSF4CKW3U4Q` (WASM upload tx `bbac73ed4c01c55e42ba65283a4778816d6cc24dd13343d2000db74ad5701cb4`, instance creation tx `7da6288c0b3fbdd69ca903bb680453afbc3828809a6d4a5c69f70372fabd46b0`). Reused the Phase 10 demo identities and the `STLP` demo asset (SAC `CAOV35NPIJXHWA7QPXXERRJQ4ZTDUGAEHA7FKB6QIOTIOTI62B35ZNWI`), which still held sufficient balances.
+- **Live full happy-path run** (`pool_id: 1`, contribution 1 STLP, member_limit 2, required guarantee 1 STLP, `round_duration: 1800`, `grace_duration: 1800`, `purchase_duration: 900`): `create_pool` tx `ce27118919a93b59ed0ac419be1303780d5a283ec136f8e67e092602bca93124`; both `join_pool` calls; `propose_terms` tx `ea0e3d2d41506920abc31a68d60d2865a4a26d6917d03b61dd819da41e441f7f` (`approval_threshold: 2` for 2 verifiers, confirming the `ceil(2n/3)` quorum formula); three `approve_terms` calls (both members + sponsor); `fund_guarantee` tx moving 1 STLP; `start_pool` tx `b5a946545f0c1b46f0130d36b8799a7115d77371dda67628fffff6e005afffc0` (permissionless, called by the deployer identity, which is neither a member nor the sponsor); round 1 both deposits, after which a live `get_round` read showed `phase: "AwaitingPurchase"` and `purchase_deadline` set automatically; `propose_purchase` tx with `asset` and `amount` fields populated and echoed correctly; two `approve_purchase` calls; `execute_round` tx `0dbda0d13092733c714d571108e79fb1224fa0227d07e878ce004b832095b114` paying the demo seller exactly 2 STLP; round 2 repeated the same sequence; final `execute_round` tx `017785e64c77e974ecf9e97786a9c98b4580de6edeeb2975acdc17da16fb22ef` paid the seller again and emitted `PoolCompleted`. A final `get_pool` read confirmed `status: "Completed"` with every field (`members`, `recipient_order`, `verifiers`, `terms_approvals`, `approval_threshold`, etc.) present in exactly the shape `frontend/src/services/pool.ts`'s `mapPool` expects.
+- Total live seller payout across both rounds: 4 STLP (2 STLP x 2 rounds), matching `contribution_amount * member_limit` exactly each time.
+
+### Decisions
+
+- Rewrote rather than patched: the pool/round state machine changed shape enough (Grace moving from pool-level to round-level, a new AwaitingPurchase phase, denormalized reads) that incremental edits to the Phase 1-10 contract would have been harder to get right than a clean rewrite built directly against the frontend's already-fixed interface.
+- Treated `frontend/src/services/pool.ts` and `frontend/src/types/pool.ts` as the literal interface contract (method names, parameter names, field names, enum variants) rather than re-deriving an interface from `docs/plan.md` prose alone, since the user's instruction was specifically to match what the frontend already expects and prevent future drift.
+- `TermsApproval` and `PurchaseApproval` are keyed by version (`(pool_id, version, approver)` / `(pool_id, round, version, verifier)`) rather than storing a separate "approvals" list that must be manually cleared on every re-proposal; a version bump alone makes every prior approval key permanently stale, which is simpler and can't be forgotten in some future code path.
+- `RoundState.paid`/`sponsor_advanced`/`approvals` are stored as bounded `Vec<Address>` directly on the round (bounded by `MAX_MEMBERS`=12 / `MAX_VERIFIERS`=10) rather than reconstructed from flags at read time, specifically so `get_round` remains the single call the frontend expects rather than requiring N extra reads.
+- Sponsor top-up money is deliberately never added to `RefundLiability`/`MemberContributionTotal` for the covered member — only to `PoolAssignedBalance`, `RoundTopUp`-equivalent pot accounting, and the member's own `SponsorAdvance` debt — so it flows back to the sponsor via `claim_sponsor_remainder` if the pool later aborts, per `docs/plan.md`'s "Sponsor avansı üyenin iade hesabına katılmaz."
+- `repay_advance` requires paying the full outstanding debt in one call (no partial-repayment amount parameter), matching the frontend's method signature (`{ pool_id, member }`, no `amount`) and the existing codebase's "exact amount" idiom used elsewhere (`cure_payment`, the old `top_up`).
+- Deployed a fresh contract instance rather than trying to migrate the Phase 9/10 instance's state, since Soroban contracts have no upgrade mechanism by design (documented decision since Phase 0) and the API is a breaking change regardless.
+- `cancel_unstarted_pool` refunds the sponsor immediately and directly inside the call itself (not via a later `claim_sponsor_remainder`), since `docs/plan.md` frames it as an immediate return ("sponsor kilitlediği tutarın tamamını alır") and no member has paid anything yet at the Filling stage to complicate the accounting.
+
+### Risks / Open Questions
+
+- `scripts/README.md` had never actually been committed to git in any earlier phase (confirmed via `git log -- scripts/README.md` returning nothing) despite being written and referenced in this conversation twice before; it was silently dropped somewhere in an earlier stash/pop/merge sequence. It has been recreated from scratch this phase. Worth double-checking after any future stash operation that every intended file actually landed in the commit, not just the ones git happened to report as conflicted.
+- The live Testnet run exercised the happy path only; the new `cancel_unstarted_pool`, `top_up`/`repay_advance`, and `BlockedSettlement` abort paths are covered by the 24 unit tests but not re-proven live in this phase (Phase 10's live abort/refund run was against the now-superseded Phase 9/10 contract instance, not this one). A future phase could re-run `demo_testnet.sh`'s Pool B scenario against the new instance for live abort evidence too.
+- `asset`/`amount` on `propose_purchase` are currently required to exactly equal `pool.token` and the round's fixed payout; the frontend passes them but never reads them back from `get_round`'s response, so they function as write-only, checked audit fields for now.
+- The old Phase 9/10 contract instance (`CACZQBHHQ3TY33AJIC52MHMCPEKUYO4KQFURHQGPJJ3LNDJZAT6LG4II`) remains live on Testnet with its own pool history; it is no longer the one referenced by `.env`/`frontend/.env` but nothing decommissions it (Soroban contracts cannot be deleted). Should not be confused with the current instance in any submission material.
+- The frontend itself was not run (no Node/browser session in this environment); compatibility was verified by direct comparison of `stellar contract info interface` output against the TypeScript source, plus live CLI calls using the exact same field names/shapes the frontend's client constructs. A real wallet-driven click-through test of the frontend against this contract has not been performed.
+
+### Stellar Skills Used
+
+- Stellar Smart Contracts: full state-machine redesign (round-level phases, version-keyed approval invalidation, denormalized read structs), permissionless lifecycle transitions, checked arithmetic throughout, generated-interface cross-checking against an external TypeScript client, and canonical build/deploy.
+- Stellar Assets & SAC: reused the existing self-issued demo asset and SAC wrapper; peer-to-peer `repay_advance` transfer (member to sponsor) using the same `require_auth` pattern as every other member-initiated transfer in the contract.
+- RPC & Horizon APIs: `stellar contract info interface` used as a machine-readable compatibility check, not just documentation.
+- Soroban Common Mistakes: no upgrade-in-place attempt on a deployed contract (fresh instance instead); version-keyed storage instead of manual list-clearing to prevent stale-approval bugs; checks-effects-interactions preserved in every rewritten entrypoint.
+
+### Definition of Done
+
+- Contract rewritten to match the current `docs/plan.md`: completed.
+- Contract rewritten to match the frontend's existing client field-for-field: completed and cross-verified via generated interface inspection.
+- New unit test coverage for every new mechanism (terms approval, cancellation, sponsor advances, purchase-version binding, both abort reasons): completed, 24/24 passing.
+- Canonical WASM build: passed.
+- Redeployed to Testnet as a new instance: completed.
+- Live end-to-end happy-path run against the new instance with frontend-shaped calls and reads: completed.
+- Deployment/demo scripts and docs updated to match: completed.
+- Frontend untouched: completed.
+
+### Status
+
+NEEDS REVIEW
