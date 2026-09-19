@@ -1,0 +1,23 @@
+# Sırlar
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Node / Vue
+node_modules/
+dist/
+.vite/
+
+# Rust / Soroban
+target/
+*.wasm
+
+# macOS / editör
+.DS_Store
+.idea/
+.vscode/
+
+# Organizatör dökümanının yerel kopyası (public repoya konmaz)
+docs/hackathon-handbook.md
