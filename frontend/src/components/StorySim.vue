@@ -12,7 +12,9 @@ import type { IlloName } from '@/lib/icon-data'
  * Tamamen kurgusaldır (kişiler ve tutarlar örnek); zincire işlem gitmez. Kurallar hedef tasarımdır.
  * Tek gerçek hesap: alım belgesinin SHA-256 özeti tarayıcıda gerçekten hesaplanır.
  */
-type Phase = 'intro' | 'collect' | 'grace' | 'blocked' | 'aborted' | 'purchase' | 'verify' | 'pay' | 'done'
+type Phase =
+  | 'intro' | 'collect' | 'grace' | 'blocked' | 'aborted' | 'purchase' | 'verify' | 'pay' | 'done'
+  | 'r2' | 'r2grace' | 'r2aborted' | 'r2ok'
 
 interface Person {
   id: string
@@ -26,7 +28,6 @@ const PEOPLE: Person[] = [
   { id: 'can', name: 'Can', illo: 'can' },
 ]
 const VERIFIERS = ['A', 'B', 'C']
-const RECIPIENT = 'ayse'
 const AMOUNT = 10
 const POT = AMOUNT * PEOPLE.length
 const NEEDED = 2
@@ -42,6 +43,10 @@ const paid = ref<string[]>([])
 const docHash = ref<string | null>(null)
 const approvals = ref<string[]>([])
 const sent = ref(false)
+/** 2. tur (plan bölüm 7): ilk turda tutarı alan Ayşe artık ödemiyor. */
+const round2 = ref(false)
+const round1Paid = ref(false)
+const refunded = ref<string[]>([])
 const locked = ref(false)
 
 const stage = ref<HTMLElement | null>(null)
@@ -59,14 +64,19 @@ onBeforeUnmount(() => timers.forEach((t) => clearTimeout(t)))
 const isFunded = (id: string) => paid.value.includes(id)
 const funded = computed(() => PEOPLE.filter((p) => isFunded(p.id)).length)
 const fill = computed(() => (sent.value ? 0 : funded.value / PEOPLE.length))
-const recipientPaid = computed(() => paid.value.includes(RECIPIENT))
-const canTap = computed(() => (phase.value === 'collect' || phase.value === 'grace') && !locked.value)
+const recipient = computed(() => (round2.value ? 'mehmet' : 'ayse'))
+const recipientPaid = computed(() => paid.value.includes(recipient.value))
+const canTap = computed(
+  () => (['collect', 'grace', 'r2', 'r2grace'] as Phase[]).includes(phase.value) && !locked.value,
+)
+/** Kişiye dokunup ödetilebilir mi? 2. turda Ayşe ancak ek sürede ödeyebilir. */
+const canPay = (id: string) => canTap.value && !isFunded(id) && !(phase.value === 'r2' && id === 'ayse')
 
 const CHAPTERS = ['Kurallar', 'Katkı', 'Alım', 'Onay', 'Gönderim']
 const chapter = computed(() => {
   switch (phase.value) {
     case 'intro': return 0
-    case 'collect': case 'grace': case 'blocked': case 'aborted': return 1
+    case 'collect': case 'grace': case 'blocked': case 'aborted': case 'r2': case 'r2grace': case 'r2aborted': case 'r2ok': return 1
     case 'purchase': return 2
     case 'verify': return 3
     default: return 4
@@ -110,7 +120,7 @@ function acceptRules() {
 }
 
 function pay(id: string) {
-  if (!canTap.value || isFunded(id)) return
+  if (!canPay(id)) return
   flyCoin(personEls[id] ?? null, jarEl.value)
   paid.value = [...paid.value, id]
   afterFunding()
@@ -120,7 +130,7 @@ function afterFunding() {
   if (funded.value < PEOPLE.length) return
   locked.value = true
   later(() => {
-    phase.value = 'purchase'
+    phase.value = phase.value === 'r2grace' ? 'r2ok' : 'purchase'
     locked.value = false
   }, 1100)
 }
@@ -137,6 +147,31 @@ function abortRound() {
   if (phase.value !== 'grace' || locked.value) return
   paid.value = []
   phase.value = 'aborted'
+}
+
+function startRound2() {
+  if (phase.value !== 'done') return
+  round1Paid.value = true
+  round2.value = true
+  sent.value = false
+  paid.value = []
+  approvals.value = []
+  docHash.value = null
+  phase.value = 'r2'
+}
+function toGrace2() {
+  if (phase.value === 'r2' && funded.value === PEOPLE.length - 1) phase.value = 'r2grace'
+}
+function abortRound2() {
+  if (phase.value !== 'r2grace' || locked.value) return
+  locked.value = true
+  refunded.value = [...paid.value]
+  refunded.value.forEach((id, i) => flyCoin(jarEl.value, personEls[id] ?? null, i * 160))
+  later(() => {
+    paid.value = []
+    phase.value = 'r2aborted'
+    locked.value = false
+  }, 1000)
 }
 
 async function propose() {
@@ -179,6 +214,9 @@ function reset() {
   docHash.value = null
   approvals.value = []
   sent.value = false
+  round2.value = false
+  round1Paid.value = false
+  refunded.value = []
   locked.value = false
 }
 
@@ -210,6 +248,26 @@ const story = computed<{ title: string; text: string }>(() => {
         title: 'Tur durdu',
         text: 'Bu örnekte satıcıya ödeme yapılmadı; bu turda yatırılan katkılar sahiplerine geri döner. Daha önce tamamlanan bir tur olsaydı, o turdaki para satıcıya gitmiş olurdu.',
       }
+    case 'r2':
+      return {
+        title: 'Tur 2: Ayşe artık ödemiyor',
+        text: `Sıra Mehmet’te. Ayşe ilk turda ${POT} birimlik alımını yaptırdı; şimdi bu turun payını yatırmıyor. Diğer üçüne dokunup ${AMOUNT}’ar birimi yatır. Herkes ödemeden satıcıya hiçbir şey gitmez.`,
+      }
+    case 'r2grace':
+      return {
+        title: 'Ek süre başladı',
+        text: 'Ayşe hâlâ kendi payını yatırabilir (ona dokunarak dene). Yatırmazsa ek süre bitince tur durur; kimse onun yerine ödeyemez.',
+      }
+    case 'r2ok':
+      return {
+        title: 'Ayşe ek sürede ödedi',
+        text: 'Bütün katkılar tamamlandı; tur alım önerisi ve doğrulayıcı onayı adımlarına geçebilir. Ödeme geciktiğinde yalnızca ek süre ve bu turun durması devreye girer.',
+      }
+    case 'r2aborted':
+      return {
+        title: 'Tur durdu, ama ilk tur geri gelmiyor',
+        text: `Bu turda yatırılan ${refunded.value.length * AMOUNT} birim üç arkadaşa iade edildi. Ancak 1. turdaki ${POT} birim çoktan satıcıya gitti; Mehmet, Zeynep ve Can’ın ilk tur payları kontrattan geri alınamaz. Ayşe’nin kalan borcunu kontrat tahsil edemez; bu, grubun ayrıca çözmesi gereken bir alacaktır.`,
+      }
     case 'purchase':
       return {
         title: 'Alım önerisi',
@@ -237,7 +295,11 @@ const shortHash = computed(() => (docHash.value ? `${docHash.value.slice(0, 10)}
 
 function statusOf(id: string): { label: string; cls: string } {
   if (paid.value.includes(id)) return { label: 'Ödedi ✓', cls: 'bg-sage-100 text-sage-800' }
+  if (refunded.value.includes(id)) return { label: 'İade aldı ✓', cls: 'bg-sage-100 text-sage-800' }
   if (phase.value === 'grace' && id === 'can') return { label: 'Geciktirdi', cls: 'bg-rose-100 text-rose-800' }
+  if (round2.value && id === 'ayse' && phase.value !== 'r2ok') {
+    return { label: phase.value === 'r2' ? 'Ödemiyor' : 'Ödemedi', cls: 'bg-rose-100 text-rose-800' }
+  }
   return { label: 'Bekliyor', cls: 'bg-stone-100 text-stone-700' }
 }
 </script>
@@ -283,15 +345,15 @@ function statusOf(id: string): { label: string; cls: string } {
             type="button"
             class="relative flex min-h-[7.5rem] flex-col items-center justify-center gap-1 rounded-2xl border-2 bg-white p-2.5 text-center transition-[border-color,box-shadow,transform] duration-200 disabled:cursor-default"
             :class="[
-              canTap && !isFunded(p.id) ? 'cursor-pointer border-brand-300 hover:-translate-y-0.5 hover:shadow-[0_12px_24px_-14px_rgb(20_128_90/0.6)]' : 'border-stone-200',
-              p.id === RECIPIENT && !sent ? 'ring-2 ring-gold-300 ring-offset-2' : '',
+              canPay(p.id) ? 'cursor-pointer border-brand-300 hover:-translate-y-0.5 hover:shadow-[0_12px_24px_-14px_rgb(20_128_90/0.6)]' : 'border-stone-200',
+              p.id === recipient && !sent ? 'ring-2 ring-gold-300 ring-offset-2' : '',
             ]"
-            :disabled="!canTap || isFunded(p.id)"
-            :aria-label="`${p.name}: ${statusOf(p.id).label}${canTap && !isFunded(p.id) ? '. Dokun ve öde' : ''}`"
+            :disabled="!canPay(p.id)"
+            :aria-label="`${p.name}: ${statusOf(p.id).label}${canPay(p.id) ? '. Dokun ve öde' : ''}`"
             @click="pay(p.id)"
           >
             <span
-              v-if="canTap && !isFunded(p.id)"
+              v-if="canPay(p.id)"
               class="absolute top-2 right-2 size-2.5 rounded-full bg-brand-500"
               style="animation: ring-ping 1.8s ease-out infinite"
               aria-hidden="true"
@@ -299,7 +361,7 @@ function statusOf(id: string): { label: string; cls: string } {
             <Illo :name="p.illo" :size="48" />
             <span class="font-display text-sm font-bold">{{ p.name }}</span>
             <span class="badge !px-2 !py-0.5 text-[11px]" :class="statusOf(p.id).cls">{{ statusOf(p.id).label }}</span>
-            <span v-if="p.id === RECIPIENT" class="absolute -top-2.5 left-2 flex items-center gap-1 rounded-full bg-gold-400 px-2 py-0.5 text-[10px] font-bold text-ink">
+            <span v-if="p.id === recipient" class="absolute -top-2.5 left-2 flex items-center gap-1 rounded-full bg-gold-400 px-2 py-0.5 text-[10px] font-bold text-ink">
               {{ sent ? 'Aracı yolda' : 'Bu tur sırası' }}
               <Illo v-if="sent" name="car" :size="16" class="pop" />
             </span>
@@ -348,6 +410,16 @@ function statusOf(id: string): { label: string; cls: string } {
           {{ sent ? 0 : funded * AMOUNT }} / {{ POT }} birim
           <span class="block text-xs font-normal text-stone-600">{{ sent ? `${POT} birim satıcıya gitti` : 'sözleşmede' }}</span>
         </p>
+        <ul v-if="round1Paid" class="w-full space-y-1.5 text-left text-[11px] leading-snug" aria-label="Tur geçmişi">
+          <li class="flex items-start gap-1.5 rounded-xl bg-stone-100 p-2 text-stone-700">
+            <Illo name="lock" :size="16" class="mt-0.5" />
+            <span><b>Tur 1:</b> {{ POT }} birim Örnek Galeri’ye gitti; geri alınamaz.</span>
+          </li>
+          <li v-if="phase === 'r2aborted'" class="pop flex items-start gap-1.5 rounded-xl bg-sage-50 p-2 text-sage-800">
+            <Illo name="check" :size="16" class="mt-0.5" />
+            <span><b>Tur 2:</b> {{ refunded.length * AMOUNT }} birim sahiplerine iade edildi.</span>
+          </li>
+        </ul>
         </div>
       </div>
 
@@ -436,13 +508,35 @@ function statusOf(id: string): { label: string; cls: string } {
         </button>
       </template>
 
-      <template v-else-if="phase === 'done' || phase === 'aborted'">
+      <template v-else-if="phase === 'r2'">
+        <span class="text-sm text-stone-600">Mehmet, Zeynep ve Can’a dokun ({{ funded }} / {{ PEOPLE.length - 1 }})</span>
+        <button type="button" class="btn-primary" :disabled="locked || funded < PEOPLE.length - 1" @click="toGrace2">
+          <Illo name="alarm" :size="20" /> Süre doldu: ek süre
+        </button>
+      </template>
+
+      <template v-else-if="phase === 'r2grace'">
+        <span class="text-sm text-stone-600">Ayşe’ye dokun: geç öder</span>
+        <button type="button" class="btn-primary" :disabled="locked" @click="abortRound2">
+          <Illo name="hourglass" :size="20" /> Ek süre bitti: turu durdur
+        </button>
+      </template>
+
+      <template v-else-if="phase === 'done'">
         <Illo name="party" :size="40" class="pop" />
+        <button type="button" class="btn-primary" @click="startRound2">
+          <Illo name="warning" :size="20" /> Sonraki tur: Ayşe ödemezse?
+        </button>
+        <button type="button" class="btn-secondary" @click="reset"><AppIcon name="refresh" class="!size-4" /> Baştan oyna</button>
+      </template>
+
+      <template v-else-if="phase === 'aborted' || phase === 'r2aborted' || phase === 'r2ok'">
+        <Illo :name="phase === 'r2aborted' ? 'warning' : 'party'" :size="40" class="pop" />
         <button type="button" class="btn-secondary" @click="reset"><AppIcon name="refresh" class="!size-4" /> Baştan oyna</button>
         <RouterLink to="/create" class="btn-primary">Kendi havuzunu kur <AppIcon name="arrow" class="!size-4" /></RouterLink>
       </template>
 
-      <button v-if="phase !== 'intro' && phase !== 'done'" type="button" class="ml-auto text-xs font-medium text-stone-500 underline hover:text-stone-700" @click="reset">
+      <button v-if="!['intro', 'done', 'aborted', 'r2aborted', 'r2ok'].includes(phase)" type="button" class="ml-auto text-xs font-medium text-stone-500 underline hover:text-stone-700" @click="reset">
         Baştan başla
       </button>
     </div>

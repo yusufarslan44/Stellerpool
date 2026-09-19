@@ -187,6 +187,14 @@ const FAQ = [
     a: 'Planlanan Testnet akışında ek süre sonunda havuz sonlandırılabilir. Yalnızca henüz ödenmemiş turun katkıları iade edilebilir; önceki turlar geri alınamaz. Kontrat henüz çalışmıyor.',
   },
   {
+    q: 'Ayşe ilk turda alıp sonra bırakırsa ne olur?',
+    a: 'Dört kişi 10’ar birim yatırırsa ilk tur 40 birim satıcıya gider ve havuzda o turun parası kalmaz. Ayşe sonraki turu ödemezse ikinci tur durur; yalnızca ikinci turda yatırılan katkılar iade edilir. Mehmet, Zeynep ve Can’ın ilk tur payları kontrattan geri alınamaz. Bunu “Bir turu kendin dene” bölümünde adım adım görebilirsin.',
+  },
+  {
+    q: 'Sponsor, sigorta ya da teslimat garantisi var mı?',
+    a: 'Hayır. Ayrı sponsor, başkası adına avans ve platform garantisi yok. Daha fazla kişi katılması da erken teslim alanın gelecekteki ödeme riskini ortadan kaldırmaz. Bu risk yalnızca tanıdık, kapalı bir grupta ve ayrı sözleşmelerle yönetilebilir.',
+  },
+  {
     q: 'Param kime gider?',
     a: 'Testnet planında doğrulayıcı onayı sonrası yalnızca demo satıcısına test varlığı gönderilecek. Şu anda havuz kontratı ve satıcı ödemesi yok.',
   },
