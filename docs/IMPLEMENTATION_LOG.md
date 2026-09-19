@@ -1236,3 +1236,185 @@ Deliberately not changed: `README.md` (standing instruction, see above), `docs/p
 ### Status
 
 NEEDS REVIEW
+
+## Phase 14 - Anchor Backend (SEP-1/10/24, TRYT test varlığı)
+
+### Goal
+
+Doldurmak için `docs/HACKATHON_SUBMISSION_TASKS.md`'nin "Backend ekibi" P0 bölümünde
+tanımlanan en kritik boşluğu: proje bir backend'e sahip değildi ve anchor entegrasyonu
+`frontend/src/lib/anchor.ts` üzerinden doğrudan SDF'in `testanchor.stellar.org`'una
+konuşuyordu (test varlığı, sunucu tarafı bize ait değil). Kendi işlettiğimiz minimal ama
+gerçek bir SEP-1/10/24 anchor sunucusu kurmak — el kitabının en ağırlıklı alt kriteri
+(Ecosystem Fit → Anchor/Local Payments) burada.
+
+### Changes Made
+
+- Yeni `backend/` (Node.js + TypeScript + Express, `@stellar/stellar-sdk ^17.1.0` —
+  frontend'le aynı sürüm) projesi kuruldu: `package.json`, `tsconfig.json` (ESM,
+  NodeNext), `.env.example`, `.gitignore` (`.env`/`node_modules`/`dist` hariç tutulur).
+- `src/config.ts`: ortam değişkenlerinden yapılandırma; `homeDomain`/`webAuthEndpoint`/
+  `sep24Server` `PUBLIC_BASE_URL`'den türetilir (tek değişkeni değiştirmek her şeyi
+  günceller).
+- `src/lib/stellar.ts`: `TRYT` varlık tanımı (issuer'dan); `sendTry()` dağıtım hesabından
+  kullanıcıya gerçek bir Horizon `Payment` işlemi gönderir; hedefte trustline yoksa
+  `NoTrustlineError` fırlatır (trustline'ı yalnızca hesap sahibi açabilir — bu istisnayı
+  çağıran taraf SEP-24 `pending_trust` durumuna çevirir).
+- `src/lib/jwt.ts`, `src/lib/authMiddleware.ts`: SEP-10 oturum JWT'si imzalama/doğrulama
+  ve `Authorization: Bearer` middleware'i.
+- `src/lib/store.ts`: SEP-24 işlem kayıtları için bellek-içi depo (bilinçli
+  basitleştirme, bkz. `backend/README.md`).
+- `src/routes/wellKnown.ts`: `GET /.well-known/stellar.toml` — `frontend/src/lib/anchor.ts`
+  `resolveAnchor()`'ın okuduğu tüm alanlarla (`WEB_AUTH_ENDPOINT`, `TRANSFER_SERVER_SEP0024`,
+  `SIGNING_KEY`, `NETWORK_PASSPHRASE`, `CURRENCIES`), varlığın test amaçlı olduğunu açıkça
+  belirten `DOCUMENTATION`/`desc` alanlarıyla.
+- `src/routes/auth.ts`: SEP-10 `GET /auth` (challenge üretimi, `WebAuth.buildChallengeTx`)
+  ve `POST /auth` (`WebAuth.readChallengeTx` + `WebAuth.verifyChallengeTxSigners` ile
+  doğrulama, JWT dönüşü) — `frontend/src/lib/anchor.ts`'nin zaten kullandığı aynı SDK
+  modülünün (`WebAuth`) sunucu tarafı karşılığı.
+- `src/routes/sep24.ts`: `GET /sep24/info`, `POST /sep24/transactions/deposit/interactive`
+  (Bearer korumalı, işlem açar), `GET /sep24/transaction` (Bearer korumalı; durum
+  `pending_trust` ise ödemeyi burada sessizce yeniden dener — ayrı bir "retry" ucu
+  gerektirmez).
+- `src/routes/interactive.ts`: sunucu tarafında render edilen basit bir HTML form
+  (tutar girişi + "TRY yatırdım, onayla (test)" butonu, sayfanın kendisinde "gerçek banka
+  entegrasyonu yoktur" uyarısı); onay sonrası gerçek ödemeyi dener, sonucu SEP-24 `callback=
+  postMessage` sözleşmesine uygun şekilde `window.opener`'a bildirir ve pencereyi kapatır.
+- `src/server.ts`: Express uygulaması, `cors`/`json`/`urlencoded` middleware'leri, `/health`.
+- `scripts/setup-issuer.ts`: tek seferlik kurulum — issuer + dağıtım hesabı üretir,
+  Friendbot ile fonlar, dağıtım hesabına `TRYT` trustline'ı açar, issuer'dan dağıtıma
+  1.000.000.000 birimlik arz gönderir, `.env`'e yapıştırılacak satırları yazdırır.
+- `scripts/test-flow.mjs`: uçtan uca doğrulama scripti (aşağıda, gerçek Testnet
+  işlemleriyle çalıştırıldı).
+
+### Files Changed
+
+- `backend/**` (yeni — `DEPLOY.md` ve `.tools/` için `.gitignore` girdisi dahil)
+- `frontend/.env` (local only, gitignored) — `VITE_ANCHOR_HOME_DOMAIN` tünel adresine yazıldı
+- `docs/IMPLEMENTATION_LOG.md` (bu bölüm)
+- `docs/HACKATHON_SUBMISSION_TASKS.md` (backend bölümü güncellendi)
+
+### Commands Run
+
+- `npm install` (backend/)
+- `npx tsc --noEmit -p tsconfig.json` (temiz)
+- `npm run setup-issuer` — gerçek Testnet issuer/dağıtım hesabı üretti ve `TRYT` ihraç etti
+- `npm run start`, ardından `curl http://localhost:3001/.well-known/stellar.toml` ve
+  `/health` ile sağlık kontrolü
+- `node scripts/test-flow.mjs <issuer>` — tam SEP-10 + SEP-24 uçtan uca akışı
+
+### Test Results
+
+- **Gerçek Testnet issuer/dağıtım kurulumu**: issuer `GAOPTL4Q34VQWE5PWWVYEX7QQLOSO2DVYUVURCHHXTZFKASS66YL7YJ3`,
+  dağıtım `GCXVNHNXFKMQHUILBFMSVW2FBOGXFGLU4Y5P42RGOW5H3HP7BQBMIOIG`, varlık `TRYT`, arz
+  `1,000,000,000` dağıtım hesabında.
+- **Uçtan uca canlı test** (`scripts/test-flow.mjs`, rastgele üretilip Friendbot ile
+  fonlanan gerçek bir Testnet hesabıyla):
+  1. SEP-10: challenge alındı, imzalandı, `POST /auth` JWT döndürdü.
+  2. SEP-24 `/info`: `{"deposit":{"TRYT":{"enabled":true,"min_amount":10,"max_amount":100000}},...}`.
+  3. `POST /transactions/deposit/interactive` bir işlem id'si ve interaktif form adresi
+     döndürdü.
+  4. Form, kullanıcı henüz `TRYT` trustline'ı açmadan onaylandı → durum doğru şekilde
+     `pending_trust` oldu (gerçek bir Horizon `op_no_trust` hatası yakalanıp bu duruma
+     çevrildi, sahte/simüle bir hata değil).
+  5. Kullanıcı gerçek bir on-chain `changeTrust` işlemiyle trustline açtı.
+  6. Bir sonraki `GET /sep24/transaction` sorgusunda sunucu ödemeyi **kendiliğinden**
+     yeniden denedi ve başarılı oldu — durum `completed`, gerçek bir Stellar işlem hash'i
+     (`415c3f687f7f74d7385dbdc7b9a73c9202c12b411b4873d93eabb339793073a8`) döndü.
+  7. Kullanıcının nihai bakiyesi doğrulandı: `250.0000000 TRYT` — talep edilen tutarla
+     birebir.
+- Bu, `pending_trust` kendi kendini iyileştirme mantığının gerçek bir hata koşulunda
+  (trustline yokluğu) ve gerçek bir kurtarmada (trustline sonrası otomatik yeniden deneme)
+  çalıştığının doğrudan kanıtı — uydurulmuş bir mutlu yol değil.
+- **Genel https tünel üzerinden ikinci bir doğrulama**: `cloudflared` (hesapsız "quick
+  tunnel" modu, tek dosya, kurulum gerektirmez — winget'in MSI kurulumu bir UAC izin
+  penceresinde takılınca bu yola geçildi) ile `https://projection-democratic-leslie-orders.trycloudflare.com`
+  üzerinden dışarı açıldı, `PUBLIC_BASE_URL` buna güncellenip sunucu yeniden başlatıldı
+  (`stellar.toml`'daki `WEB_AUTH_ENDPOINT`/`TRANSFER_SERVER_SEP0024`'ün artık tünel
+  adresini gösterdiği doğrulandı), ve `scripts/test-flow.mjs` bu genel adrese karşı
+  ikinci kez uçtan uca çalıştırıldı — yine gerçek bir Testnet işlem hash'iyle
+  (`a7170ca00d6da1272d089fb30bf1faf421d8fa7fe78c61423dba8c5c6c4a5133`) ve doğru
+  `250.0000000 TRYT` bakiyesiyle tamamlandı. `frontend/.env`'deki `VITE_ANCHOR_HOME_DOMAIN`
+  bu tünel adresine yazıldı. Bu, yalnızca geliştiricinin makinesi açıkken çalışan **geçici**
+  bir teşhir — kalıcı çözüm için bkz. aşağıdaki `backend/DEPLOY.md`.
+- `scripts/test-flow.mjs`, hem yerel hem tünel adresine karşı tekrar kullanılabilsin diye
+  `baseUrl`/`issuerPublicKey`'i komut satırı argümanı olarak almak üzere genelleştirildi
+  (önceden `localhost:3001` sabitti).
+- Yeni `backend/DEPLOY.md`: Yusuf'un sunucusuna kalıcı deploy talimatı — en kritik uyarı,
+  **issuer/dağıtım sırlarının yeniden üretilmemesi** (aksi halde farklı bir `TRYT` varlığı
+  doğar ve bu fazın tüm kanıtları geçersiz kalır); sırların git dışında güvenli bir
+  kanaldan taşınması; alt alan adı + reverse proxy (Caddy/nginx) ile TLS; pm2/systemd ile
+  sürekli çalışma; `scripts/test-flow.mjs` ile deploy sonrası doğrulama adımı.
+
+### Decisions
+
+- **Kendi anchor'ımızı kurmayı**, SDF'in test anchor'ına bağlı kalmaya tercih ettik:
+  `docs/HACKATHON_SUBMISSION_TASKS.md`'de tespit edildiği gibi el kitabı Ecosystem Fit
+  içinde Anchor/Local Payments'a en yüksek ağırlığı veriyor ve bunun "ürünün çekirdeğinde"
+  olmasını istiyor; kendi sunucumuz olmadan bu, sadece SDF'in genel demosuna bir bağlantı
+  olarak kalırdı.
+- **Node.js/TypeScript/Express** seçildi (Rust/Python değil): frontend zaten aynı dilde
+  (`@stellar/stellar-sdk`'nin aynı sürümü), takımın hackathon süresince yeni bir dil
+  öğrenmesini gerektirmiyor, ve SEP-10 yardımcı fonksiyonları (`WebAuth.buildChallengeTx`
+  vb.) frontend'in zaten kullandığı SDK modülünün birebir aynısı — istemci/sunucu arasında
+  kavramsal tutarlılık sağlıyor.
+- **`Utils` değil `WebAuth`**: ilk yazımda `Utils.buildChallengeTx` vb. varsayıldı ama
+  `@stellar/stellar-sdk@17.1.0`'da bu fonksiyonlar `WebAuth` ad alanında —
+  `frontend/src/lib/anchor.ts`'nin zaten `import { WebAuth } from '@stellar/stellar-sdk'`
+  yaptığı fark edilip düzeltildi (tip denetimi bunu hemen yakaladı).
+- **`pending_trust`'ı GET /transaction içinde sessizce yeniden deneme**, ayrı bir webhook/
+  callback ucu yerine: SEP-24 istemcileri zaten durumu poll'luyor (frontend'in
+  `getTransaction`'ı ve `TERMINAL_STATUSES` mantığı buna göre yazılmış), bu yüzden var olan
+  poll döngüsünü "self-healing" yapmak, yeni bir entegrasyon noktası eklemekten daha az
+  hareketli parça demek.
+- **Bellek-içi işlem deposu**: hackathon süresi için kalıcı bir veritabanı kurmanın getirisi
+  yok; bu `backend/README.md`'de açıkça bir basitleştirme olarak işaretlendi, gizlenmedi.
+- **Varlık kodu `TRYT`** (yalnızca `TRY` değil): kullanıcının veya bir judge'ın bunu gerçek
+  TL zannetmesini SDK/arayüz seviyesinde daha zor kılmak için — isim zaten "test" içeriyor.
+
+### Risks / Open Questions
+
+- **Hâlâ gerçek banka/ödeme kuruluşu entegrasyonu yok** — bu bilinçli bir kapsam kararı
+  (madde: Decisions), el kitabının "gerçek TL girişi" beklentisini tam karşılamıyor.
+  `docs/altin-gunu-legal-boundary.md`'deki değerlendirme bu fazdan sonra da geçerliliğini
+  koruyor: testnet + gerçek para yokluğu düşük risk, ama "gerçek TRY" iddiası hâlâ yanlış
+  olur — kod ve dokümantasyon bunu her katmanda (toml, form sayfası, README) açıkça
+  reddediyor.
+- **Anchor henüz havuz akışına bağlı değil** (`docs/HACKATHON_SUBMISSION_TASKS.md` madde 3,
+  frontend P0) — bu faz backend'i ve genel erişimi teslim eder; `CreateView.vue`/
+  `PoolView.vue`'ya bağlanması ayrı, henüz yapılmamış bir adımdır.
+- **`PUBLIC_BASE_URL` şu an bir `cloudflared` quick tunnel adresi** (hesapsız, tek dosya) —
+  gerçek bir cüzdanla https üzerinden deneme artık mümkün, ama bu tünel yalnızca
+  geliştiricinin makinesi açıkken yaşar ve her yeniden başlatmada adres değişir. **Teslim
+  için yeterli değil** — kalıcı çözüm `backend/DEPLOY.md`'de belgelendi, Yusuf'un
+  sunucusuna uygulanması bekleniyor.
+- **Tek imzalı hesap varsayımı** (`verifyChallengeTxSigners`, eşik/çoklu imza yok) —
+  hackathon demosu için yeterli, üretim için yetersiz; `backend/README.md`'de açıkça
+  "bilinçli basitleştirme" olarak işaretli.
+- **`ISSUER_SECRET`/`DISTRIBUTION_SECRET` yalnızca yerel `backend/.env`'de** (gitignore'lu,
+  hiç commit edilmedi) — bu sırların takım içinde nasıl paylaşılacağı (ör. güvenli bir
+  kanaldan) bu fazın kapsamı dışında, teslim öncesi netleştirilmeli.
+
+### Stellar Skills Used
+
+- Anchors (SEP-1/6/10/12/24/31/38 skill dosyası, `skills.stellar.org`): SEP-10 challenge
+  üretimi/doğrulaması ve SEP-24 interactive deposit akışının doğrudan referansı.
+- Stellar Assets & SAC: yeni bir classic varlık ihracı (issuer + dağıtım hesabı ayrımı,
+  trustline), Soroban tarafında ekstra işlem gerekmeden aynı bakiyenin SAC sarmalayıcısı
+  üzerinden kontrat tarafından da kullanılabilir olması (`stellar contract id asset` ile
+  hesaplanabilir SAC adresi, kontrat `token` parametresine geçilebilir).
+
+### Definition of Done
+
+- Gerçek SEP-1/10/24 akışı, kendi sunucumuzda, uçtan uca ve gerçek bir Testnet ödemesiyle
+  doğrulandı: **tamamlandı** (yukarıdaki test kanıtı, iki ayrı gerçek tx hash ile).
+- Genel https erişim (geçici): **tamamlandı** (`cloudflared` quick tunnel). **Kalıcı
+  değil** — sunucuya deploy `backend/DEPLOY.md`'de belgelendi, uygulanması bekleniyor.
+- Anchor'ın ana havuz akışına bağlanması: **tamamlanmadı** — ayrı bir sonraki adım
+  (frontend tarafı, `docs/HACKATHON_SUBMISSION_TASKS.md`).
+- Gerçek bir cüzdanla (https üzerinden) canlı deneme: **tamamlanmadı** — sonraki adım.
+- Dürüstlük/etiketleme (gerçek TRY olmadığının her katmanda açık olması): **tamamlandı**.
+
+### Status
+
+NEEDS REVIEW

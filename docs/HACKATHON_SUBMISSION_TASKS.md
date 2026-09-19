@@ -52,7 +52,7 @@ destek** ve küçük doğrulamalar.
   rastgelelik (commit-reveal), erken alıcı temerrüdü riski — bunlar bilinçli kapsam
   dışı, şimdi dokunma.
 
-## 2. Backend ekibi — sıfırdan kurulmalı, en kritik iş
+## 2. Backend ekibi — sıfırdan kuruldu (Phase 14)
 
 Şu an proje backend'siz. "Anchor" dediğimiz şey frontend'in doğrudan
 `testanchor.stellar.org`'a konuştuğu bir istemci — kendi sunucumuz yok. El kitabının
@@ -63,22 +63,36 @@ sabit gecikme) bir servis. Dürüstlük şart: hem kodda hem pitch'te "kendi iş
 test anchor'ı, gerçek banka rayı yok" net yazılmalı — aksi hem etik hem
 (`docs/altin-gunu-legal-boundary.md`'de zaten işaretlenmiş) hukuki risk yaratır.
 
+**Durum:** temel servis yazıldı, gerçek Testnet varlığı ihraç edildi, uçtan uca
+(SEP-10 login → SEP-24 interactive deposit → `pending_trust` → trustline → otomatik
+tamamlanma → gerçek bakiye) **canlı test edildi ve doğrulandı**. Kod: `backend/`.
+Ayrıntılı kanıt ve kararlar: `docs/IMPLEMENTATION_LOG.md` "Phase 14".
+
 **P0 — minimum çalışan anchor**
-- [ ] Kendi issuer hesabını oluştur (Testnet), TRY'yi temsil eden bir test varlığı
-  ihraç et. Kod adı net "test/temsili" olduğunu belli etsin (örn. `TRYT` veya
-  `TRYX`, "TRY" tek başına değil — gerçek TRY zannedilmesin).
-- [ ] SEP-1 `stellar.toml` servis et: `CURRENCIES` (yeni varlık), `WEB_AUTH_ENDPOINT`,
-  `TRANSFER_SERVER_SEP0024`, `SIGNING_KEY` alanları dolu olmalı.
-- [ ] SEP-10 auth endpoint: challenge üret/doğrula, JWT dön. (`frontend/src/lib/anchor.ts`
-  zaten generic bir SEP-10 istemcisi — sunucu tarafı eksik olan.)
-- [ ] SEP-24 minimum uçlar: `GET /info`, `POST /transactions/deposit/interactive`,
-  `GET /transaction?id=...`. Interactive deposit sayfası: kullanıcıdan tutar alır,
-  "TRY yatırdım" onayı (gerçek ödeme değil, buton) sonrası arka planda kullanıcının
-  Stellar hesabına gerçek bir on-chain transferle `TRYT` gönderir.
-- [ ] `.env`/`frontend/.env`'deki `ANCHOR_HOME_DOMAIN` / `VITE_ANCHOR_HOME_DOMAIN`'i
-  bu yeni sunucunun domainine (veya localhost/tünel adresine, demo sırasında) çevir.
-- [ ] **Kabul ölçütü**: frontend'ten gerçek bir cüzdanla SEP-10 login + SEP-24
-  interactive deposit tam döngüsü çalışıyor, kullanıcı bakiyesinde `TRYT` görünüyor.
+- [x] Kendi issuer hesabını oluştur (Testnet), TRY'yi temsil eden bir test varlığı
+  ihraç et. Kod adı net "test/temsili" olduğunu belli etsin — `TRYT`, `backend/scripts/setup-issuer.ts`.
+- [x] SEP-1 `stellar.toml` servis et — `backend/src/routes/wellKnown.ts`.
+- [x] SEP-10 auth endpoint — `backend/src/routes/auth.ts` (`WebAuth.buildChallengeTx`/
+  `readChallengeTx`/`verifyChallengeTxSigners`, `frontend/src/lib/anchor.ts`'nin
+  kullandığı aynı SDK modülü).
+- [x] SEP-24 minimum uçlar + interaktif form — `backend/src/routes/sep24.ts`,
+  `backend/src/routes/interactive.ts`. `pending_trust` durumu her poll'da kendiliğinden
+  yeniden denenir.
+- [x] `frontend/.env`'deki `VITE_ANCHOR_HOME_DOMAIN`'i https adresine çevir — **geçici
+  olarak yapıldı**: `cloudflared` quick tunnel açıldı (hesap gerektirmedi), backend şu an
+  `https://projection-democratic-leslie-orders.trycloudflare.com` üzerinden dışarı açık,
+  `frontend/.env`'e yazıldı. ⚠️ Bu tünel yalnızca geliştiricinin makinesi açıkken çalışır,
+  adres her yeniden başlatmada değişir — **teslim için kalıcı değil.**
+- [ ] **Kalıcı sunucu deploy'u — Yusuf'un sunucusuna.** Adım adım talimat:
+  [`backend/DEPLOY.md`](../backend/DEPLOY.md). Özet: aynı issuer/distribution sırlarını
+  (güvenli kanaldan) sunucuya taşı — **yeniden `setup-issuer` çalıştırma**, bir alt alan
+  adı + reverse proxy (Caddy/nginx) ile TLS, pm2/systemd ile sürekli ayakta tutma. Bu
+  bitmeden teslim edilen link, sunucu değil geliştiricinin laptobuna bağımlı kalır.
+- [x] **Kabul ölçütü** (backend tarafı için): `backend/scripts/test-flow.mjs` ile
+  gerçek bir Testnet hesabı üzerinden tam SEP-10+SEP-24 döngüsü ve gerçek bir on-chain
+  ödeme **hem localhost hem genel tünel adresi üzerinden** doğrulandı (iki ayrı tx hash,
+  `docs/IMPLEMENTATION_LOG.md`'de). Gerçek bir cüzdanla (Freighter) tarayıcı üzerinden
+  deneme henüz yapılmadı.
 
 **P1 — zaman kalırsa**
 - [ ] SEP-12 KYC-lite form (ad, e-posta — gerçek doğrulama yok, sadece akış tamlığı
@@ -99,8 +113,11 @@ test anchor'ı, gerçek banka rayı yok" net yazılmalı — aksi hem etik hem
   `AnchorDemo.vue` yalnızca `HomeView`/`ShowcaseView`'de, havuz akışıyla hiç teması
   yok. Tam otomasyon şart değil; en azından kullanıcı "önce TRY yatır, sonra havuza
   katıl" akışını gözle takip edebilmeli.
-- [ ] Backend hazır olunca (madde 2) `VITE_ANCHOR_HOME_DOMAIN`'i o sunucuya çevir,
-  gerçek bir cüzdanla SEP-10 + SEP-24 interactive deposit'i dene.
+- [ ] **Backend artık hazır** (`backend/`, bkz. madde 2 — kurulum ve https tünel adımları
+  `backend/README.md`'de). `cloudflared`/`ngrok` ile bir https tünel aç, backend'in
+  `PUBLIC_BASE_URL`'ini o adrese ayarlayıp yeniden başlat, `frontend/.env`'de
+  `VITE_ANCHOR_HOME_DOMAIN`'i o adresin host'una çevir, gerçek bir cüzdanla SEP-10 +
+  SEP-24 interactive deposit'i dene.
 - [ ] **Gerçek cüzdanla (Freighter) uçtan uca tam döngü**: havuz oluştur → üye
   katıl → şartları öner/onayla → başlat → öde → (kura modundaysa) kura çek →
   execute_round → tamamlandı. Ekran görüntüsü veya kısa video al (pitch/README için
