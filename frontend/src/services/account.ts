@@ -1,5 +1,5 @@
 import { BASE_FEE, contract, Operation, TransactionBuilder } from '@stellar/stellar-sdk'
-import { config, horizonServer, poolAsset, poolTokenContractId } from '@/lib/stellar'
+import { config, friendbotUrl, horizonServer, poolAsset, poolTokenContractId, requireTestnetDemo } from '@/lib/stellar'
 import type { SignOptions } from '@/stores/wallet'
 
 export interface AccountInfo {
@@ -64,7 +64,8 @@ export async function getTokenBalance(holder: string): Promise<bigint> {
 
 /** Friendbot: Testnet hesabını oluşturur ve XLM yükler. */
 export async function fundWithFriendbot(address: string): Promise<void> {
-  const res = await fetch(`${config.friendbotUrl}?addr=${encodeURIComponent(address)}`)
+  requireTestnetDemo()
+  const res = await fetch(`${friendbotUrl}?addr=${encodeURIComponent(address)}`)
   if (!res.ok) {
     const detail = await res.text().catch(() => '')
     throw new Error(`Friendbot hesabı fonlayamadı (${res.status}). ${detail.slice(0, 120)}`)
@@ -73,6 +74,7 @@ export async function fundWithFriendbot(address: string): Promise<void> {
 
 /** Havuz asset'i (USDC) için trustline ekler. Yoksa asset alınamaz, payout başarısız olur. */
 export async function addTrustline(address: string, sign: Signer): Promise<string> {
+  requireTestnetDemo()
   const account = await horizonServer.loadAccount(address)
   const tx = new TransactionBuilder(account, {
     fee: BASE_FEE,

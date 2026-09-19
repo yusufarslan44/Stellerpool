@@ -12,6 +12,13 @@ export function parseAmount(input: string): bigint {
   return BigInt(whole) * STROOPS + BigInt(frac.padEnd(7, '0'))
 }
 
+/** 125000000n -> "12.5". Form alanlarına ve URL'e yazmak için, yerel ayar kullanmaz. */
+export function toPlainAmount(value: bigint): string {
+  const whole = value / STROOPS
+  const frac = (value % STROOPS).toString().padStart(7, '0').replace(/0+$/, '')
+  return frac ? `${whole}.${frac}` : `${whole}`
+}
+
 /** 125000000n -> "12,50" (tr-TR). En az 2, en fazla maxDecimals ondalık gösterir. */
 export function formatStroops(value: bigint, maxDecimals = 2): string {
   const negative = value < 0n

@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { errorMessage, isUserRejection } from '@/lib/errors'
-import { config } from '@/lib/stellar'
+import { config, requireTestnetDemo } from '@/lib/stellar'
 import { StellarWalletsKit } from '@/lib/wallet-kit'
 
 export interface SignOptions {
@@ -64,6 +64,7 @@ export const useWalletStore = defineStore('wallet', () => {
 
   /** `contract.Client` ve trustline işlemleri için imza fonksiyonu. */
   async function signTransaction(xdr: string, opts?: SignOptions) {
+    requireTestnetDemo()
     if (!address.value) throw new Error('Önce cüzdanınızı bağlayın.')
     return StellarWalletsKit.signTransaction(xdr, {
       networkPassphrase: opts?.networkPassphrase ?? config.passphrase,

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { StrKey } from '@stellar/stellar-sdk'
-import { computed, ref, watch } from 'vue'
-import { RouterLink, useRouter } from 'vue-router'
+import { computed, ref } from 'vue'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { errorMessage, isUserRejection } from '@/lib/errors'
 import { formatStroops, parseAmount } from '@/lib/format'
 import { requiredGuarantee } from '@/lib/guarantee'
@@ -20,13 +20,22 @@ const DURATIONS = [
   { label: '30 gün (aylık)', seconds: 30 * 24 * 60 * 60 },
 ]
 
-const amount = ref('10')
-const memberLimit = ref(4)
+// Ana sayfadaki hesaplama aracından gelen değerler (?amount=…&members=…).
+const route = useRoute()
+const queryAmount = typeof route.query.amount === 'string' ? route.query.amount : ''
+const queryMembers = Number.parseInt(String(route.query.members ?? ''), 10)
+
+const amount = ref(queryAmount || '10')
+const memberLimit = ref(
+  Number.isInteger(queryMembers) && queryMembers >= 2 && queryMembers <= 12 ? queryMembers : 4,
+)
 const duration = ref(DURATIONS[0]!.seconds)
+const graceDuration = ref(10 * 60)
+const purchaseDuration = ref(30 * 60)
+const setupDuration = ref(24 * 60 * 60)
 const sponsorIsMe = ref(false)
 const sponsorInput = ref('')
-const verifiersInput = ref('')
-const threshold = ref(1)
+const demoSellerInput = ref('')
 const busy = ref(false)
 const error = ref<string | null>(null)
 const txHash = ref<string | null>(null)
@@ -34,18 +43,6 @@ const txHash = ref<string | null>(null)
 const sponsor = computed(() =>
   sponsorIsMe.value ? (wallet.address ?? '') : sponsorInput.value.trim(),
 )
-
-const verifiers = computed(() =>
-  verifiersInput.value
-    .split(/[\s,;]+/)
-    .map((v) => v.trim())
-    .filter(Boolean),
-)
-
-// Onay eşiği doğrulayıcı sayısını aşmasın.
-watch(verifiers, (list) => {
-  if (list.length > 0 && threshold.value > list.length) threshold.value = list.length
-})
 
 const contribution = computed(() => {
   try {
@@ -65,8 +62,12 @@ const guarantee = computed(() =>
 )
 
 const sponsorValid = computed(() => StrKey.isValidEd25519PublicKey(sponsor.value))
-const badVerifier = computed(() => verifiers.value.find((v) => !StrKey.isValidEd25519PublicKey(v)))
-const verifiersValid = computed(() => verifiers.value.length > 0 && badVerifier.value === undefined)
+const demoSeller = computed(() => demoSellerInput.value.trim())
+const demoSellerValid = computed(() =>
+  StrKey.isValidEd25519PublicKey(demoSeller.value) &&
+  demoSeller.value !== sponsor.value &&
+  demoSeller.value !== wallet.address,
+)
 
 const valid = computed(
   () =>
@@ -74,9 +75,11 @@ const valid = computed(
     memberLimit.value >= 2 &&
     memberLimit.value <= 12 &&
     sponsorValid.value &&
-    verifiersValid.value &&
-    threshold.value >= 1 &&
-    threshold.value <= verifiers.value.length,
+    demoSellerValid.value &&
+    duration.value > 0 &&
+    graceDuration.value > 0 &&
+    purchaseDuration.value > 0 &&
+    setupDuration.value > 0,
 )
 
 async function submit() {
@@ -93,8 +96,10 @@ async function submit() {
         contributionAmount: contribution.value,
         memberLimit: memberLimit.value,
         roundDuration: duration.value,
-        verifiers: verifiers.value,
-        approvalThreshold: threshold.value,
+        graceDuration: graceDuration.value,
+        purchaseDuration: purchaseDuration.value,
+        setupDeadline: Math.floor(Date.now() / 1000) + setupDuration.value,
+        demoSeller: demoSeller.value,
       },
     )
     txHash.value = result.hash
@@ -112,8 +117,8 @@ async function submit() {
     <div>
       <h1 class="text-2xl font-bold tracking-tight">Yeni tasarruf havuzu</h1>
       <p class="mt-1 text-sm text-slate-600">
-        Her tur herkes aynı tutarı yatırır, tur tutarı doğrulanmış satıcıya gider. Para sözleşmede
-        durur, kurucunun serbest çekim yetkisi yoktur.
+        Testnet için hedeflenen akışta herkes aynı tutarı yatırır; demo satıcıya ödeme ve kurucunun
+        serbest çekimini engelleyen kurallar henüz kontratta uygulanmadı.
       </p>
     </div>
 
@@ -166,11 +171,38 @@ async function submit() {
         </select>
       </div>
 
+      <div class="grid gap-4 sm:grid-cols-3">
+        <div>
+          <label class="label" for="grace-duration">Ek süre</label>
+          <select id="grace-duration" v-model.number="graceDuration" class="input">
+            <option :value="600">10 dakika (demo)</option>
+            <option :value="86400">1 gün</option>
+            <option :value="604800">7 gün</option>
+          </select>
+        </div>
+        <div>
+          <label class="label" for="purchase-duration">Alım onayı süresi</label>
+          <select id="purchase-duration" v-model.number="purchaseDuration" class="input">
+            <option :value="1800">30 dakika (demo)</option>
+            <option :value="86400">1 gün</option>
+            <option :value="604800">7 gün</option>
+          </select>
+        </div>
+        <div>
+          <label class="label" for="setup-duration">Kuruluş süresi</label>
+          <select id="setup-duration" v-model.number="setupDuration" class="input">
+            <option :value="3600">1 saat (demo)</option>
+            <option :value="86400">1 gün</option>
+            <option :value="604800">7 gün</option>
+          </select>
+        </div>
+      </div>
+
       <fieldset class="space-y-3">
         <legend class="label">Sponsor</legend>
         <p class="text-xs text-slate-500">
-          Havuz başlamadan önce güvence yatıran taraf. Bir üye ödemeyi bırakırsa bekleyenlerin
-          iadesi bu güvenceyle korunur.
+          Planlanan Testnet senaryosunda güvence yatıran taraf. Bu hesap gerçek para veya teslimat
+          garantisi değildir.
         </p>
         <label class="flex items-center gap-2 text-sm">
           <input v-model="sponsorIsMe" type="checkbox" class="size-4" :disabled="!wallet.address" />
@@ -189,34 +221,22 @@ async function submit() {
       </fieldset>
 
       <div>
-        <label class="label" for="verifiers">Doğrulayıcılar (her satıra bir adres)</label>
-        <textarea
-          id="verifiers"
-          v-model="verifiersInput"
-          class="input min-h-24 font-mono"
-          placeholder="G…&#10;G…"
-          autocomplete="off"
-        />
-        <p v-if="badVerifier" class="mt-1 text-xs text-rose-700">
-          Geçersiz adres: {{ badVerifier.slice(0, 12) }}…
-        </p>
-        <p class="mt-1 text-xs text-slate-500">
-          Satıcı ve alım kaydını onaylayan bağımsız taraflar. Kurucunun tek başına onayı yeterli değildir.
-        </p>
-      </div>
-
-      <div>
-        <label class="label" for="threshold">Gereken onay sayısı</label>
+        <label class="label" for="demo-seller">İzinli demo satıcısı (Stellar Testnet adresi)</label>
         <input
-          id="threshold"
-          v-model.number="threshold"
-          class="input max-w-32"
-          type="number"
-          min="1"
-          :max="Math.max(1, verifiers.length)"
-          step="1"
+          id="demo-seller"
+          v-model="demoSellerInput"
+          class="input font-mono"
+          type="text"
+          placeholder="G… demo satıcısı"
+          autocomplete="off"
           required
         />
+        <p v-if="demoSeller && !demoSellerValid" class="mt-1 text-xs text-rose-700">
+          Satıcı geçerli bir adres olmalı; kurucu veya sponsor adresiyle aynı olamaz.
+        </p>
+        <p class="mt-1 text-xs text-slate-500">
+          Sıra ve doğrulayıcılar üyeler katıldıktan sonra ayrı bir koşul sürümü olarak önerilir ve onaylanır.
+        </p>
       </div>
 
       <dl v-if="valid && contribution !== null && pot !== null && guarantee !== null" class="rounded-xl bg-slate-50 p-4 text-sm">
