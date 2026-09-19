@@ -8,7 +8,7 @@ const wallet = useWalletStore()
   <p
     v-if="wallet.networkWarning"
     role="alert"
-    class="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-center text-sm text-amber-900"
+    class="mb-6 rounded-2xl border border-gold-300/60 bg-gold-100/70 px-4 py-3 text-center text-sm text-amber-900"
   >
     {{ wallet.networkWarning }}
   </p>

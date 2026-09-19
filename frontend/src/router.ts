@@ -14,5 +14,9 @@ export const router = createRouter({
         { path: '/pool/:id(\\d+)', name: 'pool', component: () => import('@/views/PoolView.vue') },
         { path: '/:pathMatch(.*)*', redirect: '/' },
       ],
-  scrollBehavior: () => ({ top: 0 }),
+  scrollBehavior: (to, _from, saved) => {
+    if (saved) return saved
+    if (to.hash) return { el: to.hash, top: 96, behavior: 'smooth' }
+    return { top: 0 }
+  },
 })
