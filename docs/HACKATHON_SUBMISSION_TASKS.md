@@ -128,12 +128,12 @@ bağlamak.
   `VITE_POOL_ASSET_ISSUER=GAOPTL4Q34VQWE5PWWVYEX7QQLOSO2DVYUVURCHHXTZFKASS66YL7YJ3` ayarla
   ve yeniden deploy et. **Şu an site ya boş `VITE_ANCHOR_HOME_DOMAIN` (SDF test anchor'ı)
   ya da hiç ayarlanmamış anchor değişkenleriyle çalışıyor olabilir — kontrol edilmeli.**
-- [ ] **Gerçek cüzdanla (Freighter) uçtan uca tam döngü**: havuz oluştur → üye
-  katıl → şartları öner/onayla → başlat → öde → (kura modundaysa) kura çek →
-  execute_round → tamamlandı, ve ayrıca yukarıdaki anchor bağlantısı gerçek bir cüzdanla
-  denenmeli. Ekran görüntüsü veya kısa video al (pitch/README için kanıt).
-- [ ] **Resmi Stellar sunum şablonunu kopyala ve doldur** (kopyasını al, orijinali
-  düzenleme). Zorunlu teslim maddesi, henüz yapılmadı.
+- [ ] **Gerçek cüzdanla (Freighter) uçtan uca tam döngü** — adım adım kontrol listesi
+  hazır: [`docs/WALLET_TEST_CHECKLIST.md`](./WALLET_TEST_CHECKLIST.md). Kanıt (ekran
+  görüntüsü/tx hash) bu listeye göre toplanır.
+- [ ] **Resmi Stellar sunum şablonunu kopyala ve doldur** — slayt slayt içerik taslağı
+  hazır: [`docs/PITCH_CONTENT.md`](./PITCH_CONTENT.md) (kopyala-yapıştır). Zorunlu
+  teslim maddesi.
 
 **P1 — zaman kalırsa**
 - [ ] Kura/30 üye UI'ını canlı v10 kontratına karşı manuel dene (arayüz zaten zincirdeki
