@@ -1345,6 +1345,22 @@ gerçek bir SEP-1/10/24 anchor sunucusu kurmak — el kitabının en ağırlıkl
   doğar ve bu fazın tüm kanıtları geçersiz kalır); sırların git dışında güvenli bir
   kanaldan taşınması; alt alan adı + reverse proxy (Caddy/nginx) ile TLS; pm2/systemd ile
   sürekli çalışma; `scripts/test-flow.mjs` ile deploy sonrası doğrulama adımı.
+- **Ek doğrulama — kontrat × `TRYT` uyumu (`docs/HACKATHON_SUBMISSION_TASKS.md` madde 1
+  P0)**: `TRYT`'nin SAC sarmalayıcısı ilk kez `stellar contract asset deploy` ile
+  yayınlandı (`CDCMFG35MOQPNQAJ4LEBSE427JM57SONZDSEGW4TDKLMBO6ZPMBTL2QB`), ardından
+  gerçek bir Testnet havuzu (`pool_id: 4`, v10 kontrat) `token` olarak bu SAC ile
+  sıfırdan oluşturulup tam bir tur boyunca çalıştırıldı: `create_pool → join_pool ×2 →
+  propose_terms → approve_terms ×2 → start_pool → deposit ×2 → propose_purchase →
+  approve_purchase ×2 → execute_round`. Satıcı gerçekten `20000000` stroop TRYT aldı
+  (`execute_round` tx `3379aedf3903041e6d0428b1e09614d45898827ef0aece377bbc6636b7031cc6`),
+  havuz `current_round: 2`'ye geçti. Kod değişikliği gerekmedi — kontrat zaten
+  asset-agnostik tasarlanmıştı (bkz. Phase 12). Yol boyunca satıcı hesabında henüz
+  trustline yokken ilk `execute_round` denemesi gerçek bir `op_no_trust` (`#13`) hatasıyla
+  başarısız oldu; `get_round` ile round durumunun bozulmadan kaldığı (`AwaitingPurchase`,
+  `pot: 20000000`, onaylar sağlam) doğrulandı, trustline eklenip tekrar denendiğinde
+  sorunsuz tamamlandı — checks-effects-interactions'ın canlı ağda beklendiği gibi
+  çalıştığının ek bir kanıtı (Phase 12'nin `failed_seller_transfer_rolls_back_round_and_liability_updates`
+  birim testiyle aynı davranış, bu kez gerçek bir Testnet hatasıyla).
 
 ### Decisions
 

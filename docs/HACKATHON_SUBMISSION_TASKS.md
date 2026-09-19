@@ -38,11 +38,19 @@ Kontrat tarafı fonksiyonel olarak tamam; buradaki iş artık **diğer ekiplere
 destek** ve küçük doğrulamalar.
 
 **P0**
-- [ ] Backend'in ihraç edeceği TRY-temsili test varlığının (bkz. madde 2) kontratla
-  uyumunu doğrula: `create_pool`'a `token` olarak bu yeni SAC adresi verildiğinde
-  `deposit`/`execute_round` sorunsuz çalışıyor mu — tek bir CLI denemesi yeterli
-  (kontrat zaten herhangi bir SAC ile çalışacak şekilde asset-agnostik yazıldı, bu
-  sadece bir doğrulama, kod değişikliği beklenmiyor).
+- [x] **Doğrulandı** — `TRYT` SAC'ının (`CDCMFG35MOQPNQAJ4LEBSE427JM57SONZDSEGW4TDKLMBO6ZPMBTL2QB`,
+  ilk kullanımda `stellar contract asset deploy` ile yayınlandı) kontratla tam uyumu
+  canlı Testnet'te kanıtlandı: gerçek bir havuz (`pool_id: 4`) `token = TRYT SAC` ile
+  sıfırdan oluşturuldu, `create_pool → join_pool ×2 → propose_terms → approve_terms ×2
+  → start_pool → deposit ×2 → propose_purchase → approve_purchase ×2 → execute_round`
+  zincirinin tamamı çalıştı; satıcı gerçekten `20000000` stroop TRYT aldı
+  (`execute_round` tx `3379aedf3903041e6d0428b1e09614d45898827ef0aece377bbc6636b7031cc6`),
+  havuz round 2'ye geçti. Yol boyunca kod değişikliği gerekmedi — kontrat zaten
+  asset-agnostik. Bonus doğrulama: satıcı hesabında trustline yokken `execute_round`
+  gerçek bir `op_no_trust`/`#13` hatasıyla düzgünce başarısız oldu ve round durumu
+  bozulmadan (`AwaitingPurchase`, `pot` ve onaylar sağlam) kaldı — trustline eklenip
+  tekrar denendiğinde sorunsuz tamamlandı. Checks-effects-interactions'ın canlı ağda
+  da beklendiği gibi çalıştığının doğrudan kanıtı.
 - [ ] Frontend'in gerçek cüzdanla uçtan uca denemesi sırasında (madde 3) ortaya
   çıkabilecek kontrat-kaynaklı hataları hızlı triyaj et (varsa).
 
