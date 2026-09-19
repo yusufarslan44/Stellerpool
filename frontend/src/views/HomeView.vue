@@ -166,7 +166,7 @@ const TRUST: { icon: IlloName; title: string; text: string }[] = [
   {
     icon: 'pin',
     title: 'Sabit sıra',
-    text: 'Havuz başlayınca üyeler ve sıra değişmez; sıra yalnızca üyelerin onayladığı sürümle geçerlidir. Kura hedefte.',
+    text: 'Havuz başlayınca üyeler ve sıra değişmez; sıra yalnızca üyelerin onayladığı sürümle geçerlidir. İstersen sıra yerine kura seç.',
   },
   {
     icon: 'shield',
@@ -187,7 +187,7 @@ const FAQ = [
   },
   {
     q: 'Kura nasıl çalışıyor?',
-    a: 'Kura modunda önceden sıra yoktur. Her tur herkes kendi katkısını yatırır; hepsi tamamlanınca herkesin çağırabileceği bir işlemle, henüz teslim almamış üyeler arasından alıcıyı kontrat seçer. Kazanan zaten payını ödemiştir. Zincir üstü rastgelelik hackathon düzeyindedir, yüksek tutarlı gerçek kullanım için yetmez. Kontratın kura desteği henüz yayınlanmadı.',
+    a: 'Kura modunda önceden sıra yoktur. Her tur herkes kendi katkısını yatırır; hepsi tamamlanınca herkesin çağırabileceği bir işlemle, henüz teslim almamış üyeler arasından alıcıyı kontrat seçer. Kazanan zaten payını ödemiştir. Zincir üstü rastgelelik hackathon düzeyindedir, yüksek tutarlı gerçek kullanım için yetmez. Kura Testnet kontratında canlı denendi; oluşturma formunda “Kura” seçilebilir.',
   },
   {
     q: 'Fuzul Ev veya Eminevim ile aynı mı?',
@@ -195,7 +195,7 @@ const FAQ = [
   },
   {
     q: 'Kaç kişilik grup kurulabilir?',
-    a: 'Yayındaki Testnet kontratı şu an 2 ile 12 üyeyi destekliyor; hedef 30 üye. Büyük grupta bir turda satıcıya giden tutar da büyür; erken teslim alan sonraki katkıyı bırakırsa açık da büyür. Grubu büyütmek bu riski ortadan kaldırmaz.',
+    a: 'Yayındaki Testnet kontratı 2 ile 30 üyeyi destekliyor. Büyük grupta bir turda satıcıya giden tutar da büyür; erken teslim alan sonraki katkıyı bırakırsa açık da büyür. Grubu büyütmek bu riski ortadan kaldırmaz.',
   },
   {
     q: 'Biri ödemeyi bırakırsa ne olur?',
@@ -203,7 +203,7 @@ const FAQ = [
   },
   {
     q: 'Ayşe ilk turda alıp sonra bırakırsa ne olur?',
-    a: 'Dört kişi 10’ar birim yatırırsa ilk tur 40 birim satıcıya gider ve havuzda o turun parası kalmaz. Ayşe sonraki turu ödemezse ikinci tur durur; yalnızca ikinci turda yatırılan katkılar iade edilir. Mehmet, Zeynep ve Can’ın ilk tur payları kontrattan geri alınamaz. Bunu “Bir tur böyle işler” bölümünde kendiliğinden oynayan hikâyede adım adım izleyebilirsin.',
+    a: 'Dört kişi 10’ar birim yatırırsa ilk tur 40 birim satıcıya gider ve havuzda o turun parası kalmaz. Ayşe sonraki turu ödemezse ikinci tur durur; yalnızca ikinci turda yatırılan katkılar iade edilir. Mehmet, Zeynep ve Can’ın ilk tur payları kontrattan geri alınamaz.',
   },
   {
     q: 'Sponsor, sigorta ya da teslimat garantisi var mı?',
@@ -254,8 +254,8 @@ const FAQ = [
         <p class="eyebrow text-brand-700">İzle</p>
         <h2 id="hikaye-baslik" class="mt-2 text-4xl font-extrabold sm:text-5xl">Bir tur böyle işler</h2>
         <p class="mt-3 text-stone-600">
-          Dört arkadaş, bir havuz. Hikâye kendiliğinden oynar: para sözleşmeye girer, onaylar toplanır, tutar satıcıya gider.
-          Sonra biri ödemeyi bırakınca ne olduğunu izle.
+          Dört arkadaşın katkısı tek bir hedefte buluşuyor. Paraları takip et, onayların toplanışını izle;
+          ilk turun satıcıya ödemeyle tamamlanışına eşlik et.
         </p>
       </div>
       <div v-reveal><StorySim /></div>

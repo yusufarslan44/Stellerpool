@@ -1,27 +1,25 @@
 /**
  * Kontrat modeli, docs/plan.md bölüm 5'teki sponsorsuz havuz tasarımına göre yazılmıştır
- * (Testnet'te yayındaki API v9 ile alan alan doğrulandı; kura alanları API v10 hedefidir).
- * Tutarlar stroop (7 ondalık) cinsinden bigint,
- * zamanlar unix saniyesidir.
+ * (Testnet'te yayındaki API v10 ile alan alan doğrulandı: canlı okuma ve simülasyon).
+ * Tutarlar stroop (7 ondalık) cinsinden bigint, zamanlar unix saniyesidir.
  */
 
-/** Üye sayısı sınırları (yayındaki kontrat 12'ye kadar; 30 hedefi: docs/CONTRACT_HANDOFF.md). */
+/** Üye sayısı sınırları (yayındaki kontrat API v10: 2–30). */
 export const MIN_MEMBERS = 2
-/** Arayüzün desteklediği en büyük grup; kontratın da bu sınıra yükseltilmesi gerekir. */
+/** Arayüzün ve yayındaki kontratın (API v10) desteklediği en büyük grup. */
 export const UI_MAX_MEMBERS = 30
-/** Yayındaki kontratın (API v9) kabul ettiği üst sınır. */
-const CONTRACT_MAX_MEMBERS = 12
+/** Varsayılan üst sınır: API v10 kontratının kabul ettiği 30. */
+const DEFAULT_MAX_MEMBERS = 30
 const configuredMax = Number.parseInt(String(import.meta.env.VITE_MAX_MEMBERS ?? ''), 10)
 /**
- * Formun izin verdiği üst sınır. Varsayılan, yayındaki kontratın kabul ettiği 12'dir; kontrat 30'a
- * yükseltilince `VITE_MAX_MEMBERS=30` ile açılır (docs/CONTRACT_HANDOFF.md). Aksi halde 13–30 üyeli
- * bir havuz zincirde reddedilirdi.
+ * Formun izin verdiği üst sınır. Varsayılan 30'dur (API v10). Eski bir kontrata (v9, en çok 12 üye)
+ * bağlanılıyorsa `VITE_MAX_MEMBERS=12` yazın; aksi halde 13–30 üyeli bir havuz zincirde reddedilir.
  */
 export const MAX_MEMBERS =
   Number.isInteger(configuredMax) && configuredMax >= MIN_MEMBERS && configuredMax <= UI_MAX_MEMBERS
     ? configuredMax
-    : CONTRACT_MAX_MEMBERS
-/** Kontratın doğrulayıcı sınırları (API v9). */
+    : DEFAULT_MAX_MEMBERS
+/** Kontratın doğrulayıcı sınırları (API v9 ve v10). */
 export const MIN_VERIFIERS = 2
 export const MAX_VERIFIERS = 10
 

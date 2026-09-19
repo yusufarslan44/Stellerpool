@@ -14,7 +14,7 @@ flowchart LR
   end
   subgraph Stellar["Stellar Testnet"]
     RPC["Soroban RPC"]
-    POOL["rotating_pool<br/>Soroban kontratı (API v9)"]
+    POOL["rotating_pool<br/>Soroban kontratı (API v10)"]
     SAC["Havuz varlığı (SAC)<br/>USDC / demo varlığı"]
     HZ["Horizon"]
   end
@@ -39,7 +39,7 @@ flowchart LR
 | Bileşen | Sorumluluk | Dosya |
 |---|---|---|
 | Kontrat | Havuz, tur, katkı, doğrulayıcı onayı, satıcıya ödeme, iade | `contracts/rotating_pool/src/` |
-| Sözleşme istemcisi | 17 kontrat fonksiyonu, yeteneklerin zincirden okunması, `Result` çözme | `frontend/src/services/pool.ts` |
+| Sözleşme istemcisi | 18 kontrat fonksiyonu (kura dahil), yeteneklerin zincirden okunması, `Result` çözme | `frontend/src/services/pool.ts` |
 | Anchor istemcisi | stellar.toml keşfi, SEP-10 doğrulaması ve imzası, SEP-24 oturumu | `frontend/src/lib/anchor.ts` |
 | Cüzdan | Bağlantı ve imza | `frontend/src/stores/wallet.ts` |
 | Arayüz | Adım adım rehber, kura sahnesi, hikâye simülatörü, 3B sahne | `frontend/src/views/`, `components/` |
@@ -63,15 +63,19 @@ stateDiagram-v2
 stateDiagram-v2
   [*] --> Collecting
   Collecting --> Grace: mark_overdue (katkı süresi doldu)
-  Collecting --> AwaitingPurchase: tüm üyeler ödedi
-  Grace --> AwaitingPurchase: eksik üye cure_payment ile ödedi
+  Collecting --> AwaitingPurchase: tüm üyeler ödedi (sabit sıra)
+  Collecting --> AwaitingDraw: tüm üyeler ödedi (kura)
+  Grace --> AwaitingPurchase: eksik üye cure_payment ile ödedi (sabit sıra)
+  Grace --> AwaitingDraw: eksik üye cure_payment ile ödedi (kura)
+  AwaitingDraw --> AwaitingPurchase: draw_recipient (herkes çağırabilir)
   AwaitingPurchase --> Settled: execute_round (doğrulayıcı eşiği + süre içinde)
   Settled --> Collecting: sonraki tur
   Grace --> [*]: abort_pool (iade)
+  AwaitingDraw --> [*]: abort_pool (süre doldu, iade)
   AwaitingPurchase --> [*]: abort_pool (iade)
 ~~~
 
-**Hedef (API v10, henüz kontratta yok):** kura modunda `Collecting/Grace` ile `AwaitingPurchase` arasına `AwaitingDraw` girer; `draw_recipient` alıcıyı henüz teslim almamış üyeler arasından seçer ([görev listesi](../CONTRACT_HANDOFF.md)).
+**Kura modu (API v10, Testnet'te canlı):** alıcı tur başında belli değildir. Tüm üyeler kendi katkısını yatırınca tur `AwaitingDraw` olur ve alım süresi (`purchase_deadline`) burada başlar. `draw_recipient`, henüz teslim almamış üyeler arasından `env.prng()` ile bir alıcı seçer; herkes çağırabilir, kazanan zaten payını ödemiştir. Tek aday kalınca seçim deterministiktir. Rastgelelik hackathon düzeyindedir (bkz. [görev listesi](../CONTRACT_HANDOFF.md)).
 
 ## Fon akışı ve değişmezler
 

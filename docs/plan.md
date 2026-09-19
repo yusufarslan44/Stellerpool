@@ -2,7 +2,7 @@
 
 **Amaç:** Tanıdık kişilerin altın günü gibi sabit sıralı katkılarını görünür kurallarla koordine eden Stellar prototipi. Hedef Soroban kontratında kurucunun ortak parayı serbestçe çekme yetkisi olmayacak; katkı, sıra ve ödeme koşulları üyelerce onaylanacak. Bu teknik sınır, erken tahsisat alan üyenin gelecek katkılarını garanti etmez.
 
-**Aşama (19 Eylül 2026, akşam):** Lisans başvurusu veya gerçek müşteri fonu yok. Mainnet sitesi salt okunur tanıtımdır; cüzdan imzası, fon ve havuz işlemi yoktur. Testnet'te sponsorsuz havuz kontratı (API v9) yayında: `CCAKOEC34WVBKQ427KT5PI5GMPPKSGBHCWBI7FO4GNG247KKDUH67AZH` ([kanıt](../README.md#kontrat-ve-dağıtım-kanıtı-testnet)). Kura modu ve 30 üye hedeftir, kontratta henüz yoktur ([görev listesi](CONTRACT_HANDOFF.md)). Anchor: gerçek SEP-1/10/24 istemcisi SDF test anchor'ı ile doğrulandı; test varlığı üretir, gerçek TRY veya kullanılabilir TL bakiyesi yaratmaz. [Yayın kapsamı](mainnet-showcase.md) ve [hukuki sınır](altin-gunu-legal-boundary.md) ayrı kaydedildi. Hackathon DOC'unun gerçek TL giriş/çıkış ölçütü karşılanmıyor.
+**Aşama (19 Eylül 2026, akşam):** Lisans başvurusu veya gerçek müşteri fonu yok. Mainnet sitesi salt okunur tanıtımdır; cüzdan imzası, fon ve havuz işlemi yoktur. Testnet'te sponsorsuz havuz kontratı (API v10: sabit sıra ya da kura, 2–30 üye) yayında: `CC7W3SKQHBLZ2JPTGSK42H6IAJQ22A4PUK6CSN2T4PUJRY4LQ445GYMB` ([kanıt](../README.md#kontrat-ve-dağıtım-kanıtı-testnet), [görev listesi](CONTRACT_HANDOFF.md)). Anchor: gerçek SEP-1/10/24 istemcisi SDF test anchor'ı ile doğrulandı; test varlığı üretir, gerçek TRY veya kullanılabilir TL bakiyesi yaratmaz. [Yayın kapsamı](mainnet-showcase.md) ve [hukuki sınır](altin-gunu-legal-boundary.md) ayrı kaydedildi. Hackathon DOC'unun gerçek TL giriş/çıkış ölçütü karşılanmıyor.
 
 ## 1. Eminevim ve Fuzul ile karşılaştırma
 
@@ -18,7 +18,7 @@ Her iki şirketin açıklamasında katkılar bir araya getirilir; çekilişli ve
 
 ## 2. Sponsorsuz ürün kararı
 
-1. Kapalı ve sabit üyeli grup; yayındaki kontratta 2–12 üye (hedef 30), kişi başına her tur aynı `C` katkısı ve `N` tur. Her üye bir kez alıcıdır. Alıcı **sabit sıra** (yayında) ya da **kura** (hedef, API v10) ile belirlenir. Kura, tüm katkılar tamamlanınca henüz teslim almamış üyeler arasından çekilir; kazanan zaten payını ödemiştir. Zincir üstü rastgelelik hackathon düzeyindedir. Değişken tutar MVP dışında.
+1. Kapalı ve sabit üyeli grup; 2–30 üye, kişi başına her tur aynı `C` katkısı ve `N` tur. Her üye bir kez alıcıdır. Alıcı **sabit sıra** ya da **kura** ile belirlenir (kontratta ikisi de canlı). Kura, tüm katkılar tamamlanınca henüz teslim almamış üyeler arasından çekilir; kazanan zaten payını ödemiştir. Zincir üstü rastgelelik hackathon düzeyindedir. Değişken tutar MVP dışında.
 2. Kurucu yalnızca önerir. Katkı, sıra, süreler, satıcı ve doğrulayıcı koşulları üyelerin aynı sürümü onaylamasıyla geçerli olur. Kurucu tek başına değiştiremez veya fon çekemez.
 3. Ayrı sponsor, sponsor güvencesi, başkası adına avans ve platformun teslimat garantisi yoktur. Fon eksiği yeni kullanıcıların katkısıyla kapatılmış varsayılmaz.
 4. Her turda **bütün üyeler kendi katkılarını** yatırmadan tahsisat açılmaz. Son tarih geçince ek süre başlar; eksik üye bu sürede ödeyebilir. Hâlâ eksikse herkes havuzu sonlandırabilir.

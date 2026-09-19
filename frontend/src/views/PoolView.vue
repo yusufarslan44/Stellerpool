@@ -181,8 +181,18 @@ const showDrawStage = computed(
   () => isDraw.value && pool.value?.status === 'Active' && !!round.value &&
     (round.value.phase === 'AwaitingDraw' || !!round.value.recipient),
 )
-const totalRefundable = computed(() => members.value.reduce((sum, m) => sum + m.refundable, 0n))
-const myRefundable = computed(() => (me.value ? (memberByAddress.value.get(me.value)?.refundable ?? 0n) : 0n))
+/**
+ * Kontratın `get_member_status.refundable` değeri havuz durumuna bakmadan "mevcut turda yatırdıysa
+ * katkı" döndürür; tamamlanmış havuzun son turunda da (para satıcıya gitmiş olsa bile) dolu gelir
+ * (canlı Testnet verisiyle görüldü). İade yalnızca ödenmemiş tur için anlamlıdır, o yüzden
+ * tamamlanmış havuzda ve ödenmiş (Settled) turda sıfır gösterilir.
+ */
+const refundableOf = (address: string): bigint => {
+  if (pool.value?.status === 'Completed' || round.value?.phase === 'Settled') return 0n
+  return memberByAddress.value.get(address)?.refundable ?? 0n
+}
+const totalRefundable = computed(() => members.value.reduce((sum, m) => sum + refundableOf(m.address), 0n))
+const myRefundable = computed(() => (me.value ? refundableOf(me.value) : 0n))
 
 const proposedVerifiers = computed(() => verifiersInput.value.split(/[\s,;]+/).map((v) => v.trim()).filter(Boolean))
 const verifiersValid = computed(() => {
@@ -1002,7 +1012,7 @@ const countdownLabel = computed(() =>
               >Kurada</span>
             </div>
             <div class="flex flex-wrap items-center gap-3">
-              <span class="text-xs text-stone-600">Bu turdaki iade: {{ formatStroops(memberByAddress.get(addr)?.refundable ?? 0n) }} {{ token }}</span>
+              <span class="text-xs text-stone-600">Bu turdaki iade: {{ formatStroops(refundableOf(addr)) }} {{ token }}</span>
               <span class="badge" :class="toneClass[memberState(addr).tone]">{{ memberState(addr).label }}</span>
               <span v-if="pool.status === 'Filling' && isCreator && !isDraw" class="flex gap-1">
                 <button type="button" class="btn-secondary !min-h-9 !min-w-9 !px-2 !py-1" :disabled="idx === 0" :aria-label="`${shortAddress(addr)} adresini yukarı taşı`" @click="move(idx, -1)">↑</button>
