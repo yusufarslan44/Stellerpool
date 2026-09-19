@@ -36,7 +36,7 @@ Hackathon jüri kriteri (Ecosystem Fit): *"Makes effective use of Stellar SDKs, 
 - Stellar asset 7 ondalıklıdır: `1000000` = `0.1`. Arayüzde `10^7`'ye bölün, tutarları JS `number` yerine string/BigInt tutun.
 - Kontrat (C-hesabı) SAC bakiyesini trustline olmadan tutar. **Kullanıcı hesabı (G-hesabı) trustline'sız asset alamaz, transfer başarısız olur.** Bu yüzden `join_pool` sırasında trustline kontrol edilmeli, arayüz de eksikse trustline eklemeyi önermeli.
 - SAC adresi: `new Asset(code, issuer).contractId(Networks.TESTNET)`.
-- Testnet USDC ihraççısı (skill'e göre): `GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN`. Hesap fonlama için Friendbot, USDC için handbook'taki Circle faucet.
+- Testnet USDC ihraççısı: `GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5` (Horizon testnet'te doğrulandı: yaklaşık 69 bin hesap, dolaşımda büyük arz, mainnet'te yok). **Dikkat:** skill sayfasında geçen `GA5ZSEJY…VN` adresi Circle'ın *mainnet* USDC ihraççısıdır, testnet'te arzı 0 olan işe yaramaz bir kopyası var. Kullanmayın. Hesap fonlama için Friendbot, USDC için handbook'taki Circle faucet.
 
 ## Kontrat (Smart Contracts skill'inden)
 
@@ -44,7 +44,7 @@ Hackathon jüri kriteri (Ecosystem Fit): *"Makes effective use of Stellar SDKs, 
 - `soroban-sdk` ana sürümü protokol sürümünü izler; ağın protokol sürümüne göre sabitleyin.
 - Depolama: instance (ayarlar), persistent (kalıcı veri), temporary. Her kayıt kiralıktır ve arşivlenebilir, `extend_ttl` düzenli çağrılmalı.
 - Kimlik: durum değiştiren her fonksiyonda `require_auth()`. Kritik: `overflow-checks = true` (release profili).
-- Event'ler tipli struct ve `#[topic]` alanlarıyla yayınlanır (arayüz bunları dinler: `CollateralConsumed`, `MemberDefaulted`).
+- Event'ler tipli struct ve `#[topic]` alanlarıyla yayınlanır (arayüz sponsor güvencesi, eksik ödeme, tahsisat ve iade olaylarını dinler).
 - Test: `testutils` ve `env.mock_all_auths()`. Deploy: `stellar contract build`, `stellar contract deploy --wasm ... --source-account <hesap> --network testnet`.
 - Kontrol listesi: "Soroban Common Mistakes" skill'i ile deploy öncesi gözden geçirin. Kontrat upgrade edilemez kalacak (plan kararı), bunu README'de yazın.
 
