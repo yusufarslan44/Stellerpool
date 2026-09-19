@@ -1,72 +1,63 @@
-# Stellerpool — EvAraç Tasarruf Havuzu
+# Stellerpool — korumalı ev/araç tasarruf havuzu
 
 > Birlikte biriktir. Her şeyi doğrula. — *Save together. Verify everything.*
 
-Stellar / Soroban tabanlı, şeffaf ortak tasarruf havuzu. Ev, araç veya başka büyük hedefler için birlikte düzenli birikim yapılan gruplarda para bir şirketin hesabında değil, **Soroban akıllı kontratında** durur. Kurallar kodda yazılıdır, kimse araya giremez.
+Stellerpool, FuzulEv/FuzulOto tarzı düzenli birikim ve sıralı teslimat fikrinin Stellar / Soroban üzerinde bir prototipidir. Hedef, grubun parasını organizatörün serbestçe kullanabildiği bir hesapta toplamak yerine kurallı bir akıllı kontratta tutmak ve ev/araç tahsisatını doğrulanmış satıcıya yönlendirmektir.
 
-Rise In x Stellar **Pro Hackathon 2026** (19–20 Eylül, İstanbul) için geliştiriliyor. Track: Genesis.
+Rise In x Stellar **Pro Hackathon 2026** (19–20 Eylül, İstanbul) için geliştiriliyor. Track: Genesis. Ayrıntılı ürün ve güvenlik tasarımı: [plan](docs/plan.md).
 
 ## Durum
-Proje planlama aşamasında. Kontrat, arayüz ve anchor entegrasyonu henüz yazılmadı. Bu README ilerledikçe güncellenecek.
 
-## Problem
-Türkiye'de yaygın olan katılım / birikim gruplarında para merkezi bir organizatörün hesabında toplanır. Üye şu sorularla karşı karşıyadır: Param nerede? Sıram değiştirilebilir mi? Diğer üyeler ödedi mi? Biri parayı alıp ödemeyi bırakırsa ne olacak?
+Proje geliştirme aşamasında. Ön yüz çalışması sürüyor; Soroban kontratı, sponsor güvencesi, satıcı doğrulaması ve gerçek TL anchor akışı henüz tamamlanmadı. Aşağıdaki kurallar **hedef tasarımdır**, bugün çalışan ürün özelliği olarak sunulmaz.
 
-## Çözüm
-- Fonlar kontratta tutulur, yönetici para çekemez, kontrat upgrade edilemez.
-- Sıra havuz başladıktan sonra değiştirilemez.
-- Herkes ödediğinde havuzun tamamı otomatik olarak sıradaki üyeye gider.
-- Katılırken kilitlenen **teminat**, ödemeyi aksatan üyenin eksik payını kapatır (bir katkı kadar).
-- Kim ne zaman ödedi, zincirde herkese açık.
-- Kullanıcı TL ile öder, anchor TL'yi Stellar asset'ine çevirir, kontrat kuralları uygular.
+## Sorun ve yaklaşım
 
-Ürün kredi veya finansman sağlamaz, para garantisi vermez. Bir birikim grubu altyapısıdır.
+Ortak tasarruf grubunda iki risk var: organizatörün toplanan fonu amacı dışında kullanması ve erken tahsisat alan üyenin sonraki katkıları ödememesi. Kontrat ilk risk için fon hareketini sınırlar. İkinci risk ekonomik güvence gerektirir: eski plandaki bir taksitlik üye teminatı yeterli değildir.
 
-## Nasıl çalışır
-```mermaid
+- Havuz başlamadan ayrı bir **sponsor güvencesi** kontrata yatırılır. Dört üye ve tur başına 10 birimlik örnekte gerekli başlangıç güvencesi 40 birimdir.
+- Katkılar, sponsor güvencesi ve her üyenin iade hakkı ayrı muhasebeleştirilir. Organizatörün serbest çekim yetkisi yoktur.
+- Üyeler ve tahsisat sırası başladıktan sonra kilitlenir.
+- Tur katkıları tam ve satıcı/alım onayı hazırsa, kontrat gerekli iade bakiyesi kaldığını kontrol edip tutarı doğrudan satıcı cüzdanına yollar.
+- Katkı eksikse tur durur. Sponsor açığı ayrıca karşılamazsa güvenli iptal ve iade akışı işletilir. Tahsisat almamış üyelerin yatırdığı katkıların iadesi önceliklidir.
+- TL giriş veya çıkışı için anchor gerekir; hangi sağlayıcının kullanılacağı henüz netleşmedi.
+
+Bu tasarım gerçek mülkiyet devrini, gelecekteki taksit tahsilatını veya TL token'ının değerini tek başına garanti etmez. Gerçek para ve ev/araç işlemleri için lisanslı ortak, hukuki inceleme, kimlik/satıcı doğrulaması ve bağımsız kontrat denetimi gerekir.
+
+## Örnek akış
+
+~~~mermaid
 flowchart TD
-  A[Havuz oluştur] --> B[Üyeler wallet bağlayıp katılır + teminat kilitler]
-  B --> C[Creator sırayı verip başlatır]
-  C --> D[Dönem: herkes katkısını yatırır]
-  D --> E{Herkes ödedi mi?}
-  E -->|Evet| F[execute_round: havuz sıradaki üyeye gider]
-  E -->|Süre doldu| G[settle_round: eksik pay teminattan kapatılır, teminat yetmezse işlem başarısız olur]
-  G --> F
-  F --> H{Son dönem mi?}
-  H -->|Hayır| D
-  H -->|Evet| I[Teminatlar iade edilir]
-```
+  A[Havuz ve sıra belirlenir] --> B[Sponsor güvencesi kontrata kilitlenir]
+  B --> C[Üyeler katılır ve tur katkısını öder]
+  C --> D{Üye katkıları veya sponsor tamamlamasıyla tur tutarı hazır mı?}
+  D -->|Evet| E[Satıcı ve alım kaydı doğrulanır]
+  E --> F{Ödeme sonrası iade hakkı karşılanıyor mu?}
+  F -->|Evet| G[Tahsisat satıcıya ödenir]
+  G --> H[Sonraki tur]
+  D -->|Süre doldu| I[Tur durur]
+  F -->|Hayır| I
+  I --> K{Sponsor açığı tamamlar mı?}
+  K -->|Evet| D
+  K -->|Hayır| J[Havuz iptal edilir, hak sahiplerine iade]
+~~~
 
-## Teknoloji
-- **Kontrat:** Rust + Soroban SDK, Stellar Testnet
-- **Frontend:** Vue 3 + TypeScript, Stellar Wallets Kit
-- **Fiat giriş/çıkış:** Stellar anchor (SEP) üzerinden TL
-- **Araçlar:** Stellar CLI, Stellar SDK, Stellar RPC, Stellar.Expert
+## Teknoloji ve klasörler
 
-## Klasör yapısı
 | Klasör | Amaç |
-|--------|------|
-| `contracts/` | Soroban akıllı kontratları |
-| `frontend/` | Web arayüzü |
-| `backend/` | Anchor entegrasyonu için gerekirse ince proxy |
-| `scripts/` | Deploy ve testnet yardımcı scriptleri |
-| `docs/` | Plan ve mimari dokümanlar ([plan](docs/plan.md)) |
+|---|---|
+| contracts/ | Rust + Soroban kontratı ve testleri |
+| frontend/ | Vue 3 + TypeScript, Stellar Wallets Kit arayüzü |
+| backend/ | Gerekirse anchor ve gerçek alım doğrulaması için ince servis |
+| scripts/ | Testnet deploy ve demo yardımcıları |
+| docs/ | [Ürün planı](docs/plan.md), Stellar notları ve mimari |
 
-## Bilinen sınırlar
-- Teminat bir katkı kadardır. MVP her üye için en fazla bir kaçırılmış katkıyı emer; sonraki default'lar havuzu bloke edebilir. Tam temerrüt koruması yoktur.
-- Sıra sabittir, kura yoktur.
-- Non-custodial olan havuz mantığıdır; stablecoin ihraççısı ve anchor merkezi taraflardır.
-- Testnet MVP'dir. Gerçek parayla kullanmadan önce hukuki danışmanlık gerekir.
-
-## Yol haritası
-Sıraya göre artan teminat → itibar skoru → temerrüt rezervi → sigorta → doğrulanabilir rastgele kura → diğer ülkelerin yerel para birimi anchor'ları. Sonraki adım: SCF / InstaAwards başvurusu.
-
-## Contract ID'ler ve demo
-Deploy sonrası buraya eklenecek.
+Stellar Testnet, Stellar SDK, RPC ve uygun bir Stellar varlığı kullanılacak. Fonun kontratta olması, varlık ihraççısı ve anchor riskini ortadan kaldırmaz. Prototipte ortak fon DeFi getiri ürünlerine yatırılmaz.
 
 ## Teslim durumu
-- [ ] Kontratlar Testnet'te, contract ID'ler dokümante
-- [ ] Frontend URL'i ve herkese açık demo
-- [ ] Anchor üzerinden TL giriş veya çıkışı
-- [ ] Kurulum, test ve değerlendirme talimatları
-- [ ] Sunum (resmi Stellar Pro Hackathon şablonu)
+
+- [ ] Sponsor güvencesi, tahsisat ve iade değişmezleri test edilmiş Soroban kontratı
+- [ ] Testnet contract ID ve yeniden üretilebilir kurulum
+- [ ] Cüzdanlı arayüz ve satıcıya demo ödeme
+- [ ] Eksik ödeme → durdurma → iptal/iade demosu
+- [ ] Kabul edilen TL anchor giriş veya çıkış akışı
+- [ ] Gerçek ve simüle parçaları ayıran demo/sunum dokümanı

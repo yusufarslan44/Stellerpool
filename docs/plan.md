@@ -1,161 +1,129 @@
-# EvAraç Tasarruf Havuzu — Plan
+# Stellerpool — korumalı ev/araç tasarruf havuzu planı
 
-Türkiye'de yaygın olan katılım / birikim gruplarının (ev, araç gibi hedefler için) güvenli, şeffaf sürümü.
-Para bir şirketin hesabında değil, Soroban kontratında durur. Kurallar kodda yazılıdır, kimse değiştiremez.
+**Amaç:** FuzulEv/FuzulOto benzeri düzenli birikim ve sıralı teslimat deneyimini Stellar üzerinde, fonları organizatörün kullanımından ayırarak kurmak. Ana güven vaadi: organizatör ortak parayı kendi hesabına çekemez; her tahsisatın koşulları, alıcısı ve tutarı denetlenebilir.
 
-**Slogan:** Birlikte biriktir. Her şeyi doğrula. (*Save together. Verify everything.*)
-**Track:** Genesis. **Deadline:** 20 Eylül 2026, 12:00.
+**Aşama:** Testnet prototipi. Gerçek TL, gerçek ev/araç teslimi veya lisanslı tasarruf finansmanı hizmeti sunduğumuz iddia edilmeyecek.
+**Hackathon:** Rise In x Stellar Pro Hackathon 2026, Genesis; teslim 20 Eylül 2026 12:00.
 
-## 1. Alınan kararlar
+## 1. Referans model ve farkımız
 
-| Konu | Karar | Neden |
+Fuzul'ün resmi anlatımında kişiler ödeme güçlerine göre gruplara ayrılıyor; çekilişli ve teslim tarihi baştan belirlenen seçenekler bulunuyor. Teslimat sonrasında taksitler sürüyor. Fuzul, grup dağılmasına karşı organizasyonun arkasında durduğunu ve teslim edilen ev/araç için ipotek veya rehin uyguladığını söylüyor. BDDK, lisanslı tasarruf finansman şirketleri için fon havuzunun şirket hesaplarından ayrılmasını ve başka amaçla kullanılmamasını açıklıyor. Bizim prototipimiz bu kurumsal, hukuki ve bilanço güvencelerinin yerine geçmez.
+
+| İhtiyaç | Prototipteki karşılık | Açık sınır |
 |---|---|---|
-| Track | Genesis | Sıfırdan yeni ürün, Scale davetli |
-| Kontrat sayısı | Tek `rotating_pool` kontratı, `pool_id` ile çok havuz | Factory riskli ve gereksiz; tek contract ID belgelemesi kolay |
-| Sıra | Creator, `start_pool` sırasında verir, sonra kilitlenir | Başlamadan para hareket etmez, güvenli |
-| Teminat | Katılırken 1 katkı kadar kilitlenir, havuz parasından **ayrı muhasebe edilir**, sonda `claim_collateral` ile iade edilir | Erken alanın ödemeyi bırakma riskini kısmen kapatır; havuz ve teminat karışırsa yanlış payout riski doğar |
-| Son ödeme zamanı | Her turun `round_started_at` ve `round_deadline` değerleri kontratta tutulur; demoda süre 3 dakika | Zaman olmadan "ödemedi" durumu tanımlanamaz. 3 dakika **son ödeme süresidir**, bekleme süresi değil: herkes erken öderse `execute_round` hemen çalışır |
-| Yönetici yetkisi | Creator para çekemez, upgrade fonksiyonu yok | Ana güven vaadi |
-| Tetikleme | `execute_round` ve `settle_round` herkes çağırabilir | Kimseye bağımlı değil |
-| Anchor | Workshop'un TRY anchor'ı; SEP-24 tercih edilir (anchor destekliyorsa), yoksa SEP-6. Gerçek sağlayıcı ve SEP workshop sonrası kilitlenir | Handbook: "a user should be able to put real Turkish lira in and get a usable balance out, or the reverse". Belirli bir SEP zorunlu kılınmıyor. Sandbox/test akışının şartı karşılayıp karşılamadığı belgede açık değil, organizatöre sorulacak |
-| Wallet | Stellar Wallets Kit | Dökümandaki uygun partner |
-| Frontend | Vue 3 + TypeScript | Ekibin seçimi, framework zorunluluğu yok |
-| Backend | Yok, sadece anchor için gerekirse ince bir proxy | 24 saatte gereksiz yük |
-| Kategoriler | Ev / Araç / Eğitim / Diğer, sadece etiket | Kullanıcı tanıdık modeli görsün; kontratta fark yok |
-| Kura | Yok, sıra sabit | Rastgelelik MVP dışı |
+| Organizatör parayı alıp kaçamasın | Katkı ve sponsor güvencesi Soroban kontratında; creator'ın serbest çekim yetkisi yok | Kontrat hatası, anahtar ve varlık ihraççısı riski sürer |
+| Sıra ve ödemeler değiştirilemesin | Grup başladıktan sonra üye, katkı, sıra ve süre kilitli; olaylar zincirde | Kura ve esnek ödeme planları MVP dışında |
+| Erken teslim alan taksitleri bırakırsa diğerleri korunabilsin | Havuz başlamadan sponsorun ayrı varlığı kilitlenir; güvenli devam mümkün değilse bekleyenlere iade | Sponsor ekonomik kaybı üstlenir; gerçek dünyadaki tahsilat ayrı iştir |
+| Tahsisat amaç dışına gitmesin | Alıcı, satıcı adresini ve alım kaydını önerir; doğrulama sonrası ödeme doğrudan satıcı cüzdanına | Tapu, ruhsat ve gerçek satıcı kimliği zincir dışında doğrulanır |
+| TL ile kullanılabilsin | Anchor ile TL giriş/çıkışı araştırılır; kontrat yalnızca Stellar varlığı görür | Anchor, ihraççı ve bankacılık katmanı merkezi taraflardır |
 
-## 2. İki tarafı nasıl koruyoruz
+## 2. Ürün kararı
 
-**Ödeyip sırasını bekleyen üye**
-- Para kontratta, yönetici çekemez.
-- Sırası başladıktan sonra değiştirilemez.
-- Sıra ona gelince herkes ödemişse havuzun tamamı otomatik gönderilir.
+1. **MVP: sabit sıralı, sponsor güvenceli havuz.** Üye başına bir teslimat ve her dönem bir katkı. Kura ve bireysel teslim tarihi varyantları sonraya bırakılır.
+2. **Organizatör yalnızca kurulum yapar.** Başladıktan sonra sırayı, satıcıyı tek başına değiştiremez veya kontrat fonunu çekemez. Kontratta tek taraflı upgrade/kaçış kapısı bulunmaz.
+3. **Katılımcıdan girişte bir taksitlik teminat alınmaz.** Eski plan bu teminatı yeterli koruma gibi sunuyordu; dört üyeli örnekte iki taksitlik açık bırakıyordu. Ayrıca tasarruf dönemindeki teminat kuralları hukuken incelenmelidir.
+4. **Sponsor güvencesi ayrı tutulur.** Demo sponsoru Testnet varlığını yatırır. Gerçek üründe sponsorun kim olacağı, fonun niteliği ve düzenleyici statü hukuk ve iş ortaklığı kararıdır.
+5. **Eksik katkı otomatik olarak sponsor parasıyla sessizce kapatılıp tahsisat yapılmaz.** Süre dolunca tur durur. Sponsor açık tutarı ayrıca yatırır ve kontratın iade yeterliliği testi geçerse devam edilir; aksi hâlde havuz iptal ve iade akışına girer.
+6. **Tahsisat satıcıya yapılır.** Demo için test satıcısı cüzdanı kullanılır ve gerçek ev/araç satın alındığı söylenmez. Gerçek ürün, satıcı ve mülkiyet doğrulama ortağı gerektirir.
+7. **Getiri stratejisi yok.** Ortak fonu lending, staking veya likidite havuzuna yatırmak MVP güven vaadini geniş risklere açar. DeFi özelliği programlanabilir saklama ve doğrulanabilir kurallardır.
 
-**Diğer üyeler / grup**
-- Herkes teminat kilitler. Biri ödemezse eksik parça teminatından kapatılır.
-- Kim ödedi, kim ödemedi, zincirde herkese açık.
+## 3. Ekonomik güvence hesabı
 
-**Dürüst sınır:** Teminat 1 katkı kadar. Erken alan kişi bundan fazlasını alıp bırakırsa grup zarar görebilir. Aynı üye ikinci kez ödemezse teminat yetmez, `settle_round` başarısız olur ve havuz bloke olabilir (bkz. bölüm 4). Tam çözüm (sıraya göre artan teminat, itibar, rezerv, iptal/iade) roadmap'te.
+N üye, kişi başına her tur C katkı, N tur ve her tur bir tahsisat varsayılır. r tamamlanmış turdan sonra henüz tahsisat almamış N-r kişinin o ana kadar yatırdığı toplam tutar r × (N-r) × C'dir. Bu kişilerin havuz durursa yatırdıklarını geri alabilmesi için kontrat bakiyesi en az bu tutarı karşılamalıdır. Başlangıçta kilitlenecek sponsor güvencesinin alt sınırı, bu dizinin tepe noktası olan **floor(N²/4) × C**'dir. Bu formül yalnızca bu sabit, eşit katkılı model ve aşağıdaki iade kuralı içindir; gerçek varlık değeri, kur ve hukuki tahsilat riskini kapsamaz.
 
-## 3. Kullanıcı akışı
+**Örnek:** Dört üye, her tur 10 birim öder. Sponsor başta 40 birim kilitler. İlk tur sonunda A'nın satıcısına 40 ödenir; B, C ve D'nin önceki toplam 30 birimi için kontratta 40 kalır. İkinci turda herkes öderse B'nin satıcısına 40 ödenir ve henüz teslim almamış C ile D'nin yatırdığı 40 birim kontratta kalır. İlk teslim alan A ikinci turda ödemezse tahsisat kendiliğinden gerçekleşmez: sponsor tamamlayıp iade yeterliliğini koruyabilir veya havuz iptal edilir ve bekleyenler yatırdıklarını kontrattan geri alır. Sponsor bu durumda kayıp yaşayabilir.
 
-```mermaid
+**İade hakkı:** İptalde teslimat almamış üyeler yaptıkları tüm katkıları; teslimat almış üyeler yalnızca henüz tamamlanmamış tur için yatırdıkları katkıyı geri alır. Tamamlanmış turların katkısı geri alınamaz. Sponsor, tüm üye iadelerinden sonra kalan güvenceyi alır. Aynı varlık için havuzlar arası borç/alacak mahsuplaşması yapılmaz.
+
+## 4. Kullanıcı akışı
+
+~~~mermaid
 flowchart TD
-  A[Havuz oluştur: ad, kategori, katkı, üye sayısı, dönem süresi] --> B[Davet linki]
-  B --> C[Üye wallet bağlar]
-  C --> D[Katıl + teminat kilitle]
-  D --> E{Herkes katıldı mı?}
-  E -->|Evet| F[Creator sırayı verip başlatır]
-  F --> G[Dönem: herkes katkısını yatırır]
-  G --> H{Herkes ödedi mi?}
-  H -->|Evet| I[execute_round: havuz sıradaki üyeye gider]
-  H -->|Süre doldu| J[settle_round: eksik pay teminattan kapatılır, teminat yetmezse işlem başarısız olur]
-  J --> I
-  I --> K{Son dönem mi?}
-  K -->|Hayır| G
-  K -->|Evet| L[Teminatlar iade edilir, havuz tamamlandı]
-```
+  A[Havuz ve sabit ödeme planı oluştur] --> B[Sponsor güvencesini kontrata kilitle]
+  B --> C[Üyeler cüzdanla katılır]
+  C --> D[Sıra onaylanır ve havuz başlar]
+  D --> E[Tur katkıları yatırılır]
+  E --> F{Üye katkıları veya sponsor tamamlamasıyla tur tutarı hazır mı?}
+  F -->|Evet| G[Alıcı satıcıyı ve alım kaydını önerir]
+  G --> H[Bağımsız doğrulama ve imzalar]
+  H --> I{Ödeme sonrası iade yeterliliği korunuyor mu?}
+  I -->|Evet| J[Tutar doğrudan satıcıya gider]
+  J --> K{Son tur mu?}
+  K -->|Hayır| E
+  K -->|Evet| L[Sponsor kalanı geri alır]
+  F -->|Süre doldu| M[Tur durur]
+  M --> N{Sponsor açık tutarı tamamlar mı?}
+  N -->|Evet: eksik katkı sponsor adına kaydedilir| F
+  N -->|Hayır| O[İptal ve hak sahiplerine iade]
+  I -->|Hayır| M
+~~~
 
-Yatırma: yerel para → anchor → Stellar asset → kullanıcı wallet'ı → `deposit`.
-Çekme: hak sahibi Stellar asset'i anchor ile yerel paraya çevirip bankasına çeker.
-Handbook gerçek TL girişi veya çıkışı istiyor. Kontrat para biriminden bağımsız kalır (sadece bir Stellar asset görür), TL sadece anchor katmanında. Demoda en az bir yönü (giriş veya çıkış) gerçek olmalı.
+Demo sırasında alım doğrulaması imzalı test verisidir; gerçek satıcı veya tapu entegrasyonu değildir. Kontrat fon transferini doğrular, fiziksel mülkiyet devrini kendi başına bilemez.
 
-**Tutar:** Demo tutarı seçilen anchor'ın desteklediği en küçük TL tutarıdır (destekliyorsa 1 TL, değilse anchor'ın minimumu). Bu değer kontrata sabitlenmez. Kontrat TL'yi görmez, anchor sonucunda ortaya çıkan Stellar asset miktarıyla çalışır. Anchor TL-cinsinden bir Stellar asset verirse 1 TL = 1 token olur; USDC verirse miktar değişkendir, bu yüzden arayüz kullanıcıya katkıdan biraz fazla yatırmasını önerir (tampon). Anchor belli olunca kesinleştirilecek.
+## 5. Kontrat tasarımı
 
-## 4. Kontrat (`contracts/rotating_pool`)
+**Durumlar:** Filling → Active → Paused → Completed / Aborted. Paused durumunda yeni tahsisat yapılamaz. Herkese açık çağrılar zamanı gelmiş işlemleri tetikler; zincirde işlemler kendi kendine çalışmaz.
 
-**Fonksiyonlar**
-- `create_pool` — havuzu oluşturur, `pool_id` döner
-- `join_pool` — katılır, teminatı kilitler, trustline'ı kontrol eder
-- `start_pool` — creator sırayı verir, dönem 1 başlar
-- `deposit` — üye o dönemin katkısını yatırır
-- `execute_round` — **herkes ödediyse** (süre beklemeden) o turun havuzunu sıradaki üyeye gönderir
-- `settle_round` — **`now >= round_deadline`** ise eksik katkıyı ilgili üyenin teminatından kapatır, sonra havuzu gönderir. Teminat yetmiyorsa **işlem başarısız olur**
-- `claim_collateral` — havuz `Completed` olunca üye kalan teminatını geri alır (**P0**)
-- `get_pool`, `get_round`, `get_member_status` — okuma
-- `abort_pool` — (P1, öneri) bloke olmuş havuzda süre + bekleme sonrası herkes çağırabilir, o turun katkıları ve kalan teminatlar iade edilir
+**P0 fonksiyonlar**
+- create_pool: varlık, katkı, üye sayısı, tur süresi ve sponsor adresini belirler.
+- fund_guarantee: sponsor güvencesini ayrı muhasebe kaydına yatırır; yeterli güvence olmadan havuz başlamaz.
+- join_pool: üyeyi kaydeder; cüzdan ve varlık uygunluğunu doğrular.
+- start_pool: tüm üyeler, sıra ve güvence hazırsa planı kilitler.
+- deposit: üyenin mevcut tur katkısını bir kez alır.
+- propose_purchase: sıradaki üye satıcı adresi ve zincir dışı belge özetini kaydeder.
+- approve_purchase: belirlenen doğrulayıcıların imzalarını kontrol eder; creator'ın tek başına onayı yeterli değildir.
+- execute_round: üye katkıları veya kayda geçirilmiş sponsor tamamlamasıyla tur tutarı tam, alım onaylı ve ödeme sonrası iade yeterliliği sağlanıyorsa yalnızca o turun tutarını kayıtlı satıcıya yollar. Herkes çağırabilir.
+- mark_overdue, top_up, abort_pool: süre aşımını işaretler; sponsor eksik üye katkısını ilave fonla tamamlayıp o tur için kayda geçirebilir; aynı katkı sonradan ikinci kez alınmaz. Belirlenmiş bekleme süresi sonunda güvenli devam yoksa herkes iptali tetikleyebilir.
+- claim_refund, claim_sponsor_remainder: iptal veya tamamlanma durumuna göre hak sahibine iade. İki kez talep engellenir.
+- get_pool, get_round, get_member_status, get_refund_claim: okuma.
 
-**Durumlar:** `Filling → Active → Completed`. "Round hazır" durumu saklanmaz, deposit sayısından türetilir.
+**Değişmezler**
+- Hiçbir fonksiyon havuzun toplam kontrat bakiyesini doğrudan tahsisat tutarı saymaz.
+- Her transfer belirli pool_id, tur ve hak sahibi ile ilişkilidir; başka havuzun varlığı kullanılamaz.
+- Her tahsisat sonrasında kontratın o havuza atanan bakiyesi, teslimat almamış üyelerin tüm katkıları ile teslimat almış üyelerin henüz tamamlanmamış tur katkılarından doğan iade hakları toplamından az olamaz; aynı katkı iki kez sayılmaz.
+- Sponsor güvencesi, üye alacakları kapatılmadan çekilemez.
+- Aynı üye aynı turda ikinci kez ödeme veya aynı iade için ikinci kez talep yapamaz.
+- Tur, başlama, ödeme sonu ve iptal bekleme zamanları zincirde saklanır; depolama TTL'si uzatılır.
+- Varlık tutarları tamsayı en küçük birimle saklanır; arayüzde string/BigInt kullanılır.
 
-**Saklama:** Havuz ayarı bir anahtarda. Teminat, deposit ve tur havuzu **ayrı anahtarlarda** tutulur, `extend_ttl` çağrılır:
-- `Collateral(pool_id, üye) → miktar`
-- `Deposit(pool_id, round, üye) → bool`
-- `RoundPot(pool_id, round) → miktar`
-- Tur zamanları: `round_started_at`, `round_deadline`
+**Güvenlik:** Yetkilendirme, taşma, yeniden giriş/çapraz kontrat çağrısı, çok havuzlu muhasebe, kötü niyetli satıcı, hatalı doğrulama, eksik ödeme, iade yarışı ve TTL test edilir. Gerçek fonlardan önce bağımsız kontrat denetimi gerekir.
 
-**Yetki:** `deposit`, `join_pool`, `start_pool` için `require_auth`. Creator'ın para hareketi yetkisi yok.
+## 6. Zincir dışı parçalar ve mevzuat
 
-**Kurallar:**
-- **Değişmezlik:** `start_pool` sonrası üye, sıra ve katkı tutarı değişmez.
-- **Muhasebe (kritik güvenlik kuralı):** `execute_round` ve `settle_round` **kontratın toplam bakiyesini değil**, yalnızca `katkı × üye sayısı` kadar tur havuzunu gönderir. Teminatlar kontratta kalır. Örnek: 4 üye, 10 USDC katkı, 10 USDC teminat → kontrat 80 USDC tutar, Alice'e 40 USDC gider, 40 USDC teminat olarak kalır.
-- **Tur zamanlaması:** Tur 1, `start_pool` anında başlar. Tur N+1, `execute_round(N)` veya `settle_round(N)` çalıştığı anda başlar ve `duration` kadar süre verir.
-- **Teminat kullanımı:** Süre dolduğunda eksik üyenin katkısı onun teminatından tur havuzuna aktarılır, üye teminatı azalır.
-- **İkinci default:** Kalan teminat eksik katkıyı karşılamıyorsa `settle_round` **başarısız olur**. Eksik havuz alıcıya gönderilmez, çünkü birikim planının ekonomik kuralı bozulur. Sonuç: her üye için en fazla bir kaçırılmış katkı emilir, sonrası havuzu bloke edebilir. Bu sınır README'de açıkça yazılır.
-- **Olaylar:** `CollateralConsumed { pool_id, round, member, amount }` ve `MemberDefaulted { pool_id, round, member }` yayınlanır.
-- **Değişmez test:** kontrat bakiyesi = tüm kalan teminatlar + henüz dağıtılmamış turun katkıları. Muhasebe hatası bu testle yakalanır.
+- **Anchor:** Gerçek TL → Stellar varlığı veya tersi için sağlayıcı ve SEP akışı workshop'ta doğrulanacak. SEP-24 tercih; desteklenmiyorsa SEP-6. Jüri şartının sandbox ile karşılanıp karşılanmadığı organizatöre sorulacak. Sağlayıcı netleşmeden gerçek TL desteği iddia edilmez.
+- **Varlık:** Anchor'ın verdiği token, ihraççı, geri ödeme hakkı, freeze/clawback yetkileri ve kur riski gösterilecek. TL olmayan varlıkta taksit ile TL satın alma gücü aynı şey değildir.
+- **Gerçek ev/araç:** Satıcı kimliği, fatura/sözleşme, tapu/ruhsat, ipotek/rehin ve ihtilaflar zincir dışı doğrulayıcı veya lisanslı ortak gerektirir. Doğrulayıcı yanlış bilgi verirse kontratın doğru ödeme yapması tek başına kaybı önlemez.
+- **Hukuki model:** Tasarruf finansmanı faaliyeti, müşteri fonu, sponsor güvencesi, ipotek/rehin, KYC/AML ve ödeme hizmetleri yetkileri uzmanla ve yetkili kurumlarla netleştirilecek. Testnet demosu faaliyet izni anlamına gelmez. Katılımcıdan tasarruf döneminde nakit teminat alma fikri ayrıca değerlendirilmeden geri getirilmeyecek.
+- **Çekiliş:** MVP'de yok. Gelecekte eklenirse doğrulanabilir rastgelelik, katılım ve iptal kuralları ayrıca tasarlanacak.
 
-## 5. Demo ve Definition of Done
+## 7. Hackathon demosu ve teslim ölçütü
 
-Demo: 4 üye (Alice, Bob, Charlie, David), örnek olarak 10 USDC katkı ve 10 USDC teminat (tutarlar yapılandırılabilir), son ödeme süresi demoda 3 dakika. Sıra: Alice, Bob, Charlie, David.
+1. Dört üye ve bir demo sponsoru Testnet cüzdanlarıyla katılır; örnek katkı 10 birim, sponsor güvencesi 40 birim.
+2. Arayüz, havuz bakiyesini, sponsor güvencesini, bekleyen üyelerin iade hakkını, sırayı ve tur son tarihini ayrı gösterir.
+3. Bir TL anchor akışı gerçekten çalışıyorsa en az bir TL giriş veya çıkışı gösterilir; sağlayıcı ve işlem kanıtı belgelenir.
+4. İlk turda herkes öder; doğrulanmış demo satıcısına 40 birim gider. Zincir işlemi ve satıcı adresi gösterilir.
+5. İkinci turda A ödemez; ödeme süresi dolunca tur durur. Sponsor tamamlamazsa iptal tetiklenir, teslimat almamış üyeler katkılarını geri alır ve sponsorun zararı görünür.
+6. Pozitif ikinci senaryoda sponsor açık tutarı ekler; iade yeterliliği korunuyorsa tur tamamlanır.
+7. Testler: normal tur, farklı havuzların ayrılığı, eksik katkı, sahte satıcı/onay, yetersiz güvence, iptal/iade, çift talep ve muhasebe değişmezi.
+8. Testnet contract ID, kurulum adımları, demo URL, gerçek/simüle edilen parçaların sınırları ve sunum hazırlanır.
 
-**Tur 1 — mutlu yol:** dört üye öder, `execute_round` süre beklemeden çalışır, 40 USDC Alice'e gider, Stellar.Expert'te görünür.
-**Tur 2 — default koruması:** Charlie ödemez, süre dolar, `settle_round` Charlie'nin 10 USDC teminatından eksik payı kapatır, 40 USDC Bob'a gider. Charlie'nin kalan teminatı 0 olarak gösterilir.
+**Öncelik:** Önce fon muhasebesi ve iptal/iade; ardından satıcıya ödeme, cüzdan, anchor ve arayüz. Hukuken doğrulanmamış gerçek para veya gerçek ev/araç teslim vaadi yapılmaz.
 
-1. Alice havuzu oluşturur, diğerleri katılıp teminat yatırır.
-2. Alice sırayı verip başlatır.
-3. Bir üye katkısını **anchor üzerinden gerçek TL ile** yatırır (TL → Stellar asset → `deposit`).
-4. 4 üye ödeyince `execute_round`: 40 USDC Alice'e gider, Stellar.Expert'te görünür.
-5. Round 2'de Charlie ödemez, süre dolar, `settle_round` teminatından kapatır, Bob'a ödeme gider. Arayüz "Katkı yapılmadı ⚠, 10 USDC teminattan karşılandı" gösterir.
-5b. Havuz tamamlanınca üyeler `claim_collateral` ile kalan teminatlarını geri alır.
-6. (İsteğe bağlı, giriş çalışıyorsa) Bir hak sahibi payout'ı anchor ile TL'ye çevirip çeker. Handbook giriş **veya** çıkıştan birini yeterli sayıyor.
+## 8. Açık kararlar
 
-Bu çalışmadan sonra başka özelliğe geçilmez.
+1. Sponsor kim olacak ve gerçek üründe kaybı hangi bilanço taşıyacak?
+2. Satıcı ve mülkiyet doğrulamasını hangi yetkili taraf yapacak? Sahte satıcı ve danışıklı işlem nasıl engellenecek?
+3. Seçilen anchor gerçek TL'yi hangi ağda, hangi varlık ve minimum tutarla destekliyor?
+4. Düzenlenmiş tasarruf finansmanı kapsamına giren faaliyetler için lisanslı ortak mı, başka bir hukuki yapı mı gerekiyor?
+5. Havuz başına ayrı kontrat mı kullanılacak? Tek kontrat, ayrı muhasebeye rağmen ortak kod riski taşır.
+6. Üyelerin para birimi TL ise token/TL kur değişimi ve satın alma gücü riski kime ait?
 
-## 6. Önceliklendirme
+## 9. Araştırma kaynakları
 
-**P0 Kontrat:** `create_pool`, `join_pool`, `start_pool`, `deposit`, `execute_round`, `settle_round`, `claim_collateral`, `get_pool`, `get_round`, `get_member_status`. Teminat, deposit ve tur havuzu ayrı muhasebe.
-**P0 Blockchain:** kontrat testleri (değişmez test dahil), Testnet deploy, asset entegrasyonu, wallet
-**P0 Anchor:** organizatörün kabul ettiği gerçek local payment akışı (handbook'ta zorunlu, Ecosystem Fit'in en ağırlıklı parçası)
-**P0 Demo:** Vue dashboard, Tur 1 başarı, Tur 2 teminat ile default koruması
-**P1:** `abort_pool`, UX cilası, 4–10 gerçek kullanıcı testi ve geri bildirim, README'de kurulum/test/değerlendirme talimatları, kullanılan Stellar Skills'e referans, SCF/InstaAwards sonraki adımı, sunum
-**P2:** backend metadata/davet, Blend/DeFindex ile getiri, sıraya göre artan teminat
+- Fuzul sistemin işleyişi: https://www.fuzulev.com.tr/nasil-calisir
+- Fuzul SSS (teslimat sonrası taksit, grup güvencesi, ipotek/rehin): https://www.fuzulev.com.tr/merak-edilenler
+- BDDK tasarruf finansman SSS (fon ayrımı ve müşteri hakları): https://www.bddk.org.tr/Sss/Liste/117
+- BDDK lisanslı şirket listesi: https://www.bddk.org.tr/Kurulus/Liste/89
+- Stellar Asset Contract ve ihraççı yetkileri: https://developers.stellar.org/docs/tokens/stellar-asset-contract
 
-## 7. Ekip görevi (4 kişi)
-
-| Rol | İş |
-|---|---|
-| Kontrat | Rust/Soroban, testler, Testnet deploy, contract ID |
-| Frontend | Vue, wallet bağlama, havuz sayfası, katkı ödeme, geçmiş |
-| Entegrasyon | Anchor entegrasyonu (SEP-24 tercih, anchor destekliyorsa), trustline, USDC faucet, yatır/çek akışı |
-| Ürün/Sunum | README, Mermaid diyagram, kullanıcı testi, Stellar şablonuyla sunum, demo |
-
-## 8. Jüri eşlemesi
-
-1. **Fikir/Etki:** Merkezi katılım gruplarında paranın kaybolması ve güvensizlik problemi, hedef kitle Türkiye'deki birikim grupları
-2. **Teknik:** Testnet'te uçtan uca akış, Soroban auth/storage, teminat mantığı, Mermaid diyagram
-3. **Ecosystem Fit:** Soroban = tasarruf/tahsisat motoru, anchor = gerçek local payment (en yüksek ağırlık), Wallets Kit = kullanıcı yetkilendirme ve wallet UX. Yalnızca "Wallets Kit kullandık" argümanına yaslanılmaz. Kullanılan Stellar skills belgelenir
-4. **UX:** "Bu ay ödemen: ₺X [Öde]", kontrat çağrısı görünmez, kripto bilmeyen kullanıcıya uygun
-5. **Traction:** 4–10 kullanıcı, havuz/katkı/round sayıları
-6. **Doküman:** README, contract ID'ler, kurulum, demo, resmi şablonla sunum, SCF/InstAwards hazırlığı
-
-## 9. Sınırlar (README'ye yazılacak)
-- Teminat 1 katkı kadar. MVP, her üye için en fazla bir kaçırılmış katkıyı emer; sonraki default'lar havuzu bloke edebilir (`abort_pool` P1). Tam temerrüt koruması yok.
-- Kura yok, sıra sabit.
-- Non-custodial olan havuz mantığı. USDC ihraççısı ve anchor merkezi taraflardır.
-- Kontrat upgrade edilemez.
-- Testnet MVP'dir. Gerçek parayla kullanmadan önce hukuki danışmanlık gerekir; ürün kredi veya finansman sağlamaz.
-
-## 10. Roadmap
-Sıraya göre artan teminat → itibar skoru → temerrüt rezervi → sigorta → doğrulanabilir rastgele kura → diğer ülkelerin yerel para birimi anchor'ları.
-**Sonraki adım (handbook istiyor):** SCF / InstaAwards başvurusu.
-
-## 11. Açık noktalar (kontrol edilecek)
-- **Anchor'ın adı:** Döküman "using an anchor or another anchor from the list" diyor ve workshop'ta "how anchor works as a TRY anchor" geçiyor. Anchor'ın adı export'ta düşmüş görünüyor. Organizatörlerden veya 11:00 workshop'undan öğrenilecek.
-- **Testnet'te gerçek TL nasıl?** Anchor'ın testnet mi mainnet mi sunduğu ve gerçek TL'nin nasıl kullanılacağı workshop'ta sorulacak.
-- **Wallets Kit tek başına yeterli mi?** Dökümanda cevap yok, Integration şartını kesin karşıladığı varsayılmaz. Anchor'ı çekirdek entegrasyon sayıyoruz, Wallets Kit destek.
-- Teminatın USDC mi olacağı ve trustline gereksinimi.
-- Anchor'ın minimum TL tutarı ve hangi Stellar asset'i verdiği (TL-cinsinden token mı, USDC mi).
-
-**Organizatöre / mentora sorulacaklar:**
-1. "Does the provided TRY Anchor sandbox/test flow satisfy the Anchor / Local Payments judging requirement, or must actual fiat move through production banking rails?"
-2. "Does the selected Anchor count toward both the Integration requirement and the Anchor / Local Payments requirement, or should we demonstrate a separate eligible ecosystem integration?"
+Kaynaklar 19 Eylül 2026 tarihinde incelendi. Bu belge ürün ve teknik planıdır; hukuki görüş veya gerçek para güvencesi değildir.
