@@ -6,11 +6,11 @@ import AppIcon from '@/components/AppIcon.vue'
 import CoinSpinner from '@/components/CoinSpinner.vue'
 import Illo from '@/components/Illo.vue'
 import PoolCalculator from '@/components/PoolCalculator.vue'
-import Scene3D from '@/components/Scene3D.vue'
+import HomeHero from '@/components/HomeHero.vue'
+import ContractFlow from '@/components/ContractFlow.vue'
 import HowItWorks from '@/components/HowItWorks.vue'
 import StorySim from '@/components/StorySim.vue'
 import StepIndicator from '@/components/StepIndicator.vue'
-import { useNetworkStatus } from '@/composables/useNetworkStatus'
 import { errorMessage, isUserRejection } from '@/lib/errors'
 import { formatDecimalString, parseAmount, shortAddress } from '@/lib/format'
 import {
@@ -28,7 +28,6 @@ import type { IlloName } from '@/lib/icon-data'
 
 const wallet = useWalletStore()
 const router = useRouter()
-const { ledger, online } = useNetworkStatus()
 const token = poolAsset.getCode()
 
 // --- Başlangıç sihirbazı: hesap durumu -----------------------------------------------------
@@ -135,19 +134,19 @@ const ROLES: { icon: IlloName; title: string; text: string; tone: string }[] = [
   {
     icon: 'seedling',
     title: 'Kurucu',
-    text: 'Havuzu açar, sıra (ya da kura) ve doğrulayıcıları önerir. Parayı çekme yetkisi yoktur.',
+    text: 'Havuzu açar, sıra ve doğrulayıcıları önerir. Parayı çekme yetkisi yoktur.',
     tone: 'bg-brand-100 text-brand-800',
   },
   {
     icon: 'lock',
     title: 'Kontrat',
-    text: 'Katkıları tur bazında tutmayı ve koşullar sağlanınca yalnız izinli ödemeyi yapmayı hedefler.',
+    text: 'Katkıları tur bazında tutar ve koşullar sağlanınca yalnızca izinli demo satıcısına ödeme yapar.',
     tone: 'bg-gold-100 text-amber-900',
   },
   {
     icon: 'handshake',
     title: 'Üye',
-    text: 'Katılır, her tur katkısını öder. Sırası gelince ya da kurada seçilince satıcıyı ve alım belgesini önerir.',
+    text: 'Katılır, her tur katkısını öder. Sırası gelince satıcıyı ve alım belgesini önerir.',
     tone: 'bg-sage-100 text-sage-800',
   },
   {
@@ -162,12 +161,12 @@ const TRUST: { icon: IlloName; title: string; text: string }[] = [
   {
     icon: 'lock',
     title: 'Para sözleşmede',
-    text: 'Planlanan Testnet akışında katkılar Soroban kontratına gider; kurucuya serbest çekim yetkisi verilmez.',
+    text: 'Testnet kontratında katkılar Soroban kontratına gider; kurucuda serbest çekim fonksiyonu yoktur.',
   },
   {
     icon: 'pin',
-    title: 'Sıra ya da kura',
-    text: 'Havuz başlayınca üyeler değişmez. Alıcı, onaylanan sıradan ya da tüm katkılar gelince çekilen kuradan çıkar.',
+    title: 'Sabit sıra',
+    text: 'Havuz başlayınca üyeler ve sıra değişmez; sıra yalnızca üyelerin onayladığı sürümle geçerlidir. Kura hedefte.',
   },
   {
     icon: 'shield',
@@ -180,11 +179,11 @@ const TRUST: { icon: IlloName; title: string; text: string }[] = [
 const FAQ = [
   {
     q: 'Organizatör parayı alıp kaçabilir mi?',
-    a: 'Hedef kontratta kurucunun serbest çekim yetkisi olmayacak. Kontrat henüz yazılıp yayınlanmadı; bu koruma şu anda çalışır durumda değil.',
+    a: 'Testnet kontratında kurucunun serbest çekim fonksiyonu yok: tur tutarı yalnızca havuzda kayıtlı izinli demo satıcısına gidebilir, iade yalnızca katkı sahibine yapılır. Kontrat birim testlerinden geçti ancak bağımsız güvenlik denetimi yapılmadı.',
   },
   {
     q: 'Sıram sonradan değiştirilebilir mi?',
-    a: 'Hedef kurala göre havuz başladıktan sonra üyeler ve (sabit sıra modunda) sıra kilitlenecek. Bu kuralın kontrat ve testlerle doğrulanması gerekiyor.',
+    a: 'Hayır. Başlamadan önce sıra yalnızca üyelerin onayladığı sürümle geçerli olur, kurucu tek başına değiştiremez. Havuz başladıktan sonra üyeler ve sıra kilitlidir.',
   },
   {
     q: 'Kura nasıl çalışıyor?',
@@ -200,11 +199,11 @@ const FAQ = [
   },
   {
     q: 'Biri ödemeyi bırakırsa ne olur?',
-    a: 'Planlanan Testnet akışında ek süre sonunda havuz sonlandırılabilir. Yalnızca henüz ödenmemiş turun katkıları iade edilebilir; önceki turlar geri alınamaz. Kontrat henüz çalışmıyor.',
+    a: 'Katkı süresi dolunca tur ek süreye geçer. Ek süre de biterse herkes havuzu sonlandırabilir; yalnızca henüz ödenmemiş turun katkıları iade edilir, önceki turlar geri alınamaz. Bu akış Testnet’te canlı olarak denendi (işlem bağlantıları README’de).',
   },
   {
     q: 'Ayşe ilk turda alıp sonra bırakırsa ne olur?',
-    a: 'Dört kişi 10’ar birim yatırırsa ilk tur 40 birim satıcıya gider ve havuzda o turun parası kalmaz. Ayşe sonraki turu ödemezse ikinci tur durur; yalnızca ikinci turda yatırılan katkılar iade edilir. Mehmet, Zeynep ve Can’ın ilk tur payları kontrattan geri alınamaz. Bunu “Bir turu kendin dene” bölümünde adım adım görebilirsin.',
+    a: 'Dört kişi 10’ar birim yatırırsa ilk tur 40 birim satıcıya gider ve havuzda o turun parası kalmaz. Ayşe sonraki turu ödemezse ikinci tur durur; yalnızca ikinci turda yatırılan katkılar iade edilir. Mehmet, Zeynep ve Can’ın ilk tur payları kontrattan geri alınamaz. Bunu “Bir tur böyle işler” bölümünde kendiliğinden oynayan hikâyede adım adım izleyebilirsin.',
   },
   {
     q: 'Sponsor, sigorta ya da teslimat garantisi var mı?',
@@ -212,116 +211,58 @@ const FAQ = [
   },
   {
     q: 'Param kime gider?',
-    a: 'Testnet planında doğrulayıcı onayı sonrası yalnızca demo satıcısına test varlığı gönderilecek. Şu anda havuz kontratı ve satıcı ödemesi yok.',
+    a: 'Doğrulayıcı eşiği onayladıktan sonra yalnızca havuzda kayıtlı izinli demo satıcısına test varlığı gider. Gerçek satıcı, tapu veya ruhsat doğrulanmaz.',
   },
   {
     q: 'Faiz veya vade farkı var mı?',
-    a: 'Örnek hesapta faiz veya vade farkı modellenmiyor. Henüz çalışan sözleşme veya anchor bulunmuyor; gerçek bir ürünün ücretleri ayrıca belirlenir.',
+    a: 'Hayır, örnek hesapta faiz veya vade farkı modellenmiyor. Kontratta ücret ya da organizasyon bedeli yok; gerçek bir ürünün ücretleri ayrıca belirlenir.',
   },
   {
     q: 'Gerçek para mı kullanılıyor?',
-    a: 'Hayır. Bu, Stellar Testnet arayüzüdür; havuz kontratı henüz yayınlanmadı. Gerçek para, ev veya araç teslimi yoktur.',
+    a: 'Hayır. Bu, Stellar Testnet arayüzüdür; test varlığı kullanılır. Gerçek para, gerçek TL girişi/çıkışı, ev veya araç teslimi yoktur. Anchor bölümü test anchor’ı ile çalışır, Türk lirası sunmaz.',
   },
 ]
 </script>
 
 <template>
-  <div class="space-y-24">
-    <!-- 1 · KARŞILAMA -->
-    <section class="sunrise relative isolate overflow-hidden rounded-[2.25rem] px-5 py-10 sm:px-10 sm:py-14 lg:py-16">
-      <div class="grid items-center gap-6 lg:grid-cols-[1.05fr_1fr]">
-        <div>
-          <div class="glass inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs font-medium text-stone-700">
-            <span
-              class="size-2 rounded-full"
-              :class="online === false ? 'bg-rose-500' : 'animate-pulse bg-sage-500'"
-              aria-hidden="true"
-            />
-            <span v-if="online === false">Ağa ulaşılamıyor</span>
-            <span v-else-if="ledger !== null" class="tabular-nums">
-              Stellar {{ config.label }} canlı · defter #{{ ledger.toLocaleString('tr-TR') }}
-            </span>
-            <span v-else>Ağa bağlanılıyor…</span>
-          </div>
-
-          <h1 class="mt-5 text-5xl leading-[1.02] font-extrabold sm:text-6xl lg:text-7xl">
-            Birlikte biriktir.
-            <span class="block bg-gradient-to-r from-brand-600 via-brand-500 to-gold-500 bg-clip-text text-transparent">
-              Her şeyi doğrula.
-            </span>
-          </h1>
-          <p class="mt-5 max-w-xl text-lg leading-relaxed text-stone-700">
-            Ev, araç ya da ortak bir hedef için sırayla ya da kurayla birikim yap. Hedef: paran bir kişinin
-            cebinde değil, herkesin görebildiği kuralların içinde dursun.
-          </p>
-
-          <div class="mt-8 flex flex-wrap gap-3">
-            <a href="#basla" class="btn-primary btn-lg">
-              Adım adım başla
-              <AppIcon name="arrow" class="!size-4" />
-            </a>
-            <a href="#nasil" class="btn-secondary btn-lg">Nasıl çalışır?</a>
-          </div>
-
-          <ol class="mt-9 flex flex-wrap items-center gap-2 text-sm font-medium text-stone-700" aria-label="Üç adımda özet">
-            <li class="flex items-center gap-2 rounded-full bg-white/70 py-1.5 pr-3.5 pl-1.5">
-              <span class="grid size-7 place-items-center rounded-full bg-brand-600 text-xs font-bold text-white">1</span>
-              Cüzdanını bağla
-            </li>
-            <AppIcon name="arrow" class="!size-4 text-brand-500" />
-            <li class="flex items-center gap-2 rounded-full bg-white/70 py-1.5 pr-3.5 pl-1.5">
-              <span class="grid size-7 place-items-center rounded-full bg-brand-600 text-xs font-bold text-white">2</span>
-              Havuzu kur
-            </li>
-            <AppIcon name="arrow" class="!size-4 text-brand-500" />
-            <li class="flex items-center gap-2 rounded-full bg-white/70 py-1.5 pr-3.5 pl-1.5">
-              <span class="grid size-7 place-items-center rounded-full bg-brand-600 text-xs font-bold text-white">3</span>
-              Birlikte biriktir
-            </li>
-          </ol>
-        </div>
-
-        <!-- 3B sahne: ortada havuz, çevresinde üyeleri temsil eden paralar -->
-        <div class="relative mx-auto h-[340px] w-full max-w-xl sm:h-[420px] lg:h-[480px]">
-          <Scene3D :coins="4" label="Ortada büyük bir havuz parası, çevresinde dönen dört üye parası" />
-          <div class="float glass absolute top-6 left-0 flex items-center gap-2 rounded-2xl px-3.5 py-2 text-xs font-semibold text-ink sm:left-2">
-            <Illo name="lock" :size="22" /> Hedef: kurallar kilitli
-          </div>
-          <div class="float glass absolute right-0 bottom-10 flex items-center gap-2 rounded-2xl px-3.5 py-2 text-xs font-semibold text-ink [animation-delay:-2.4s] sm:right-2">
-            <Illo name="shield" :size="22" /> Hedef: para sözleşmede
-          </div>
-        </div>
-      </div>
-    </section>
+  <div class="home-page space-y-24">
+    <HomeHero />
 
     <p
       v-if="!poolContractId"
       role="status"
-      class="-mt-12 flex items-start gap-3 rounded-3xl border border-gold-300/60 bg-gold-100/70 p-4 text-sm leading-relaxed text-amber-950 sm:items-center sm:p-5"
+      class="home-contract-notice flex items-start gap-3 rounded-3xl border border-gold-300/60 bg-gold-100/70 p-4 text-sm leading-relaxed text-amber-950 sm:items-center sm:p-5"
     >
       <Illo name="bulb" :size="30" />
       <span>
-        <strong>Durum:</strong> Havuz ve ödeme akışı hedef tasarımdır. Soroban havuz kontratı henüz
-        yayınlanmadı; şu anda test varlığıyla havuz açılamaz veya tahsisat yapılamaz. Gerçek para yoktur.
+        <strong>Durum:</strong> Bu derleme henüz bir havuz kontratına bağlı değil
+        (<code class="font-mono">VITE_ROTATING_POOL_CONTRACT_ID</code> boş). Sponsorsuz havuz kontratı Testnet’te yayında;
+        adresi yapılandırılınca havuz açılır ve okunur. Gerçek para yoktur.
       </span>
     </p>
 
+    <div class="home-intro-strip" v-reveal>
+      <span class="intro-strip-label">BİRLİKTE BİRİKİMİN TEMELİ</span>
+      <span><AppIcon name="users" /> Tanıdığın bir grup</span><span><AppIcon name="lock" /> Herkesin onayladığı kurallar</span><span><AppIcon name="eye" /> Görünür para akışı</span>
+    </div>
+
     <HowItWorks />
 
-    <!-- 2b · HİKÂYE: dokunarak oynanan örnek tur -->
-    <section id="hikaye" class="scroll-mt-28 space-y-8" aria-labelledby="hikaye-baslik">
+    <!-- 2b · HİKÂYE: kendiliğinden oynayan örnek tur -->
+    <section id="hikaye" class="home-story scroll-mt-28 space-y-8" aria-labelledby="hikaye-baslik">
       <div v-reveal class="mx-auto max-w-2xl text-center">
-        <p class="eyebrow text-brand-700">Dene</p>
-        <h2 id="hikaye-baslik" class="mt-2 text-4xl font-extrabold sm:text-5xl">Bir turu kendin dene</h2>
+        <p class="eyebrow text-brand-700">İzle</p>
+        <h2 id="hikaye-baslik" class="mt-2 text-4xl font-extrabold sm:text-5xl">Bir tur böyle işler</h2>
         <p class="mt-3 text-stone-600">
-          Dört arkadaş, bir havuz. Dokun, öde, onayla; “ya biri ödemezse?” sorusunu da dene.
+          Dört arkadaş, bir havuz. Hikâye kendiliğinden oynar: para sözleşmeye girer, onaylar toplanır, tutar satıcıya gider.
+          Sonra biri ödemeyi bırakınca ne olduğunu izle.
         </p>
       </div>
       <div v-reveal><StorySim /></div>
     </section>
 
     <!-- 3 · BAŞLA (hesap hazırlama sihirbazı) -->
-    <section id="basla" class="scroll-mt-28 space-y-8" aria-labelledby="basla-baslik">
+    <section id="basla" class="home-setup scroll-mt-28 space-y-8" aria-labelledby="basla-baslik">
       <div v-reveal class="mx-auto max-w-2xl text-center">
         <p class="eyebrow text-brand-700">Başla</p>
         <h2 id="basla-baslik" class="mt-2 text-4xl font-extrabold sm:text-5xl">Hesabını dört adımda hazırla</h2>
@@ -506,14 +447,15 @@ const FAQ = [
     </section>
 
     <!-- 4 · KİM NE YAPAR -->
-    <section class="space-y-8" aria-labelledby="roller-baslik">
+    <section class="home-roles space-y-8" aria-labelledby="roller-baslik">
       <div v-reveal class="mx-auto max-w-2xl text-center">
         <p class="eyebrow text-brand-700">Roller</p>
         <h2 id="roller-baslik" class="mt-2 text-4xl font-extrabold sm:text-5xl">Havuzda kim ne yapar?</h2>
       </div>
       <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <article v-for="(r, i) in ROLES" :key="r.title" v-reveal="i" v-tilt class="bento h-full">
-          <span class="grid size-16 place-items-center rounded-3xl" :class="r.tone">
+        <article v-for="(r, i) in ROLES" :key="r.title" v-reveal="i" v-tilt class="role-card bento h-full">
+          <span class="role-number" aria-hidden="true">0{{ i + 1 }}</span>
+          <span class="role-art grid size-16 place-items-center rounded-3xl" :class="r.tone">
             <Illo :name="r.icon" :size="44" />
           </span>
           <h3 class="mt-4 text-xl font-bold">{{ r.title }}</h3>
@@ -535,17 +477,15 @@ const FAQ = [
     </section>
 
     <!-- 6 · GÜVEN -->
-    <section class="espresso relative overflow-hidden rounded-[2.25rem] px-5 py-12 text-white sm:px-10 sm:py-16" aria-labelledby="guven-baslik">
-      <div v-reveal class="mx-auto max-w-2xl text-center">
-        <p class="eyebrow text-gold-300">Güven modeli</p>
-        <h2 id="guven-baslik" class="mt-2 text-4xl font-extrabold sm:text-5xl">Neden güvenli olması hedefleniyor?</h2>
-        <div class="mt-6 flex flex-wrap items-center justify-center gap-2 text-sm font-semibold" aria-label="Para akışı">
-          <span class="glass-dark rounded-full px-4 py-2">Üyeler</span>
-          <AppIcon name="arrow" class="!size-4 text-gold-300" />
-          <span class="rounded-full bg-gold-400 px-4 py-2 text-ink">Sözleşme</span>
-          <AppIcon name="arrow" class="!size-4 text-gold-300" />
-          <span class="glass-dark rounded-full px-4 py-2">Doğrulanmış satıcı</span>
+    <section class="home-trust espresso relative overflow-hidden rounded-[2.25rem] px-5 py-12 text-white sm:px-10 sm:py-16" aria-labelledby="guven-baslik">
+      <div class="trust-intro">
+        <div v-reveal>
+          <p class="eyebrow text-gold-300">Güven modeli</p>
+          <h2 id="guven-baslik" class="mt-3 text-4xl font-extrabold sm:text-5xl">Kurallar kodda.<br /><span>Herkese açık.</span></h2>
+          <p class="trust-description">Katkının nereye gittiğini gör. Sırayı, onayları ve ödeme koşullarını grubunla birlikte takip et.</p>
+          <a href="#sss" class="trust-link">Kuralları ve sınırları incele <AppIcon name="arrow" /></a>
         </div>
+        <div v-reveal><ContractFlow /></div>
       </div>
       <div class="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <article
@@ -562,7 +502,8 @@ const FAQ = [
         </article>
       </div>
       <p class="mt-8 text-center text-xs text-stone-300">
-        Bunlar hedef tasarımdır. Kontrat yayınlanıp denetlenmeden gerçek para için kullanılmamalıdır.
+        Kontrat Testnet’te yayında ve birim testlerinden geçti, ancak bağımsız güvenlik denetiminden geçmedi;
+        gerçek para için kullanılmamalıdır.
       </p>
     </section>
 
@@ -570,16 +511,16 @@ const FAQ = [
     <div v-reveal><AnchorDemo /></div>
 
     <!-- 8 · SSS -->
-    <section id="sss" class="scroll-mt-28 space-y-8" aria-labelledby="sss-baslik">
-      <div v-reveal class="mx-auto max-w-2xl text-center">
+    <section id="sss" class="home-faq scroll-mt-28" aria-labelledby="sss-baslik">
+      <div v-reveal class="faq-heading">
         <p class="eyebrow text-brand-700">Aklındakiler</p>
         <h2 id="sss-baslik" class="mt-2 text-4xl font-extrabold sm:text-5xl">Sık sorulan sorular</h2>
         <p class="mt-3 text-sm text-stone-600">
-          Cevaplar hedef tasarımı anlatır. Sözleşme yayınlanıp denetlenmeden gerçek para için kullanılmamalıdır.
+          Cevaplar Testnet prototipini anlatır. Bağımsız denetimden geçmeden gerçek para için kullanılmamalıdır.
         </p>
       </div>
-      <div class="mx-auto grid max-w-4xl gap-3 md:grid-cols-2">
-        <details v-for="(item, i) in FAQ" :key="item.q" v-reveal="i % 2" class="group card cursor-pointer !p-0 open:shadow-[0_14px_32px_-16px_rgb(20_128_90/0.4)]">
+      <div class="faq-list">
+        <details v-for="(item, i) in FAQ" :key="item.q" v-reveal="i % 2" class="faq-item group card cursor-pointer !p-0 open:shadow-[0_14px_32px_-16px_rgb(20_128_90/0.4)]">
           <summary
             class="flex min-h-14 list-none items-center justify-between gap-3 px-5 py-3 font-display font-bold marker:hidden [&::-webkit-details-marker]:hidden"
           >
@@ -593,5 +534,70 @@ const FAQ = [
         </details>
       </div>
     </section>
+    <section v-reveal class="home-closing" aria-labelledby="closing-title">
+      <div><p class="eyebrow">BÜYÜK HEDEFLER, KÜÇÜK ADIMLAR</p><h2 id="closing-title">İlk adımı<br /><span>birlikte atalım.</span></h2><p>Grubunu düşün, planını oluştur.<br />Nasıl işlediğini Testnet’te keşfet.</p></div>
+      <div class="closing-actions"><a href="#basla" class="closing-primary">Hesabını hazırla <AppIcon name="arrow" /></a><a href="#hesapla">Önce planımı hesaplayayım ↗</a><span>Gerçek para kullanılmaz.</span></div>
+      <span class="closing-orbit" aria-hidden="true" /><span class="closing-star" aria-hidden="true">✳</span>
+    </section>
   </div>
 </template>
+
+<style scoped>
+.home-page :deep(.home-hero) { margin-bottom: 0; }
+.home-contract-notice { margin-top: 24px; margin-bottom: 0; }
+.home-intro-strip { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 20px; padding: 23px 12px; margin-top: 28px; border-bottom: 1px solid #dfe4d1; color: #788269; }
+.home-intro-strip > span { display: inline-flex; align-items: center; gap: 8px; font-size: 11px; }
+.home-intro-strip .intro-strip-label { font-size: 9px; letter-spacing: .13em; color: #9a9f88; }
+.home-intro-strip :deep(svg) { width: 17px; height: 17px; color: #82996b; }
+.home-page :deep(.eyebrow) { letter-spacing: .14em; font-size: 10px; }
+.home-page :deep(h2) { color: #2e462f; letter-spacing: -.045em; line-height: 1.1; }
+.home-story { position: relative; }
+.home-story::before { content: ''; position: absolute; top: 80px; left: -30px; right: -30px; bottom: -30px; background: #f0f2e4; border-radius: 42px; z-index: -1; }
+.home-setup { padding: 40px 0 0; }
+.home-setup > .card { border-radius: 27px; border-color: #dde5d1; box-shadow: 0 16px 50px -28px #345c3a30; background: #fffff9; }
+.role-card { position: relative; overflow: hidden; background: linear-gradient(140deg,#fffef6,#f3f5e8); border-color: #e0e5d5; padding: 28px 23px; border-radius: 24px; }
+.role-number { position: absolute; top: 20px; right: 20px; color: #bbc4a9; font: 500 13px var(--font-display); }
+.role-art { position: relative; margin-top: 12px; border: 1px solid #ffffffac; box-shadow: 0 6px 0 #cdd8bd80, 0 13px 22px -13px #4467443d; transform: rotate(-7deg); transition: transform .7s; }
+.role-art :deep(img), .role-art :deep(svg) { transform: rotate(7deg) translateY(-4px); filter: drop-shadow(0 5px 3px #36592a1f); }
+.role-card:hover .role-art { transform: rotate(0deg) translateY(-4px); }
+.role-card h3 { margin-top: 27px; color: #365037; }
+.role-card p { color: #7a826d; font-size: 12px; line-height: 1.85; }
+.home-trust { background: radial-gradient(ellipse at 85% 0,#47603975,transparent 70%),#1c3c2b; }
+.trust-intro { display: grid; grid-template-columns: .95fr 1.15fr; gap: 35px; align-items: center; }
+.home-trust h2 { color: #f3f1d9; font-size: clamp(32px,3.8vw,46px); }
+.home-trust h2 span { color: #b9c58b; }
+.trust-description { margin-top: 19px; color: #bbc9a8; max-width: 340px; font-size: 13px; line-height: 1.85; }
+.trust-link { display: inline-flex; align-items: center; gap: 8px; color: #e2d4a1; margin-top: 22px; font-size: 11px; min-height: 35px; }
+.trust-link :deep(svg) { width: 15px; }
+.home-trust article { background: #ffffff05; border-color: #ffffff14; border-radius: 20px; }
+.home-trust article h3 { color: #edf0d9; font-size: 16px; }
+.home-trust article p { color: #adbc9a; font-size: 12px; line-height: 1.85; }
+.home-trust > p { color: #92a785; font-size: 10px; }
+.home-faq { display: grid; grid-template-columns: .8fr 1.5fr; gap: 55px; align-items: start; }
+.faq-heading { position: sticky; top: 125px; }
+.home-faq h2 { font-size: 43px; }
+.faq-heading > p:last-child { font-size: 12px; color: #828973; line-height: 1.9; max-width: 290px; }
+.faq-list { display: grid; gap: 10px; }
+.faq-item { background: #fffef7; border-color: #e0e5d4; border-radius: 17px; box-shadow: none; }
+.faq-item[open] { background: #f1f5e7; border-color: #c5d7b3; }
+.faq-item summary { font-size: 14px; min-height: 66px; color: #49603e; }
+.faq-item > p { font-size: 12px; color: #7a836b; line-height: 1.9; }
+.home-closing { position: relative; overflow: hidden; display: flex; align-items: center; justify-content: space-between; gap: 30px; padding: 48px 55px; border: 1px solid #dce5cb; border-radius: 32px; background: linear-gradient(110deg,#e9efda,#e0e8cb); isolation: isolate; }
+.home-closing .eyebrow { color: #829363; }
+.home-closing h2 { color: #3b5736; font-size: 48px; margin-top: 16px; }
+.home-closing h2 span { color: #879b64; }
+.home-closing p:last-child { color: #7d8b66; font-size: 12px; line-height: 1.8; margin-top: 20px; }
+.closing-actions { display: flex; flex-direction: column; align-items: center; gap: 16px; z-index: 1; }
+.closing-primary { display: flex; align-items: center; gap: 35px; padding: 16px 23px; border-radius: 15px; color: #fffef0; background: #365e3b; font-size: 13px; box-shadow: 0 5px 0 #21472c; transition: transform .3s; }
+.closing-primary:hover { transform: translateY(-3px); }
+.closing-primary :deep(svg) { width: 17px; }
+.closing-actions > a:nth-child(2) { font-size: 11px; color: #698258; }
+.closing-actions > span { font-size: 9px; color: #95a27b; }
+.closing-orbit { position: absolute; width: 400px; height: 400px; right: -90px; top: -50px; border: 1px solid #b3c19550; border-radius: 50%; z-index: -1; }
+.closing-orbit::after { content: ''; position: absolute; inset: 35px; border: 1px dashed #b3c19555; border-radius: 50%; }
+.closing-star { position: absolute; top: 38px; right: 330px; font-size: 95px; line-height: 1; color: #acbd8452; transform: rotate(-15deg); z-index: -1; }
+@media(max-width:1200px) { .home-story::before { left: -10px; right: -10px; } }
+@media(max-width:1023px) { .home-faq { gap: 30px; grid-template-columns: .8fr 1.3fr; } .trust-intro { gap: 25px; grid-template-columns: 1fr; } .trust-description { max-width: 480px; } }
+@media(max-width:767px) { .home-intro-strip { justify-content: center; gap: 15px 20px; padding-inline: 0; } .home-intro-strip .intro-strip-label { flex-basis: 100%; justify-content: center; } .home-intro-strip > span { font-size: 10px; } .home-page :deep(h2) { font-size: 34px; } .home-story::before { inset: 90px -10px -20px; border-radius: 28px; } .home-faq { grid-template-columns: 1fr; gap: 28px; } .faq-heading { position: static; text-align: center; } .faq-heading > p:last-child { margin-inline: auto; max-width: 330px; } .home-closing { padding: 32px 25px; flex-direction: column; align-items: flex-start; gap: 27px; border-radius: 25px; } .home-closing h2 { font-size: 41px; } .closing-actions { align-items: flex-start; } .closing-star { right: 20px; top: 40px; } .role-card { padding: 23px 20px; } }
+@media(prefers-reduced-motion:reduce) { .role-art, .closing-primary { transition: none; } .role-card:hover .role-art { transform: rotate(-7deg); } .closing-primary:hover { transform: none; } }
+</style>

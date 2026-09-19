@@ -52,8 +52,8 @@ const { ledger, online } = useNetworkStatus()
     <p role="status" class="rounded-3xl border border-gold-300/60 bg-gold-100/70 p-5 text-sm leading-relaxed text-amber-950">
       Bu, Mainnet'e bağlanan <strong>işlemsiz tanıtım sürümüdür</strong>. Cüzdan imzası, fon yatırma,
       havuz açma ve gerçek TL anchor işlemleri kapalıdır. Aşağıdaki anchor adımları yalnızca
-      simülasyondur. Mainnet'te bir havuz kontratı yayınlanmadı;
-      gerçek para, ev veya araç teslimi ve finansman garantisi sunulmaz.
+      simülasyondur. Havuz kontratı yalnızca Testnet'te yayındadır, Mainnet'te
+      yayınlanmadı; gerçek para, ev veya araç teslimi ve finansman garantisi sunulmaz.
     </p>
 
     <section aria-labelledby="akim" class="space-y-4">
@@ -75,7 +75,7 @@ const { ledger, online } = useNetworkStatus()
           <Illo name="lock" :size="52" />
           <h3 class="mt-4 font-semibold">Kurallar görünür olur</h3>
           <p class="mt-2 text-sm leading-relaxed text-stone-600">
-            Prototip, üye onayı, eksik ödeme ve iade koşullarını Soroban üzerinde test etmeyi hedefler.
+            Prototip, üye onayı, eksik ödeme ve iade koşullarını Soroban üzerinde (Testnet) uygular ve test eder.
           </p>
         </article>
         <article class="card">

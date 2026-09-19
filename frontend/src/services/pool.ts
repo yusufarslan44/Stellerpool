@@ -14,11 +14,11 @@ import type {
  * RotatingPool kontratı için istemci katmanı. Tüm çağrılar gerçek Soroban RPC'ye gider,
  * sahte veri yoktur.
  *
- * NOT: Yayındaki kontrat hâlâ eski sponsorlu sürüm (API v8). Fonksiyon adları
- * docs/plan.md bölüm 5'ten, kura ve büyük grup alanları docs/CONTRACT_HANDOFF.md'den
- * alındı; parametre ve alan adları (snake_case) VARSAYIMDIR. Sponsorsuz + kura kontratı (v9)
- * yayınlanınca `stellar contract bindings typescript` çıktısıyla doğrulanacak; uyuşmazlık
- * varsa yalnızca bu dosya (ve types/pool.ts) değişir.
+ * NOT: Testnet'te yayındaki sponsorsuz kontrat (API v9) ile fonksiyon adları, parametreler ve
+ * okunan alanlar doğrulandı (17 metot + okuma, canlı veriyle). Kura (`draw_recipient`,
+ * `order_mode`) ve 30 üye API v10 hedefidir (docs/CONTRACT_HANDOFF.md); bu alanlar hâlâ
+ * VARSAYIMDIR ve kontrat yayınlanınca `stellar contract bindings typescript` ile doğrulanmalı.
+ * Uyuşmazlık varsa yalnızca bu dosya (ve types/pool.ts) değişir.
  */
 
 export class LegacyContractError extends Error {

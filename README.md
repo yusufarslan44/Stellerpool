@@ -96,7 +96,7 @@ flowchart TD
 ## Tasarım kararları ve çözülen zorluklar
 
 - **Sponsor kaldırıldı:** İlk tasarım sponsor güvencesi içeriyordu; "para zaten kilitli" sezgisiyle çeliştiği için ve gerçek riski gizlediği için kaldırıldı. Yerine riski açıkça gösteren sponsorsuz model geldi.
-- **Yalnızca mevcut tur iade edilir:** Satıcıya ödenmiş turun parası kontratta değildir. Bu kısıt saklanmak yerine arayüzde etkileşimli bir hikâyeyle ("Bir turu kendin dene") anlatılır.
+- **Yalnızca mevcut tur iade edilir:** Satıcıya ödenmiş turun parası kontratta değildir. Bu kısıt saklanmak yerine arayüzde kendiliğinden oynayan bir hikâyeyle ("Bir tur böyle işler") anlatılır.
 - **Arayüz ↔ kontrat uyumu:** Kontrat ve arayüz paralel geliştirildi. Arayüz, kontratın gerçek yeteneklerini zincirden okuyup uyumsuz sürümde (sponsorlu, kurasız) işlem göndermeyi reddeder. Canlı kontrata karşı testte SDK'nın `Result` sarmalayıcısı gibi stub'ın göstermediği hatalar bulundu ve düzeltildi.
 - **Trade-off:** Kontrat yükseltilemez (yeni ID gerekir); zaman aşımı kendiliğinden işlem başlatmaz, herkes ilgili fonksiyonu çağırır.
 

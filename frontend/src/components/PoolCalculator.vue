@@ -13,6 +13,7 @@ import type { OrderMode } from '@/types/pool'
 
 const token = poolAsset.getCode()
 const goal = ref('demo')
+const scenePaused = ref(false)
 const pot = ref('40')
 const members = ref(4)
 const mode = ref<OrderMode>('Fixed')
@@ -54,7 +55,7 @@ const createLink = computed(() => ({
 </script>
 
 <template>
-  <section class="card overflow-hidden !p-0" aria-labelledby="hesap-araci">
+  <section class="plan-calculator card overflow-hidden !p-0" aria-labelledby="hesap-araci">
     <div class="grid lg:grid-cols-[1.1fr_1fr]">
       <div class="space-y-6 p-5 sm:p-8">
         <div>
@@ -142,19 +143,20 @@ const createLink = computed(() => ({
             :class="contribution === null ? 'pointer-events-none opacity-50' : ''"
             :aria-disabled="contribution === null"
           >
-            {{ poolContractId ? 'Bu planla havuz oluştur' : 'Planı incele (kontrat bekleniyor)' }}
+            {{ poolContractId ? 'Bu planla havuz oluştur' : 'Planı incele' }}
             <AppIcon name="arrow" class="!size-4" />
           </RouterLink>
           <p class="mt-3 text-xs leading-relaxed text-stone-600">
-            Örnek hesaptır, {{ token }} cinsindendir. Faiz ve vade farkı modellenmez. Havuz kontratı henüz
-            yayınlanmadı; gerçek para veya teslimat garantisi yoktur.
+            Örnek hesaptır, {{ token }} cinsindendir. Faiz ve vade farkı modellenmez. Bu bir Testnet
+            prototipidir; gerçek para veya teslimat garantisi yoktur.
           </p>
         </div>
       </div>
 
       <!-- 3B: üye sayısı kadar para yörüngede döner -->
-      <div class="sunrise relative min-h-[300px] border-t border-stone-100 lg:min-h-0 lg:border-t-0 lg:border-l">
-        <Scene3D :coins="members" :label="`${members} üyeyi temsil eden ${members} altın para havuzun çevresinde dönüyor`" />
+      <div class="calculator-scene sunrise relative min-h-[300px] border-t border-stone-100 lg:min-h-0 lg:border-t-0 lg:border-l">
+        <div class="calculator-scene-top"><span>PLANININ GÖRSELİ</span><button type="button" :aria-label="scenePaused ? 'Plan animasyonunu oynat' : 'Plan animasyonunu duraklat'" @click="scenePaused = !scenePaused">{{ scenePaused ? '▷' : 'Ⅱ' }}</button></div>
+        <Scene3D :paused="scenePaused" :coins="members" :label="`${members} üyeyi temsil eden ${members} altın para havuzun çevresinde dönüyor`" />
         <div class="glass absolute right-4 bottom-4 left-4 flex items-center justify-between gap-2 rounded-2xl px-4 py-2.5 text-sm font-semibold">
           <span>{{ members }} üye · {{ members }} tur</span>
           <span v-if="effectivePot !== null" class="tabular-nums text-brand-800">Tur: {{ formatStroops(effectivePot) }} {{ token }}</span>
@@ -163,3 +165,12 @@ const createLink = computed(() => ({
     </div>
   </section>
 </template>
+
+<style scoped>
+.plan-calculator { border-radius: 30px; border-color: #dce4cf; background: #fffef8; box-shadow: 0 18px 45px -30px #3b61343d; }
+.calculator-scene { background: radial-gradient(ellipse at 50% 45%,#f8f8e5,#dde8ca); }
+.calculator-scene-top { position: absolute; z-index: 1; top: 22px; left: 24px; right: 24px; display: flex; align-items: center; justify-content: space-between; color: #859572; font-size: 9px; letter-spacing: .14em; }
+.calculator-scene-top button { display: grid; place-items: center; width: 29px; height: 29px; border: 1px solid #b5c79c; border-radius: 50%; color: #6c8354; font-size: 12px; cursor: pointer; }
+.plan-calculator :deep(input) { border-color: #d4dfc4; }
+.plan-calculator [aria-pressed] { border-radius: 12px; font-size: 12px; }
+</style>

@@ -1,20 +1,26 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import AppIcon from '@/components/AppIcon.vue'
+import Scene3D from '@/components/Scene3D.vue'
 import Illo from '@/components/Illo.vue'
 import { sha256, toHex } from '@/lib/hash'
 import { illoUrl } from '@/lib/illo'
 import type { IlloName } from '@/lib/icon-data'
 
 /**
- * Anlatıcı, dokunarak oynanan örnek hikâye: dört arkadaş, bir tur.
- * Tamamen kurgusaldır (kişiler ve tutarlar örnek); zincire işlem gitmez. Kurallar hedef tasarımdır.
- * Tek gerçek hesap: alım belgesinin SHA-256 özeti tarayıcıda gerçekten hesaplanır.
+ * Anlatıcı, kendiliğinden oynayan örnek hikâye: dört arkadaş, iki tur.
+ * Tur 1: Can geç öder, doğrulayıcılar onaylar, tutar satıcıya gider.
+ * Tur 2: ilk turda alan Ayşe ödemez, ek süre biter, yalnızca o turun katkıları iade edilir.
+ * Tamamen kurgusaldır (kişiler ve tutarlar örnek); zincire işlem gitmez. Kurallar Testnet
+ * kontratının kurallarıdır. Tek gerçek hesap: alım belgesinin SHA-256 özeti tarayıcıda hesaplanır.
+ *
+ * Her sahne bir "anlık görüntü"dür (durum, tarihten bağımsız hesaplanır); bu yüzden ileri/geri
+ * ve bölüm seçimi de çalışır.
  */
 type Phase =
-  | 'intro' | 'collect' | 'grace' | 'blocked' | 'aborted' | 'purchase' | 'verify' | 'pay' | 'done'
-  | 'r2' | 'r2grace' | 'r2aborted' | 'r2ok'
+  | 'intro' | 'collect' | 'grace' | 'cured' | 'purchase' | 'verify' | 'pay' | 'done'
+  | 'r2' | 'r2grace' | 'r2aborted'
 
 interface Person {
   id: string
@@ -27,6 +33,7 @@ const PEOPLE: Person[] = [
   { id: 'zeynep', name: 'Zeynep', illo: 'zeynep' },
   { id: 'can', name: 'Can', illo: 'can' },
 ]
+const ALL = PEOPLE.map((p) => p.id)
 const VERIFIERS = ['A', 'B', 'C']
 const AMOUNT = 10
 const POT = AMOUNT * PEOPLE.length
@@ -36,52 +43,82 @@ const DOC = 'Örnek alım belgesi: araç, 40 birim, Örnek Galeri'
 const reduced =
   typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
-const phase = ref<Phase>('intro')
-const resumePhase = ref<Phase>('collect')
-const rulesAccepted = ref(false)
-const paid = ref<string[]>([])
+// --- Senaryo -------------------------------------------------------------------------------
+interface Step {
+  phase: Phase
+  paid?: string[]
+  approvals?: string[]
+  refunded?: string[]
+  /** Bu sahneye girilirken oynatılan para animasyonu. */
+  fly?: { kind: 'in' | 'out' | 'send'; ids?: string[] }
+  /** Sahnenin ekranda kalma süresi (ms); anlatı metninin okunma süresine göre. */
+  hold: number
+}
+const A_M_Z = ['ayse', 'mehmet', 'zeynep']
+const M_Z_C = ['mehmet', 'zeynep', 'can']
+
+const STEPS: Step[] = [
+  { phase: 'intro', hold: 6500 },
+  { phase: 'collect', hold: 4200 },
+  { phase: 'collect', paid: ['ayse'], fly: { kind: 'in', ids: ['ayse'] }, hold: 2000 },
+  { phase: 'collect', paid: ['ayse', 'mehmet'], fly: { kind: 'in', ids: ['mehmet'] }, hold: 2000 },
+  { phase: 'collect', paid: A_M_Z, fly: { kind: 'in', ids: ['zeynep'] }, hold: 2300 },
+  { phase: 'grace', paid: A_M_Z, hold: 6500 },
+  { phase: 'cured', paid: ALL, fly: { kind: 'in', ids: ['can'] }, hold: 5000 },
+  { phase: 'purchase', paid: ALL, hold: 6000 },
+  { phase: 'verify', paid: ALL, hold: 5200 },
+  { phase: 'verify', paid: ALL, approvals: ['A'], hold: 2500 },
+  { phase: 'pay', paid: ALL, approvals: ['A', 'B'], hold: 5500 },
+  { phase: 'done', paid: ALL, approvals: ['A', 'B'], fly: { kind: 'send' }, hold: 6500 },
+  { phase: 'r2', paid: [], hold: 6500 },
+  { phase: 'r2', paid: ['mehmet'], fly: { kind: 'in', ids: ['mehmet'] }, hold: 2000 },
+  { phase: 'r2', paid: ['mehmet', 'zeynep'], fly: { kind: 'in', ids: ['zeynep'] }, hold: 2000 },
+  { phase: 'r2', paid: M_Z_C, fly: { kind: 'in', ids: ['can'] }, hold: 2200 },
+  { phase: 'r2grace', paid: M_Z_C, hold: 6500 },
+  { phase: 'r2aborted', paid: [], refunded: M_Z_C, fly: { kind: 'out', ids: M_Z_C }, hold: 11000 },
+]
+
+// --- Durum ---------------------------------------------------------------------------------
+const index = ref(0)
+/** Geçerli sahnede geçen süre (ms). Elle seçimden sonra negatif başlar: sahne biraz daha bekler. */
+const elapsed = ref(0)
+const autoplay = ref(!reduced)
+const visible = ref(false)
+const pageVisible = ref(true)
+
+const step = computed(() => STEPS[index.value]!)
+const phase = computed(() => step.value.phase)
+const paid = computed(() => step.value.paid ?? [])
+const approvals = computed(() => step.value.approvals ?? [])
+const refunded = computed(() => step.value.refunded ?? [])
+const rulesAccepted = computed(() => index.value > 0)
+const round2 = computed(() => phase.value.startsWith('r2'))
+const sent = computed(() => phase.value === 'done')
 const docHash = ref<string | null>(null)
-const approvals = ref<string[]>([])
-const sent = ref(false)
-/** 2. tur (plan bölüm 7): ilk turda tutarı alan Ayşe artık ödemiyor. */
-const round2 = ref(false)
-const round1Paid = ref(false)
-const refunded = ref<string[]>([])
-const locked = ref(false)
+const showHash = computed(() => (['verify', 'pay', 'done'] as Phase[]).includes(phase.value))
 
 const stage = ref<HTMLElement | null>(null)
 const jarEl = ref<HTMLElement | null>(null)
 const storeEl = ref<HTMLElement | null>(null)
 const personEls: Record<string, HTMLElement | null> = {}
 
-const timers: number[] = []
-function later(fn: () => void, ms: number) {
-  if (reduced) return fn()
-  timers.push(window.setTimeout(fn, ms))
-}
-onBeforeUnmount(() => timers.forEach((t) => clearTimeout(t)))
-
 const isFunded = (id: string) => paid.value.includes(id)
 const funded = computed(() => PEOPLE.filter((p) => isFunded(p.id)).length)
-const fill = computed(() => (sent.value ? 0 : funded.value / PEOPLE.length))
 const recipient = computed(() => (round2.value ? 'mehmet' : 'ayse'))
-const recipientPaid = computed(() => paid.value.includes(recipient.value))
-const canTap = computed(
-  () => (['collect', 'grace', 'r2', 'r2grace'] as Phase[]).includes(phase.value) && !locked.value,
-)
-/** Kişiye dokunup ödetilebilir mi? 2. turda Ayşe ancak ek sürede ödeyebilir. */
-const canPay = (id: string) => canTap.value && !isFunded(id) && !(phase.value === 'r2' && id === 'ayse')
 
 const CHAPTERS = ['Kurallar', 'Katkı', 'Alım', 'Onay', 'Gönderim']
-const chapter = computed(() => {
-  switch (phase.value) {
+function chapterOf(p: Phase): number {
+  switch (p) {
     case 'intro': return 0
-    case 'collect': case 'grace': case 'blocked': case 'aborted': case 'r2': case 'r2grace': case 'r2aborted': case 'r2ok': return 1
+    case 'collect': case 'grace': case 'cured': case 'r2': case 'r2grace': case 'r2aborted': return 1
     case 'purchase': return 2
     case 'verify': return 3
     default: return 4
   }
-})
+}
+const chapter = computed(() => chapterOf(phase.value))
+/** Bölüm çubuğundan seçilince ilk tur içindeki ilk sahneye gidilir. */
+const chapterStart = (c: number) => STEPS.findIndex((s) => chapterOf(s.phase) === c)
 
 // --- Uçan para animasyonu ------------------------------------------------------------------
 function flyCoin(from: HTMLElement | null, to: HTMLElement | null, delay = 0) {
@@ -108,117 +145,75 @@ function flyCoin(from: HTMLElement | null, to: HTMLElement | null, delay = 0) {
       { transform: `translate(${(x0 + x1) / 2}px, ${Math.min(y0, y1) - 46}px) scale(1.15)`, opacity: 1, offset: 0.5 },
       { transform: `translate(${x1}px, ${y1}px) scale(0.7)`, opacity: 0.9 },
     ],
-    { duration: 550, delay, easing: 'cubic-bezier(0.3, 0.7, 0.3, 1)', fill: 'both' },
+    { duration: 1100, delay, easing: 'cubic-bezier(0.3, 0.7, 0.3, 1)', fill: 'both' },
   )
   anim.onfinish = () => coin.remove()
 }
 
-// --- Eylemler ------------------------------------------------------------------------------
-function acceptRules() {
-  rulesAccepted.value = true
-  phase.value = 'collect'
+function playFx(s: Step) {
+  const fly = s.fly
+  if (!fly) return
+  if (fly.kind === 'in') fly.ids?.forEach((id) => flyCoin(personEls[id] ?? null, jarEl.value))
+  else if (fly.kind === 'out') fly.ids?.forEach((id, i) => flyCoin(jarEl.value, personEls[id] ?? null, i * 160))
+  else for (let i = 0; i < PEOPLE.length; i++) flyCoin(jarEl.value, storeEl.value, i * 140)
 }
 
-function pay(id: string) {
-  if (!canPay(id)) return
-  flyCoin(personEls[id] ?? null, jarEl.value)
-  paid.value = [...paid.value, id]
-  afterFunding()
+// --- Oynatıcı ------------------------------------------------------------------------------
+const playing = computed(() => autoplay.value && visible.value && pageVisible.value && !reduced)
+let raf = 0
+let last = 0
+
+function goTo(i: number, animate: boolean, hold = false) {
+  index.value = (i + STEPS.length) % STEPS.length
+  elapsed.value = hold ? -1500 : 0
+  if (animate) void nextTick(() => playFx(step.value))
+}
+const next = () => goTo(index.value + 1, true, true)
+const prev = () => goTo(index.value - 1, false, true)
+const restart = () => goTo(0, false)
+function togglePlay() {
+  autoplay.value = !autoplay.value
 }
 
-function afterFunding() {
-  if (funded.value < PEOPLE.length) return
-  locked.value = true
-  later(() => {
-    phase.value = phase.value === 'r2grace' ? 'r2ok' : 'purchase'
-    locked.value = false
-  }, 750)
+function tick(now: number) {
+  elapsed.value += Math.min(now - last, 100)
+  last = now
+  if (elapsed.value >= step.value.hold) goTo(index.value + 1, true)
+  raf = requestAnimationFrame(tick)
 }
+watch(
+  playing,
+  (play) => {
+    cancelAnimationFrame(raf)
+    if (play) {
+      last = performance.now()
+      raf = requestAnimationFrame(tick)
+    }
+  },
+  { immediate: true },
+)
 
-function delayCan() {
-  if (phase.value === 'collect' && !isFunded('can')) phase.value = 'grace'
-}
-function askAyse() {
-  if (recipientPaid.value) return
-  resumePhase.value = phase.value === 'grace' ? 'grace' : 'collect'
-  phase.value = 'blocked'
-}
-function abortRound() {
-  if (phase.value !== 'grace' || locked.value) return
-  paid.value = []
-  phase.value = 'aborted'
-}
+const progress = computed(() => {
+  const within = Math.max(0, Math.min(1, elapsed.value / step.value.hold))
+  return Math.round(((index.value + within) / STEPS.length) * 100)
+})
 
-function startRound2() {
-  if (phase.value !== 'done') return
-  round1Paid.value = true
-  round2.value = true
-  sent.value = false
-  paid.value = []
-  approvals.value = []
-  docHash.value = null
-  phase.value = 'r2'
-}
-function toGrace2() {
-  if (phase.value === 'r2' && funded.value === PEOPLE.length - 1) phase.value = 'r2grace'
-}
-function abortRound2() {
-  if (phase.value !== 'r2grace' || locked.value) return
-  locked.value = true
-  refunded.value = [...paid.value]
-  refunded.value.forEach((id, i) => flyCoin(jarEl.value, personEls[id] ?? null, i * 160))
-  later(() => {
-    paid.value = []
-    phase.value = 'r2aborted'
-    locked.value = false
-  }, 1000)
-}
-
-async function propose() {
-  if (locked.value) return
-  locked.value = true
-  docHash.value = toHex(await sha256(DOC))
-  locked.value = false
-  phase.value = 'verify'
-}
-
-function approve(v: string) {
-  if ((phase.value !== 'verify' && phase.value !== 'pay') || approvals.value.includes(v)) return
-  approvals.value = [...approvals.value, v]
-  if (phase.value === 'verify' && approvals.value.length >= NEEDED) {
-    locked.value = true
-    later(() => {
-      phase.value = 'pay'
-      locked.value = false
-    }, 450)
+let observer: IntersectionObserver | undefined
+const updatePageVisible = () => (pageVisible.value = !document.hidden)
+onMounted(async () => {
+  updatePageVisible()
+  document.addEventListener('visibilitychange', updatePageVisible)
+  if (stage.value) {
+    observer = new IntersectionObserver(([e]) => (visible.value = !!e?.isIntersecting), { threshold: 0.12 })
+    observer.observe(stage.value)
   }
-}
-
-function send() {
-  if (phase.value !== 'pay' || locked.value) return
-  locked.value = true
-  for (let i = 0; i < PEOPLE.length; i++) flyCoin(jarEl.value, storeEl.value, i * 140)
-  later(() => {
-    sent.value = true
-    phase.value = 'done'
-    locked.value = false
-  }, 800)
-}
-
-function reset() {
-  timers.forEach((t) => clearTimeout(t))
-  timers.length = 0
-  phase.value = 'intro'
-  rulesAccepted.value = false
-  paid.value = []
-  docHash.value = null
-  approvals.value = []
-  sent.value = false
-  round2.value = false
-  round1Paid.value = false
-  refunded.value = []
-  locked.value = false
-}
+  docHash.value = toHex(await sha256(DOC))
+})
+onBeforeUnmount(() => {
+  cancelAnimationFrame(raf)
+  observer?.disconnect()
+  document.removeEventListener('visibilitychange', updatePageVisible)
+})
 
 // --- Anlatım -------------------------------------------------------------------------------
 const story = computed<{ title: string; text: string }>(() => {
@@ -226,47 +221,22 @@ const story = computed<{ title: string; text: string }>(() => {
     case 'intro':
       return {
         title: 'Dört arkadaş, bir hedef',
-        text: `Ayşe, Mehmet, Zeynep ve Can birlikte araç biriktiriyor. Her tur herkes ${AMOUNT} birim yatırır; tamamı gelince sıradaki kişinin ${POT} birimlik alımı yapılır. Erken teslim alan biri sonraki ödemeyi bırakırsa diğerlerinin geçmiş katkıları otomatik geri gelmez.`,
+        text: `Ayşe, Mehmet, Zeynep ve Can birlikte araç biriktiriyor. Her tur herkes ${AMOUNT} birim yatırır; tamamı gelince sıradaki kişinin ${POT} birimlik alımı yapılır. Önce herkes grup kurallarını kabul eder.`,
       }
     case 'collect':
       return {
         title: 'Herkes payını yatırır',
-        text: `Kurallar kabul edildi. Şimdi herkes kendi ${AMOUNT} birimini yatırır; para bir kişinin cüzdanına değil, sözleşmeye gider. Örnek için arkadaşlara dokun.`,
+        text: `Kurallar kabul edildi. Şimdi herkes kendi ${AMOUNT} birimini yatırır; para bir kişinin cüzdanına değil, sözleşmeye gider. Kimse başkası adına ödeyemez.`,
       }
     case 'grace':
       return {
         title: 'Can yatırmadı: ek süre başladı',
-        text: 'Can hâlâ kendi payını yatırabilir. Ek süre biterse tur durur ve bu turda yatırılan katkılar geri verilir. Önceki tamamlanmış turların ödemeleri iade havuzunda değildir.',
+        text: 'Süre doldu ama tur hemen durmadı: Can hâlâ kendi payını yatırabilir. Ek süre biterse tur durur ve bu turda yatırılan katkılar geri verilir.',
       }
-    case 'blocked':
+    case 'cured':
       return {
-        title: 'Sıradaki kişi ödemezse?',
-        text: 'Ayşe kendi payını yatırmazsa tur ilerlemez. Ek süre bitince bu tur durur; yalnızca bu turda yatırılmış katkılar geri alınabilir.',
-      }
-    case 'aborted':
-      return {
-        title: 'Tur durdu',
-        text: 'Bu örnekte satıcıya ödeme yapılmadı; bu turda yatırılan katkılar sahiplerine geri döner. Daha önce tamamlanan bir tur olsaydı, o turdaki para satıcıya gitmiş olurdu.',
-      }
-    case 'r2':
-      return {
-        title: 'Tur 2: Ayşe artık ödemiyor',
-        text: `Sıra Mehmet’te. Ayşe ilk turda ${POT} birimlik alımını yaptırdı; şimdi bu turun payını yatırmıyor. Diğer üçüne dokunup ${AMOUNT}’ar birimi yatır. Herkes ödemeden satıcıya hiçbir şey gitmez.`,
-      }
-    case 'r2grace':
-      return {
-        title: 'Ek süre başladı',
-        text: 'Ayşe hâlâ kendi payını yatırabilir (ona dokunarak dene). Yatırmazsa ek süre bitince tur durur; kimse onun yerine ödeyemez.',
-      }
-    case 'r2ok':
-      return {
-        title: 'Ayşe ek sürede ödedi',
-        text: 'Bütün katkılar tamamlandı; tur alım önerisi ve doğrulayıcı onayı adımlarına geçebilir. Ödeme geciktiğinde yalnızca ek süre ve bu turun durması devreye girer.',
-      }
-    case 'r2aborted':
-      return {
-        title: 'Tur durdu, ama ilk tur geri gelmiyor',
-        text: `Bu turda yatırılan ${refunded.value.length * AMOUNT} birim üç arkadaşa iade edildi. Ancak 1. turdaki ${POT} birim çoktan satıcıya gitti; Mehmet, Zeynep ve Can’ın ilk tur payları kontrattan geri alınamaz. Ayşe’nin kalan borcunu kontrat tahsil edemez; bu, grubun ayrıca çözmesi gereken bir alacaktır.`,
+        title: 'Can ek sürede ödedi',
+        text: 'Bütün katkılar tamamlandı; tur alım adımına geçiyor. Ödeme geciktiğinde yalnızca ek süre devreye girdi, kimse zarar görmedi.',
       }
     case 'purchase':
       return {
@@ -276,28 +246,45 @@ const story = computed<{ title: string; text: string }>(() => {
     case 'verify':
       return {
         title: 'Doğrulayıcılar belgeye bakar',
-        text: `Üç doğrulayıcı belgeyi zincir dışında kontrol eder. Tutarın çıkması için en az ${NEEDED} onay gerekir. Onaylamaları için dokun (${approvals.value.length} / ${NEEDED}).`,
+        text: `Üç doğrulayıcı belgeyi zincir dışında kontrol eder. Tutarın çıkması için en az ${NEEDED} onay gerekir (${approvals.value.length} / ${NEEDED}).`,
       }
     case 'pay':
       return {
         title: 'Onaylar tamam',
         text: 'Artık kim isterse “gönder” diyebilir; bir yöneticiye gerek yok. Para Ayşe’ye değil, doğrudan satıcıya gider.',
       }
-    default:
+    case 'done':
       return {
         title: 'Tur 1 / 4 tamamlandı',
-        text: `${POT} birim satıcıya gitti, Ayşe’nin aracı yolda. Kimse parayı elle çekemedi. Sıradaki tur Mehmet’in; aynı adımlar yeniden başlar.`,
+        text: `${POT} birim satıcıya gitti, Ayşe’nin aracı yolda. Kimse parayı elle çekemedi. Sıradaki tur Mehmet’in. Peki Ayşe artık ödemezse?`,
+      }
+    case 'r2':
+      return {
+        title: 'Tur 2: Ayşe artık ödemiyor',
+        text: `Sıra Mehmet’te. Ayşe ilk turda ${POT} birimlik alımını yaptırdı; şimdi bu turun payını yatırmıyor. Diğer üçü kendi ${AMOUNT}’ar birimini yatırıyor. Herkes ödemeden satıcıya hiçbir şey gitmez.`,
+      }
+    case 'r2grace':
+      return {
+        title: 'Ek süre başladı',
+        text: 'Ayşe hâlâ kendi payını yatırabilir; yatırmazsa ek süre bitince tur durur. Kimse onun yerine ödeyemez.',
+      }
+    default:
+      return {
+        title: 'Tur durdu, ama ilk tur geri gelmiyor',
+        text: `Bu turda yatırılan ${refunded.value.length * AMOUNT} birim üç arkadaşa iade edildi. Ancak 1. turdaki ${POT} birim çoktan satıcıya gitti; Mehmet, Zeynep ve Can’ın ilk tur payları kontrattan geri alınamaz. Ayşe’nin kalan borcunu kontrat tahsil edemez; bu, grubun ayrıca çözmesi gereken bir alacaktır.`,
       }
   }
 })
 
-const shortHash = computed(() => (docHash.value ? `${docHash.value.slice(0, 10)}…${docHash.value.slice(-4)}` : null))
+const shortHash = computed(() =>
+  showHash.value && docHash.value ? `${docHash.value.slice(0, 10)}…${docHash.value.slice(-4)}` : null,
+)
 
 function statusOf(id: string): { label: string; cls: string } {
   if (paid.value.includes(id)) return { label: 'Ödedi ✓', cls: 'bg-sage-100 text-sage-800' }
   if (refunded.value.includes(id)) return { label: 'İade aldı ✓', cls: 'bg-sage-100 text-sage-800' }
   if (phase.value === 'grace' && id === 'can') return { label: 'Geciktirdi', cls: 'bg-rose-100 text-rose-800' }
-  if (round2.value && id === 'ayse' && phase.value !== 'r2ok') {
+  if (round2.value && id === 'ayse') {
     return { label: phase.value === 'r2' ? 'Ödemiyor' : 'Ödemedi', cls: 'bg-rose-100 text-rose-800' }
   }
   return { label: 'Bekliyor', cls: 'bg-stone-100 text-stone-700' }
@@ -305,59 +292,60 @@ function statusOf(id: string): { label: string; cls: string } {
 </script>
 
 <template>
-  <div class="card overflow-hidden !p-0">
+  <div class="story-board card overflow-hidden !p-0">
     <!-- Başlık: bölüm çubuğu + dürüstlük etiketi -->
     <div class="flex flex-wrap items-center justify-between gap-3 border-b border-stone-100 px-5 py-4 sm:px-7">
       <ol class="flex flex-wrap items-center gap-1.5 text-xs font-semibold" aria-label="Hikâye bölümleri">
         <li v-for="(c, i) in CHAPTERS" :key="c" class="flex items-center gap-1.5">
-          <span
-            class="rounded-full px-2.5 py-1 transition-colors duration-300"
-            :class="i === chapter ? 'bg-brand-600 text-white' : i < chapter ? 'bg-sage-100 text-sage-800' : 'bg-stone-100 text-stone-600'"
+          <button
+            type="button"
+            class="cursor-pointer rounded-full px-2.5 py-1 transition-colors duration-300 hover:bg-brand-100"
+            :class="i === chapter ? 'bg-brand-600 !text-white' : i < chapter ? 'bg-sage-100 text-sage-800' : 'bg-stone-100 text-stone-600'"
             :aria-current="i === chapter ? 'step' : undefined"
+            @click="goTo(chapterStart(i), false, true)"
           >
             {{ i < chapter ? '✓ ' : '' }}{{ c }}
-          </span>
+          </button>
           <span v-if="i < CHAPTERS.length - 1" class="text-stone-300" aria-hidden="true">›</span>
         </li>
       </ol>
-      <span class="badge bg-gold-100 text-amber-900">Örnek hikâye · gerçek işlem değil</span>
+      <div class="flex flex-wrap items-center gap-2">
+        <span class="badge bg-brand-50 text-brand-800 ring-1 ring-brand-100">{{ round2 ? 'Tur 2' : 'Tur 1' }}</span>
+        <span class="badge bg-gold-100 text-amber-900">Örnek hikâye · gerçek işlem değil</span>
+      </div>
     </div>
 
     <!-- Anlatıcı -->
     <div class="flex items-start gap-3 bg-sand/50 px-5 py-4 sm:gap-4 sm:px-7">
       <Illo name="fox" :size="64" class="float" />
-      <div :key="phase" class="pop relative min-w-0 flex-1 rounded-3xl rounded-tl-lg bg-white p-4 shadow-[0_10px_26px_-16px_rgb(120_53_15/0.4)]" role="status" aria-live="polite">
+      <div
+        :key="phase"
+        class="pop relative min-h-[7.5rem] min-w-0 flex-1 rounded-3xl rounded-tl-lg bg-white p-4 shadow-[0_10px_26px_-16px_rgb(120_53_15/0.4)]"
+        role="status"
+        :aria-live="playing ? 'off' : 'polite'"
+      >
         <p class="font-display text-lg font-extrabold">{{ story.title }}</p>
         <p class="mt-1 text-sm leading-relaxed text-stone-700">{{ story.text }}</p>
       </div>
     </div>
 
     <!-- Sahne -->
-    <div ref="stage" class="relative grid gap-5 px-5 py-6 sm:px-7 md:grid-cols-[1.25fr_1fr_1fr]">
+    <div ref="stage" class="story-stage relative grid gap-5 px-5 py-6 sm:px-7 md:grid-cols-[1.25fr_1fr_1fr]">
       <!-- Arkadaşlar -->
       <div class="order-2 md:order-1">
         <p class="eyebrow mb-2 text-stone-600">Arkadaşlar</p>
         <div class="grid grid-cols-2 gap-2.5">
-          <button
+          <div
             v-for="p in PEOPLE"
             :key="p.id"
             :ref="(el) => (personEls[p.id] = el as HTMLElement | null)"
-            type="button"
-            class="relative flex min-h-[7.5rem] flex-col items-center justify-center gap-1 rounded-2xl border-2 bg-white p-2.5 text-center transition-[border-color,box-shadow,transform] duration-200 disabled:cursor-default"
+            class="story-person relative flex min-h-[7.5rem] flex-col items-center justify-center gap-1 rounded-2xl border-2 bg-white p-2.5 text-center transition-[border-color,box-shadow] duration-300"
             :class="[
-              canPay(p.id) ? 'cursor-pointer border-brand-300 hover:-translate-y-0.5 hover:shadow-[0_12px_24px_-14px_rgb(20_128_90/0.6)]' : 'border-stone-200',
+              isFunded(p.id) ? 'border-sage-300' : 'border-stone-200',
               p.id === recipient && !sent ? 'ring-2 ring-gold-300 ring-offset-2' : '',
             ]"
-            :disabled="!canPay(p.id)"
-            :aria-label="`${p.name}: ${statusOf(p.id).label}${canPay(p.id) ? '. Dokun ve öde' : ''}`"
-            @click="pay(p.id)"
+            :aria-label="`${p.name}: ${statusOf(p.id).label}`"
           >
-            <span
-              v-if="canPay(p.id)"
-              class="absolute top-2 right-2 size-2.5 rounded-full bg-brand-500"
-              style="animation: ring-ping 1.8s ease-out infinite"
-              aria-hidden="true"
-            />
             <Illo :name="p.illo" :size="48" />
             <span class="font-display text-sm font-bold">{{ p.name }}</span>
             <span class="badge !px-2 !py-0.5 text-[11px]" :class="statusOf(p.id).cls">{{ statusOf(p.id).label }}</span>
@@ -365,24 +353,20 @@ function statusOf(id: string): { label: string; cls: string } {
               {{ sent ? 'Aracı yolda' : 'Bu tur sırası' }}
               <Illo v-if="sent" name="car" :size="16" class="pop" />
             </span>
-          </button>
+          </div>
         </div>
       </div>
 
       <!-- Kurallar + kavanoz -->
       <div class="order-1 flex flex-row items-center justify-around gap-3 md:order-2 md:flex-col md:justify-between">
         <div class="flex flex-col items-center">
-          <button
-            v-if="phase === 'intro'"
-            type="button"
-            class="group relative grid size-20 cursor-pointer place-items-center rounded-3xl bg-gold-100 transition-transform duration-200 hover:scale-105 active:scale-95"
-            aria-label="Grup kurallarını kabul et"
-            @click="acceptRules"
-          >
-            <span class="absolute inset-0 rounded-3xl border-2 border-brand-500" style="animation: ring-ping 1.8s ease-out infinite" aria-hidden="true" />
-            <Illo name="memo" :size="52" />
-          </button>
-          <span v-else class="grid size-20 place-items-center rounded-3xl bg-gold-100">
+          <span class="relative grid size-20 place-items-center rounded-3xl bg-gold-100">
+            <span
+              v-if="phase === 'intro'"
+              class="absolute inset-0 rounded-3xl border-2 border-brand-500"
+              style="animation: ring-ping 1.8s ease-out infinite"
+              aria-hidden="true"
+            />
             <Illo name="memo" :size="52" :class="rulesAccepted ? 'pop' : ''" />
           </span>
           <span class="mt-1 text-xs font-bold">Grup kuralları</span>
@@ -393,24 +377,16 @@ function statusOf(id: string): { label: string; cls: string } {
 
         <div class="flex flex-col items-center gap-2">
         <div :ref="(el) => (jarEl = el as HTMLElement | null)" class="relative">
-          <svg viewBox="0 0 120 140" class="w-28 md:w-32" role="img" :aria-label="`Havuz: ${sent ? 0 : funded * AMOUNT} / ${POT} birim`">
-            <defs>
-              <clipPath id="story-jar"><path d="M22 34h76l-6 88a10 10 0 0 1-10 9H38a10 10 0 0 1-10-9Z" /></clipPath>
-            </defs>
-            <path d="M22 34h76l-6 88a10 10 0 0 1-10 9H38a10 10 0 0 1-10-9Z" fill="#fffaf2" />
-            <g clip-path="url(#story-jar)">
-              <rect class="jar-fill" x="0" y="34" width="120" height="100" fill="#f2b134" :style="{ transform: `scaleY(${fill})` }" />
-            </g>
-            <path d="M22 34h76l-6 88a10 10 0 0 1-10 9H38a10 10 0 0 1-10-9Z" fill="none" stroke="#2b1a12" stroke-width="3.5" stroke-linejoin="round" />
-            <path d="M14 34h92" stroke="#2b1a12" stroke-width="5" stroke-linecap="round" />
-          </svg>
-          <Illo v-if="funded === PEOPLE.length && !sent" name="lock" :size="34" class="pop absolute top-14 left-1/2 -translate-x-1/2" />
+          <div class="story-pool-scene">
+            <Scene3D :coins="PEOPLE.length" :filled="sent ? 0 : funded" :paused="!playing" :label="`Havuz: ${sent ? 0 : funded * AMOUNT} / ${POT} birim; ${sent ? 0 : funded} üyenin katkısı sözleşmede`" />
+          </div>
+          <Illo v-if="funded === PEOPLE.length && !sent" name="lock" :size="34" class="pop absolute right-4 bottom-3" />
         </div>
         <p class="text-center text-sm font-bold tabular-nums">
           {{ sent ? 0 : funded * AMOUNT }} / {{ POT }} birim
           <span class="block text-xs font-normal text-stone-600">{{ sent ? `${POT} birim satıcıya gitti` : 'sözleşmede' }}</span>
         </p>
-        <ul v-if="round1Paid" class="w-full space-y-1.5 text-left text-[11px] leading-snug" aria-label="Tur geçmişi">
+        <ul v-if="round2" class="w-full space-y-1.5 text-left text-[11px] leading-snug" aria-label="Tur geçmişi">
           <li class="flex items-start gap-1.5 rounded-xl bg-stone-100 p-2 text-stone-700">
             <Illo name="lock" :size="16" class="mt-0.5" />
             <span><b>Tur 1:</b> {{ POT }} birim Örnek Galeri’ye gitti; geri alınamaz.</span>
@@ -428,28 +404,19 @@ function statusOf(id: string): { label: string; cls: string } {
         <div>
           <p class="eyebrow mb-2 text-stone-600">Doğrulayıcılar</p>
           <div class="grid grid-cols-3 gap-2">
-            <button
+            <div
               v-for="v in VERIFIERS"
               :key="v"
-              type="button"
-              class="flex flex-col items-center gap-1 rounded-2xl border-2 bg-white p-2 text-center transition-[border-color,transform] duration-200 disabled:cursor-default"
-              :class="
-                approvals.includes(v)
-                  ? 'border-sage-500 bg-sage-50'
-                  : (phase === 'verify' || phase === 'pay') && !locked
-                    ? 'cursor-pointer border-brand-300 hover:-translate-y-0.5'
-                    : 'border-stone-200 opacity-70'
-              "
-              :disabled="approvals.includes(v) || !(phase === 'verify' || phase === 'pay')"
+              class="flex flex-col items-center gap-1 rounded-2xl border-2 bg-white p-2 text-center transition-[border-color] duration-300"
+              :class="approvals.includes(v) ? 'border-sage-500 bg-sage-50' : 'border-stone-200 opacity-80'"
               :aria-label="`Doğrulayıcı ${v}: ${approvals.includes(v) ? 'onayladı' : 'bekliyor'}`"
-              @click="approve(v)"
             >
               <Illo name="magnifier" :size="34" />
               <span class="text-[11px] font-bold">{{ v }}</span>
               <span class="text-[10px]" :class="approvals.includes(v) ? 'font-bold text-sage-800' : 'text-stone-500'">
                 {{ approvals.includes(v) ? 'Onayladı ✓' : 'Bekliyor' }}
               </span>
-            </button>
+            </div>
           </div>
           <p v-if="shortHash" class="pop mt-2 break-all rounded-xl bg-sand/70 p-2 font-mono text-[11px] text-stone-700">
             Belge özeti (SHA-256): {{ shortHash }}
@@ -466,92 +433,61 @@ function statusOf(id: string): { label: string; cls: string } {
       </div>
     </div>
 
-    <!-- Eylem çubuğu -->
-    <div class="flex flex-wrap items-center gap-3 border-t border-stone-100 bg-white px-5 py-4 sm:px-7">
-      <template v-if="phase === 'intro'">
-        <button type="button" class="btn-primary" @click="acceptRules">
-          <Illo name="memo" :size="20" /> Kuralları kabul et
+    <!-- Oynatıcı -->
+    <div class="space-y-3 border-t border-stone-100 bg-white px-5 py-4 sm:px-7">
+      <div
+        class="h-1.5 overflow-hidden rounded-full bg-stone-200"
+        role="progressbar"
+        aria-label="Hikâye ilerlemesi"
+        aria-valuemin="0"
+        aria-valuemax="100"
+        :aria-valuenow="progress"
+      >
+        <div class="h-full rounded-full bg-gradient-to-r from-brand-500 to-gold-400 transition-[width] duration-200" :style="{ width: `${progress}%` }" />
+      </div>
+      <div class="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          class="btn-primary !min-h-10"
+          :aria-label="autoplay ? 'Hikâyeyi duraklat' : 'Hikâyeyi oynat'"
+          @click="togglePlay"
+        >
+          <svg v-if="autoplay" viewBox="0 0 24 24" class="size-4" fill="currentColor" aria-hidden="true"><path d="M6 5h4v14H6zM14 5h4v14h-4z" /></svg>
+          <svg v-else viewBox="0 0 24 24" class="size-4" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg>
+          {{ autoplay ? 'Duraklat' : 'Oynat' }}
         </button>
-      </template>
-
-      <template v-else-if="phase === 'collect'">
-        <span class="text-sm text-stone-600">Ne olurdu?</span>
-        <button v-if="!isFunded('can')" type="button" class="btn-secondary !min-h-10" :disabled="locked" @click="delayCan">Can unutursa?</button>
-        <button v-if="!recipientPaid" type="button" class="btn-secondary !min-h-10" :disabled="locked" @click="askAyse">Ayşe unutursa?</button>
-      </template>
-
-      <template v-else-if="phase === 'grace'">
-        <span class="text-sm text-stone-600">Geç ödemesi için Can’a dokun</span>
-        <button type="button" class="btn-secondary !min-h-10" :disabled="locked" @click="abortRound">Ek süre bitti: turu durdur</button>
-        <button v-if="!recipientPaid" type="button" class="btn-secondary !min-h-10" :disabled="locked" @click="askAyse">Ayşe unutursa?</button>
-      </template>
-
-      <template v-else-if="phase === 'blocked'">
-        <button type="button" class="btn-primary" @click="phase = resumePhase">
-          <AppIcon name="back" class="!size-4" /> Geri dön
+        <button type="button" class="btn-secondary !min-h-10" aria-label="Önceki sahne" @click="prev">
+          <AppIcon name="back" class="!size-4" />
         </button>
-      </template>
-
-      <template v-else-if="phase === 'purchase'">
-        <button type="button" class="btn-primary" :disabled="locked" @click="propose">
-          <Illo name="receipt" :size="20" /> Alım belgesini gönder
+        <button type="button" class="btn-secondary !min-h-10" aria-label="Sonraki sahne" @click="next">
+          <AppIcon name="arrow" class="!size-4" />
         </button>
-      </template>
-
-      <template v-else-if="phase === 'verify'">
-        <span class="text-sm font-semibold text-stone-700">Doğrulayıcılara dokun: {{ approvals.length }} / {{ NEEDED }} onay</span>
-      </template>
-
-      <template v-else-if="phase === 'pay'">
-        <button type="button" class="btn-primary btn-lg" :disabled="locked" @click="send">
-          <Illo name="store" :size="24" /> Tutarı satıcıya gönder
+        <button type="button" class="btn-secondary !min-h-10" @click="restart">
+          <AppIcon name="refresh" class="!size-4" /> Baştan
         </button>
-      </template>
-
-      <template v-else-if="phase === 'r2'">
-        <span class="text-sm text-stone-600">Mehmet, Zeynep ve Can’a dokun ({{ funded }} / {{ PEOPLE.length - 1 }})</span>
-        <button type="button" class="btn-primary" :disabled="locked || funded < PEOPLE.length - 1" @click="toGrace2">
-          <Illo name="alarm" :size="20" /> Süre doldu: ek süre
-        </button>
-      </template>
-
-      <template v-else-if="phase === 'r2grace'">
-        <span class="text-sm text-stone-600">Ayşe’ye dokun: geç öder</span>
-        <button type="button" class="btn-primary" :disabled="locked" @click="abortRound2">
-          <Illo name="hourglass" :size="20" /> Ek süre bitti: turu durdur
-        </button>
-      </template>
-
-      <template v-else-if="phase === 'done'">
-        <Illo name="party" :size="40" class="pop" />
-        <button type="button" class="btn-primary" @click="startRound2">
-          <Illo name="warning" :size="20" /> Sonraki tur: Ayşe ödemezse?
-        </button>
-        <button type="button" class="btn-secondary" @click="reset"><AppIcon name="refresh" class="!size-4" /> Baştan oyna</button>
-      </template>
-
-      <template v-else-if="phase === 'aborted' || phase === 'r2aborted' || phase === 'r2ok'">
-        <Illo :name="phase === 'r2aborted' ? 'warning' : 'party'" :size="40" class="pop" />
-        <button type="button" class="btn-secondary" @click="reset"><AppIcon name="refresh" class="!size-4" /> Baştan oyna</button>
-        <RouterLink to="/create" class="btn-primary">Kendi havuzunu kur <AppIcon name="arrow" class="!size-4" /></RouterLink>
-      </template>
-
-      <button v-if="!['intro', 'done', 'aborted', 'r2aborted', 'r2ok'].includes(phase)" type="button" class="ml-auto text-xs font-medium text-stone-500 underline hover:text-stone-700" @click="reset">
-        Baştan başla
-      </button>
+        <span class="text-xs tabular-nums text-stone-500">Sahne {{ index + 1 }} / {{ STEPS.length }}</span>
+        <RouterLink to="/create" class="btn-secondary !min-h-10 ml-auto">
+          Kendi havuzunu kur <AppIcon name="arrow" class="!size-4" />
+        </RouterLink>
+      </div>
     </div>
 
     <p class="border-t border-stone-100 bg-sand/40 px-5 py-3 text-xs leading-relaxed text-stone-600 sm:px-7">
-      Bu bir anlatım örneğidir: kişiler, tutarlar ve satıcı kurgusaldır, zincire hiçbir işlem gitmez. Kurallar
-      hedef tasarımdır; havuz kontratı henüz yayınlanmadı.
+      Bu bir anlatım örneğidir: kişiler, tutarlar ve satıcı kurgusaldır, zincire hiçbir işlem gitmez. Kurallar,
+      Testnet’te yayındaki havuz kontratının kurallarını yansıtır.
     </p>
   </div>
 </template>
 
+
+
 <style scoped>
-.jar-fill {
-  transform-box: fill-box;
-  transform-origin: bottom;
-  transition: transform 0.5s var(--ease-out-soft);
-}
+.story-board { border-color: #dde4d1; border-radius: 30px; box-shadow: 0 18px 50px -35px #2d53353b; }
+.story-stage { background: radial-gradient(ellipse at 50% 50%,#e7eed970,transparent 65%),#fffef8; }
+.story-pool-scene { width: 215px; height: 190px; border-radius: 50%; background: radial-gradient(ellipse,#ecf1dc88,transparent 65%); }
+.story-person { box-shadow: 0 4px 0 #eef0e5; transition: transform .5s, border-color .5s, box-shadow .5s; }
+.story-person:hover { transform: translateY(-3px); box-shadow: 0 7px 0 #e9eddf; }
+@media(max-width:767px) { .story-pool-scene { width: 185px; height: 175px; } }
+@media(max-width:370px) { .story-pool-scene { width: 153px; height: 155px; } }
+@media(prefers-reduced-motion:reduce) { .story-person { transition: none; } .story-person:hover { transform: none; } }
 </style>

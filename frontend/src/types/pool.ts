@@ -1,11 +1,11 @@
 /**
- * Kontrat modeli, docs/plan.md bölüm 5'teki sponsorsuz havuz tasarımına göre yazılmıştır.
- * Kontrat henüz deploy edilmedi; alan
- * adları kontrat yazılınca doğrulanacak. Tutarlar stroop (7 ondalık) cinsinden bigint,
+ * Kontrat modeli, docs/plan.md bölüm 5'teki sponsorsuz havuz tasarımına göre yazılmıştır
+ * (Testnet'te yayındaki API v9 ile alan alan doğrulandı; kura alanları API v10 hedefidir).
+ * Tutarlar stroop (7 ondalık) cinsinden bigint,
  * zamanlar unix saniyesidir.
  */
 
-/** Üye sayısı sınırları (kontrat API v9 hedefi: docs/CONTRACT_HANDOFF.md). */
+/** Üye sayısı sınırları (yayındaki kontrat 12'ye kadar; 30 hedefi: docs/CONTRACT_HANDOFF.md). */
 export const MIN_MEMBERS = 2
 /** Arayüzün desteklediği en büyük grup; kontratın da bu sınıra yükseltilmesi gerekir. */
 export const UI_MAX_MEMBERS = 30

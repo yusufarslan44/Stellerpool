@@ -72,9 +72,9 @@ const current = computed(() => steps[active.value]!)
 // Fare üstünde durmaz (kaydırırken imleç bölümün üstünde kalınca anlatım hiç ilerlemiyordu);
 // yalnızca klavye odağında, sekme/bölüm görünmezken ve duraklatılınca durur.
 const playing = computed(() => autoplay.value && visible.value && pageVisible.value && !reduced.value && !focused.value)
-// Her adım 5 sn; elle seçilen adım ilk 2,5 sn ek bekler (progress negatif başlar).
-const duration = 5000
-const HOLD = -0.5
+// Her adım 16 sn; elle seçilen adım 2,5 sn daha bekler.
+const duration = 16000
+const HOLD = -2500 / duration
 let raf = 0
 let last = 0
 let observer: IntersectionObserver | undefined

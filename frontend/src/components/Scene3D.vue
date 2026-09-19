@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { createGoalModels, type SceneGoal } from '@/lib/goal-models'
+import Illo from './Illo.vue'
 
 /**
  * Üç boyutlu altın para sahnesi (three.js, yalnızca bu bileşen açıldığında yüklenir).
@@ -8,8 +10,9 @@ import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
  *  - filled: kaç tanesi altın (ödemiş/katılmış); geri kalanı soluk. -1 = hepsi altın.
  * Hareket azaltma tercihinde animasyon döngüsü çalışmaz, yalnızca tek kare çizilir.
  */
-const props = withDefaults(defineProps<{ coins?: number; filled?: number; label?: string }>(), {
+const props = withDefaults(defineProps<{ coins?: number; filled?: number; label?: string; goal?: SceneGoal; paused?: boolean }>(), {
   coins: 4,
+  paused: false,
   filled: -1,
   label: 'Havuzu temsil eden üç boyutlu altın paralar',
 })
@@ -36,6 +39,7 @@ const ready = ref(false)
 let disposed = false
 let cleanup: (() => void) | null = null
 let sync: (() => void) | null = null
+let lazyObserver: IntersectionObserver | undefined
 
 function webglAvailable(): boolean {
   try {
@@ -65,22 +69,26 @@ async function init() {
   }
   if (disposed || !host.value || !canvas.value) return
 
-  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  const motion = window.matchMedia('(prefers-reduced-motion: reduce)')
+  let reduced = motion.matches
   const el = host.value
 
   const renderer = new THREE.WebGLRenderer({
     canvas: canvas.value,
     antialias: true,
     alpha: true,
-    powerPreference: 'high-performance',
+    powerPreference: 'low-power',
   })
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75))
   renderer.toneMapping = THREE.ACESFilmicToneMapping
   renderer.toneMappingExposure = 1.05
 
   const scene = new THREE.Scene()
   const pmrem = new THREE.PMREMGenerator(renderer)
-  const envTexture = pmrem.fromScene(new RoomEnvironment(), 0.04).texture
+  const room = new RoomEnvironment()
+  const envTarget = pmrem.fromScene(room, 0.04)
+  const envTexture = envTarget.texture
+  room.dispose()
   scene.environment = envTexture
 
   const camera = new THREE.PerspectiveCamera(34, 1, 0.1, 100)
@@ -153,6 +161,14 @@ async function init() {
   const centre = makeCoin()
   centre.group.scale.setScalar(1.55)
   root.add(centre.group)
+  const destinations = props.goal ? createGoalModels(THREE) : null
+  const goalKeys: SceneGoal[] = ['home', 'car', 'work']
+  const goalScales = { home: 0, car: 0, work: 0 }
+  if (destinations) {
+    root.add(destinations.base, ...Object.values(destinations.models))
+    goalScales[props.goal!] = 1
+    centre.group.visible = false
+  }
 
   const ring = new THREE.Group()
   ring.rotation.set(0.28, 0, 0.1)
@@ -188,7 +204,7 @@ async function init() {
   const orbit: OrbitCoin[] = []
 
   function reconcile() {
-    const wanted = Math.max(0, Math.min(12, props.coins))
+    const wanted = Math.max(0, Math.min(30, Math.floor(props.coins)))
     const alive = orbit.filter((c) => c.targetScale > 0)
     while (alive.length < wanted) {
       const { group, mats } = makeCoin()
@@ -217,7 +233,7 @@ async function init() {
     })
   }
   reconcile()
-  orbit.forEach((c) => (c.fill = c.targetFill))
+  orbit.forEach((c) => { c.fill = c.targetFill; c.angle = c.slot; if (reduced || props.paused) c.scale = c.targetScale })
 
   // --- Boyut ve kamera ---------------------------------------------------------------------
   function resize() {
@@ -226,13 +242,13 @@ async function init() {
     renderer.setSize(w, h, false)
     camera.aspect = w / h
     const dist = 10.6 / Math.min(1, Math.max(0.55, camera.aspect / 1.15)) ** 0.7
-    camera.position.set(0, 1.5, dist)
+    camera.position.set(0, props.goal ? 4.1 : 1.5, props.goal ? dist * 1.07 : dist)
     camera.lookAt(0, 0, 0)
     camera.updateProjectionMatrix()
   }
   const ro = new ResizeObserver(() => {
     resize()
-    if (reduced) frame(0)
+    if (reduced || props.paused) frame(0)
   })
   ro.observe(el)
   resize()
@@ -241,11 +257,14 @@ async function init() {
   let tx = 0
   let ty = 0
   const onPointer = (e: PointerEvent) => {
+    if (reduced || props.paused || e.pointerType !== 'mouse') return
     const r = el.getBoundingClientRect()
     tx = ((e.clientX - r.left) / r.width - 0.5) * 0.6
     ty = ((e.clientY - r.top) / r.height - 0.5) * 0.3
   }
-  if (!reduced) window.addEventListener('pointermove', onPointer, { passive: true })
+  const resetPointer = () => { tx = ty = 0 }
+  el.addEventListener('pointermove', onPointer, { passive: true })
+  el.addEventListener('pointerleave', resetPointer)
 
   // --- Çizim döngüsü -----------------------------------------------------------------------
   const tmp = new THREE.Color()
@@ -259,9 +278,20 @@ async function init() {
     root.rotation.y += (tx - root.rotation.y) * 0.04
     root.rotation.x += (ty - root.rotation.x) * 0.04
 
-    centre.group.rotation.y = time * 0.55
+    if (destinations) {
+      for (const goal of goalKeys) {
+        const target = goal === props.goal ? 1 : 0
+        goalScales[goal] = reduced || props.paused ? target : goalScales[goal] + (target - goalScales[goal]) * Math.min(1, dt * 5)
+        const model = destinations.models[goal]
+        model.visible = goalScales[goal] > .01
+        model.scale.setScalar(Math.max(.001, goalScales[goal]))
+        model.position.y = (1 - goalScales[goal]) * -.5 + Math.sin(time * .65) * .04
+        model.rotation.y = -.38 + Math.sin(time * .25) * .15 + (1 - goalScales[goal]) * .4
+      }
+    }
+    centre.group.rotation.y = time * 0.32
     centre.group.position.y = Math.sin(time * 1.1) * 0.12
-    ring.rotation.y = time * 0.22
+    ring.rotation.y = time * (props.goal ? .07 : .15)
     dust.rotation.y = -time * 0.05
 
     for (let i = orbit.length - 1; i >= 0; i--) {
@@ -275,7 +305,7 @@ async function init() {
       const R = 3.05
       c.group.position.set(Math.cos(c.angle) * R, Math.sin(time * 1.3 + c.phase) * 0.16, Math.sin(c.angle) * R)
       c.group.rotation.y = Math.PI / 2 - c.angle + Math.sin(time * 0.8 + c.phase) * 0.18
-      c.group.scale.setScalar(Math.max(0.0001, c.scale * 0.62))
+      c.group.scale.setScalar(Math.max(0.0001, c.scale * (props.goal ? .4 : .62 * Math.min(1, 8 / Math.max(1, props.coins)))))
 
       const [rim, face, star] = c.mats
       tmp.lerpColors(PALE, GOLD, c.fill)
@@ -303,57 +333,71 @@ async function init() {
   }
 
   function loop(now: number) {
-    raf = requestAnimationFrame(loop)
+    raf = 0
+    if (!visible || document.hidden) return
     const dt = Math.min(0.05, (now - last) / 1000)
     last = now
-    if (visible && !document.hidden) frame(dt)
+    frame(reduced || props.paused ? 0 : dt)
+    if (!reduced && !props.paused) raf = requestAnimationFrame(loop)
   }
-
-  const io = new IntersectionObserver(([entry]) => (visible = !!entry?.isIntersecting), { threshold: 0.01 })
-  io.observe(el)
-
-  if (reduced) {
-    frame(0)
-  } else {
+  function schedule() {
+    if (disposed || !visible || document.hidden || raf) return
+    last = performance.now()
     raf = requestAnimationFrame(loop)
   }
-  ready.value = true
-
+  const io = new IntersectionObserver(([entry]) => {
+    visible = !!entry?.isIntersecting
+    if (visible) schedule()
+    else { cancelAnimationFrame(raf); raf = 0 }
+  }, { threshold: 0.01 })
+  io.observe(el)
+  const updateMotion = () => { reduced = motion.matches; sync?.() }
+  motion.addEventListener('change', updateMotion)
+  document.addEventListener('visibilitychange', schedule)
   sync = () => {
     reconcile()
-    if (reduced) {
-      // Hareketsiz modda hedef değerlere hemen geç ve tek kare çiz.
-      for (let i = orbit.length - 1; i >= 0; i--) {
-        const c = orbit[i]!
-        c.scale = c.targetScale
-        c.fill = c.targetFill
-        c.angle = c.slot
-      }
+    if (reduced || props.paused) {
+      for (const c of orbit) { c.scale = c.targetScale; c.fill = c.targetFill; c.angle = c.slot }
       frame(0)
     }
+    schedule()
   }
+  sync()
+  ready.value = true
 
   cleanup = () => {
     cancelAnimationFrame(raf)
     io.disconnect()
     ro.disconnect()
-    window.removeEventListener('pointermove', onPointer)
+    el.removeEventListener('pointermove', onPointer)
+    el.removeEventListener('pointerleave', resetPointer)
+    motion.removeEventListener('change', updateMotion)
+    document.removeEventListener('visibilitychange', schedule)
+    destinations?.dispose()
     ;[bodyGeo, faceGeo, rimGeo, starGeo, dustGeo, orbitLine.geometry].forEach((g) => g.dispose())
     allMats.forEach((m) => m.dispose())
-    envTexture.dispose()
+    envTarget.dispose()
     pmrem.dispose()
     renderer.dispose()
     renderer.forceContextLoss()
   }
 }
 
-onMounted(() => void init())
+onMounted(() => {
+  lazyObserver = new IntersectionObserver(([entry]) => {
+    if (!entry?.isIntersecting) return
+    lazyObserver?.disconnect()
+    void init().catch(() => { failed.value = true; cleanup?.() })
+  }, { rootMargin: '220px' })
+  if (host.value) lazyObserver.observe(host.value)
+})
 watch(
-  () => [props.coins, props.filled],
+  () => [props.coins, props.filled, props.goal, props.paused],
   () => sync?.(),
 )
 onBeforeUnmount(() => {
   disposed = true
+  lazyObserver?.disconnect()
   cleanup?.()
   cleanup = null
   sync = null
@@ -369,9 +413,10 @@ onBeforeUnmount(() => {
       :class="ready ? 'opacity-100' : 'opacity-0'"
       aria-hidden="true"
     />
+    <div v-if="failed && goal" class="absolute inset-0 grid place-items-center" aria-hidden="true"><Illo :name="goal" :size="180" /></div>
     <!-- WebGL yoksa veya yüklenemezse: durağan çizim. -->
     <svg
-      v-if="failed"
+      v-if="failed && !goal"
       viewBox="0 0 200 200"
       class="absolute inset-0 m-auto size-3/4 max-h-full max-w-full"
       aria-hidden="true"
@@ -382,7 +427,7 @@ onBeforeUnmount(() => {
           <stop offset="1" stop-color="#e39a12" />
         </linearGradient>
       </defs>
-      <g class="float">
+      <g>
         <circle cx="100" cy="100" r="62" fill="url(#coinfill)" stroke="#c98a10" stroke-width="4" />
         <circle cx="100" cy="100" r="48" fill="none" stroke="#fdeec3" stroke-width="3" />
         <path

@@ -165,25 +165,31 @@ async function init() {
       tube([[x, -.48, z], [x * .7, -.64, z * .7], [0, -.68, 0]], .018, goldLight, pool)
       return member
     })
-    // 02: onaylanan grup kuralları.
-    const agreement = stage(t => { shieldGroup.position.y = .25 + Math.sin(t * 1.15) * .1; shieldGroup.rotation.y = -.18 + Math.sin(t * .7) * .13 })
+    // 02: the members assemble around their shared agreement.
+    const agreement = stage(t => {
+      groupMembers.forEach((person, i) => {
+        person.position.y = -.28 + Math.sin(t * .9 + i * 1.4) * .065
+        person.rotation.y = Math.sin(t * .55 + i) * .12
+      })
+      agreementCard.position.y = .6 + Math.sin(t * .8) * .06
+    })
     pedestal(agreement)
-    const shieldGroup = new T.Group()
-    agreement.add(shieldGroup)
-    shieldGroup.position.set(0, .25, .15)
-    const outline = new T.Shape()
-    outline.moveTo(0, 1.28)
-    outline.bezierCurveTo(.35, 1.02, .78, 1, .92, .98)
-    outline.lineTo(.87, .05)
-    outline.bezierCurveTo(.81, -.43, .35, -.78, 0, -.96)
-    outline.bezierCurveTo(-.35, -.78, -.81, -.43, -.87, .05)
-    outline.lineTo(-.92, .98)
-    outline.bezierCurveTo(-.78, 1, -.35, 1.02, 0, 1.28)
-    const shieldGeo = new T.ExtrudeGeometry(outline, { depth: .2, bevelEnabled: true, bevelSize: .07, bevelThickness: .07, bevelSegments: 4, curveSegments: 20 })
-    mesh(shieldGeo, goldLight, shieldGroup)
-    const shieldInset = mesh(shieldGeo, green, shieldGroup, 0, .03, .17)
-    shieldInset.scale.set(.88, .88, .6)
-    check(shieldGroup, 0, .18, .41, 1.1)
+    const agreementCard = new T.Group()
+    agreementCard.position.set(0, .6, -.35)
+    agreementCard.rotation.y = -.13
+    agreement.add(agreementCard)
+    block(1.35, 1.6, .16, .11, ivory, agreementCard)
+    for (let i = 0; i < 3; i++) block(.8 - i * .1, .045, .025, .015, mint, agreementCard, -.08, .51 - i * .16, .12)
+    mesh(new T.CylinderGeometry(.28, .28, .07, 32).rotateX(Math.PI / 2), green, agreementCard, 0, -.35, .14)
+    check(agreementCard, 0, -.35, .2, .42)
+    const groupMembers = [-1.35, -.52, .52, 1.35].map((x, i) => {
+      const person = new T.Group()
+      person.position.set(x, -.28, i === 0 || i === 3 ? .2 : .85)
+      mesh(new T.SphereGeometry(.2, 24, 16), ivory, person, 0, .36)
+      mesh(new T.CapsuleGeometry(.19, .25, 8, 24), i % 2 ? gold : green, person, 0, -.08)
+      agreement.add(person)
+      return person
+    })
     // 03: lock and four approval markers.
     const rules = stage(t => { lock.rotation.y = -.2 + Math.sin(t * .8) * .13; lock.position.y = .15 + Math.sin(t * 1.2) * .08 })
     pedestal(rules)
