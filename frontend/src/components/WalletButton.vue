@@ -9,7 +9,7 @@ const wallet = useWalletStore()
   <div class="flex items-center gap-2">
     <template v-if="wallet.isConnected && wallet.address">
       <span
-        class="rounded-full bg-slate-100 px-3 py-1.5 font-mono text-xs text-slate-700"
+        class="rounded-full bg-stone-100 px-3 py-1.5 font-mono text-xs text-stone-700"
         :title="wallet.address"
       >
         {{ shortAddress(wallet.address) }}

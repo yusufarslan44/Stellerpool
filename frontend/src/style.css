@@ -1,19 +1,51 @@
 @import 'tailwindcss';
 
 /*
- * Tasarım dili: bento ızgara + yumuşak cam (glass) + koyu aurora hero.
- * Renkler: koyu mürekkep (#0b1020), indigo (birincil), nane yeşili (doğrulandı / zincirde).
- * Yazı tipi: IBM Plex Sans (finans ve güven hissi, Türkçe karakter destekli).
+ * Tasarım dili: sıcak tonlar (krem zemin, zümrüt yeşili vurgu, altın sarısı) + bento ızgara
+ * + yumuşak cam + 3B altın paralar (three.js) + kaydırmayla beliren hareketler.
+ * Başlıklar Bricolage Grotesque, metin IBM Plex Sans (ikisi de Türkçe karakterleri destekler).
+ * Kontrast: brand-600 üzerinde beyaz metin 4.7:1, espresso (#2b1a12) krem üzerinde 15:1.
  */
 @theme {
   --font-sans:
     'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue',
     Arial, sans-serif;
+  --font-display:
+    'Bricolage Grotesque Variable', 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
   --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
-  --color-ink: #0b1020;
-  --color-ink-soft: #141a33;
-  --color-canvas: #f4f5fb;
+
+  --color-ink: #2b1a12;
+  --color-ink-soft: #43302a;
+  --color-cream: #fff8ee;
+  --color-sand: #f7ead6;
+
+  --color-brand-50: #eefaf3;
+  --color-brand-100: #d5f3e1;
+  --color-brand-200: #aee6c8;
+  --color-brand-300: #78d2a6;
+  --color-brand-400: #3fb883;
+  --color-brand-500: #1f9d6b;
+  --color-brand-600: #14805a;
+  --color-brand-700: #0f6748;
+  --color-brand-800: #0d523a;
+  --color-brand-900: #0a4230;
+
+  --color-gold-100: #fdeec3;
+  --color-gold-300: #f7c85a;
+  --color-gold-400: #f2b134;
+  --color-gold-500: #e39a12;
+
+  --color-sage-50: #f1f8ee;
+  --color-sage-100: #e0efd8;
+  --color-sage-200: #c3dfb4;
+  --color-sage-500: #6aa35a;
+  --color-sage-600: #4f8a44;
+  --color-sage-700: #3f7037;
+  --color-sage-800: #305a2d;
+  --color-sage-900: #234524;
+
   --radius-bento: 1.75rem;
+  --ease-out-soft: cubic-bezier(0.2, 0.7, 0.2, 1);
 }
 
 @layer base {
@@ -22,10 +54,20 @@
     scroll-behavior: smooth;
   }
   body {
-    @apply bg-canvas font-sans text-slate-900 antialiased;
+    @apply bg-cream font-sans text-ink antialiased;
+  }
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    letter-spacing: -0.015em;
   }
   :focus-visible {
-    @apply outline-2 outline-offset-2 outline-indigo-600;
+    @apply outline-2 outline-offset-2 outline-brand-600;
+  }
+  ::selection {
+    background: var(--color-gold-300);
+    color: var(--color-ink);
   }
   @media (prefers-reduced-motion: reduce) {
     html {
@@ -41,26 +83,33 @@
   }
 }
 
-/* --- Bento kartları --------------------------------------------------------------------- */
+/* --- Kartlar ---------------------------------------------------------------------------- */
 @utility card {
-  @apply rounded-bento border border-slate-200/80 bg-white p-5 shadow-[0_1px_2px_rgb(15_23_42/0.04),0_8px_24px_-12px_rgb(15_23_42/0.08)] sm:p-6;
+  @apply rounded-bento border border-stone-200/80 bg-white/90 p-5 shadow-[0_1px_2px_rgb(120_53_15/0.05),0_10px_30px_-14px_rgb(120_53_15/0.18)] sm:p-6;
 }
 
 @utility bento {
-  @apply card transition-[transform,box-shadow] duration-200 ease-out hover:-translate-y-0.5 hover:shadow-[0_12px_32px_-12px_rgb(79_70_229/0.25)];
+  @apply card transition-[transform,box-shadow] duration-300 ease-out hover:-translate-y-1 hover:shadow-[0_18px_40px_-16px_rgb(20_128_90/0.35)];
 }
 
-/* Koyu, aurora renkli zemin (hero). */
-@utility aurora {
+/* Sıcak, gün doğumu renkli hero zemini. */
+@utility sunrise {
   background:
-    radial-gradient(60% 80% at 12% 8%, rgb(99 102 241 / 0.6), transparent 62%),
-    radial-gradient(50% 70% at 92% 18%, rgb(139 92 246 / 0.45), transparent 60%),
-    radial-gradient(45% 60% at 72% 105%, rgb(52 211 153 / 0.28), transparent 60%), var(--color-ink);
+    radial-gradient(55% 70% at 8% 6%, rgb(174 230 200 / 0.75), transparent 62%),
+    radial-gradient(45% 60% at 96% 12%, rgb(247 200 90 / 0.5), transparent 60%),
+    radial-gradient(50% 70% at 70% 110%, rgb(63 184 131 / 0.3), transparent 62%),
+    linear-gradient(180deg, #fff6e6 0%, #f3f1de 100%);
 }
 
-/* Yarı saydam cam yüzey. Açık zeminde bile okunur kalması için opaklık yüksek tutuldu. */
+/* Koyu, espresso zemin (kontrast bölümleri). */
+@utility espresso {
+  background:
+    radial-gradient(60% 80% at 10% 0%, rgb(20 128 90 / 0.55), transparent 62%),
+    radial-gradient(45% 60% at 100% 100%, rgb(227 154 18 / 0.3), transparent 60%), var(--color-ink);
+}
+
 @utility glass {
-  @apply border border-white/70 bg-white/85 shadow-[0_20px_50px_-20px_rgb(0_0_0/0.45)] backdrop-blur-xl;
+  @apply border border-white/80 bg-white/80 shadow-[0_20px_50px_-24px_rgb(120_53_15/0.45)] backdrop-blur-xl;
 }
 
 @utility glass-dark {
@@ -69,36 +118,40 @@
 
 /* --- Düğmeler (hap biçimli) ------------------------------------------------------------- */
 @utility btn {
-  @apply inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold transition-colors duration-200 disabled:cursor-not-allowed disabled:opacity-50;
+  @apply inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold transition-[background-color,box-shadow,transform,opacity] duration-200 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100;
 }
 
 @utility btn-primary {
-  @apply btn bg-indigo-600 text-white shadow-[0_8px_20px_-8px_rgb(79_70_229/0.7)] hover:bg-indigo-700;
+  @apply btn bg-brand-600 text-white shadow-[0_10px_22px_-10px_rgb(20_128_90/0.75)] hover:bg-brand-700 hover:shadow-[0_14px_28px_-10px_rgb(20_128_90/0.85)];
 }
 
 @utility btn-secondary {
-  @apply btn border border-slate-300 bg-white text-slate-800 hover:bg-slate-100;
+  @apply btn border border-stone-300 bg-white text-ink hover:border-stone-400 hover:bg-stone-50;
 }
 
 @utility btn-light {
-  @apply btn bg-white text-ink hover:bg-slate-100;
+  @apply btn bg-cream text-ink hover:bg-white;
 }
 
 @utility btn-ghost-dark {
-  @apply btn border border-white/25 text-white hover:bg-white/10;
+  @apply btn border border-white/30 text-white hover:bg-white/10;
 }
 
 @utility btn-danger {
-  @apply btn bg-amber-500 text-slate-950 hover:bg-amber-400;
+  @apply btn bg-gold-400 text-ink hover:bg-gold-300;
+}
+
+@utility btn-lg {
+  @apply min-h-12 px-7 text-base;
 }
 
 /* --- Form ------------------------------------------------------------------------------- */
 @utility input {
-  @apply min-h-11 w-full rounded-2xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 transition-colors duration-200 placeholder:text-slate-400 hover:border-slate-400;
+  @apply min-h-11 w-full rounded-2xl border border-stone-300 bg-white px-4 py-2.5 text-sm text-ink transition-[border-color,box-shadow] duration-200 placeholder:text-stone-400 hover:border-stone-400 focus:border-brand-500 focus:ring-4 focus:ring-brand-100 focus:outline-none;
 }
 
 @utility label {
-  @apply mb-1.5 block text-sm font-medium text-slate-700;
+  @apply mb-1.5 block text-sm font-semibold text-ink-soft;
 }
 
 @utility badge {
@@ -106,19 +159,198 @@
 }
 
 @utility eyebrow {
-  @apply text-xs font-semibold tracking-[0.14em] uppercase;
+  @apply text-xs font-bold tracking-[0.14em] uppercase;
 }
 
-/* --- Hareket: tek bir öğe (hero'daki ışık) yavaşça süzülür ------------------------------- */
+/* Seçilebilir büyük kart (kategori, hazır ayar). */
+@utility choice {
+  @apply flex min-h-11 cursor-pointer items-center gap-3 rounded-2xl border-2 border-stone-200 bg-white p-4 text-left transition-[border-color,background-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-[0_12px_26px_-14px_rgb(20_128_90/0.45)];
+}
+
+/* --- Hareketler ------------------------------------------------------------------------- */
 @keyframes drift {
   from {
     transform: translate3d(-4%, -2%, 0) scale(1);
   }
   to {
-    transform: translate3d(5%, 4%, 0) scale(1.12);
+    transform: translate3d(5%, 4%, 0) scale(1.14);
   }
 }
 
 @utility drift {
-  animation: drift 16s ease-in-out infinite alternate;
+  animation: drift 14s ease-in-out infinite alternate;
+}
+
+@keyframes float-y {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@utility float {
+  animation: float-y 5s ease-in-out infinite;
+}
+
+@keyframes pop-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.85) translateY(8px);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@utility pop {
+  animation: pop-in 0.3s var(--ease-out-soft) both;
+}
+
+@keyframes coin-fall {
+  0% {
+    transform: translateY(-34px);
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  55%,
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes coin-hide {
+  0%,
+  55% {
+    opacity: 1;
+  }
+  75%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes ring-ping {
+  0% {
+    transform: scale(0.8);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(1.9);
+    opacity: 0;
+  }
+}
+
+@keyframes draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes slide-x {
+  0% {
+    transform: translateX(-14px);
+    opacity: 0;
+  }
+  30%,
+  70% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(14px);
+    opacity: 0;
+  }
+}
+
+@keyframes spin-y {
+  to {
+    transform: rotateY(360deg);
+  }
+}
+
+@keyframes shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+/* Kaydırınca beliren öğeler (yalnızca hareket tercihi açıksa gizli başlar). */
+@media (prefers-reduced-motion: no-preference) {
+  [data-reveal] {
+    opacity: 0;
+    transform: translateY(22px);
+    transition:
+      opacity 0.45s var(--ease-out-soft),
+      transform 0.45s var(--ease-out-soft);
+    transition-delay: calc(var(--d, 0) * 50ms);
+  }
+  [data-reveal].is-in {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Fare ile hafif eğilen kartlar (v-tilt). */
+[data-tilt] {
+  transform: perspective(900px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  transition: transform 0.25s ease-out;
+  will-change: transform;
+}
+
+/* Sayfa geçişi. */
+.page-enter-active,
+.page-leave-active {
+  transition:
+    opacity 0.25s ease,
+    transform 0.25s var(--ease-out-soft);
+}
+.page-enter-from {
+  opacity: 0;
+  transform: translateY(14px);
+}
+.page-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+
+/* Sihirbaz adım geçişi (yön: ileri / geri). */
+.step-next-enter-active,
+.step-next-leave-active,
+.step-prev-enter-active,
+.step-prev-leave-active {
+  transition:
+    opacity 0.18s ease,
+    transform 0.22s var(--ease-out-soft);
+}
+.step-next-enter-from,
+.step-prev-leave-to {
+  opacity: 0;
+  transform: translateX(36px);
+}
+.step-next-leave-to,
+.step-prev-enter-from {
+  opacity: 0;
+  transform: translateX(-36px);
+}
+
+/* Yükleniyor iskeleti. */
+.skeleton {
+  background: linear-gradient(90deg, #f1e4cf 25%, #fbf1e0 50%, #f1e4cf 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.6s linear infinite;
+}
+
+/* SVG içinde ölçekleme, öğenin kendi merkezinden yapılsın. */
+svg .pop {
+  transform-box: fill-box;
+  transform-origin: center;
 }

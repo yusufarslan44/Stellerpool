@@ -2,6 +2,10 @@
 import { StrKey } from '@stellar/stellar-sdk'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
+import AppIcon from '@/components/AppIcon.vue'
+import CoinSpinner from '@/components/CoinSpinner.vue'
+import Illo from '@/components/Illo.vue'
+import Scene3D from '@/components/Scene3D.vue'
 import { useNow } from '@/composables/useNow'
 import { errorMessage, isUserRejection } from '@/lib/errors'
 import { formatDuration, formatStroops, shortAddress } from '@/lib/format'
@@ -14,11 +18,9 @@ import {
   approveTerms,
   cancelUnstartedPool,
   claimRefund,
-  claimSponsorRemainder,
   curePayment,
   deposit,
   executeRound,
-  fundGuarantee,
   getMemberStatus,
   getPool,
   getRound,
@@ -26,9 +28,7 @@ import {
   markOverdue,
   proposePurchase,
   proposeTerms,
-  repayAdvance,
   startPool,
-  topUp,
 } from '@/services/pool'
 import type { Signer } from '@/services/pool'
 import { useWalletStore } from '@/stores/wallet'
@@ -105,28 +105,13 @@ watch(poolId, () => void load())
 const me = computed(() => wallet.address)
 const isMember = computed(() => !!me.value && !!pool.value?.members.includes(me.value))
 const isCreator = computed(() => !!me.value && pool.value?.creator === me.value)
-const isSponsor = computed(() => !!me.value && pool.value?.sponsor === me.value)
 const isVerifier = computed(() => !!me.value && !!pool.value?.verifiers.includes(me.value))
 const isRecipient = computed(() => !!me.value && round.value?.recipient === me.value)
 const isFull = computed(() => !!pool.value && pool.value.members.length >= pool.value.memberLimit)
 
-// --- Güvence -----------------------------------------------------------------------------
-const guaranteeMissing = computed(() => {
-  if (!pool.value) return 0n
-  const gap = pool.value.requiredGuarantee - pool.value.guaranteeDeposited
-  return gap > 0n ? gap : 0n
-})
-const guaranteeOk = computed(() => !!pool.value && guaranteeMissing.value === 0n)
-const guaranteePercent = computed(() => {
-  const p = pool.value
-  if (!p || p.requiredGuarantee === 0n) return 0
-  return Math.min(100, Number((p.guaranteeDeposited * 100n) / p.requiredGuarantee))
-})
-
 // --- Tur durumu --------------------------------------------------------------------------
 const paid = computed(() => new Set(round.value?.paid ?? []))
-const covered = computed(() => new Set(round.value?.sponsorAdvanced ?? []))
-const isFunded = (m: string) => paid.value.has(m) || covered.value.has(m)
+const isFunded = (m: string) => paid.value.has(m)
 const missingMembers = computed(() => (pool.value?.members ?? []).filter((m) => !isFunded(m)))
 const allFunded = computed(() => !!pool.value && pool.value.members.length > 0 && missingMembers.value.length === 0)
 const roundDeadline = computed(() => {
@@ -142,24 +127,14 @@ const remaining = computed(() => (roundDeadline.value ? roundDeadline.value - no
 const deadlinePassed = computed(() => round.value?.phase === 'Collecting' && now.value >= round.value.collectDeadline)
 const myFunded = computed(() => !!me.value && isFunded(me.value))
 const recipientPaid = computed(() => !!round.value && paid.value.has(round.value.recipient))
-const recipientDebt = computed(() =>
-  round.value ? (memberByAddress.value.get(round.value.recipient)?.advanceOwed ?? 0n) : 0n,
-)
 const myOwnPaid = computed(() => !!me.value && paid.value.has(me.value))
-/** Katkısı sponsorun yeni fonuyla tamamlanmış: üyenin kendi ödemesi sayılmaz, avans borcu doğar. */
-const myCoveredBySponsor = computed(
-  () => !!me.value && covered.value.has(me.value) && !paid.value.has(me.value),
-)
-/** Sıradaki üye kendi katkısını bizzat ödemeden veya eski avanslarını kapatmadan tahsisat açılmaz (plan §2.6). */
+/** Bütün üyeler kendi katkısını yatırmadan tahsisat açılmaz. */
 const recipientBlock = computed<string | null>(() => {
   if (!pool.value || pool.value.status !== 'Active' || !round.value) return null
   const phase = round.value.phase
   if (phase === 'Settled') return null
-  if (recipientDebt.value > 0n) {
-    return `Sıradaki üyenin sponsora ${formatStroops(recipientDebt.value)} ${token} açık avansı var. Avans kapanmadan bu turun tahsisatı açılmaz.`
-  }
   if (!recipientPaid.value && (phase === 'Grace' || deadlinePassed.value)) {
-    return 'Sıradaki üye kendi katkısını bizzat ödemedi. Sponsor onun yerine ödeyemez; ek süre sonunda ödenmezse havuz iptal edilebilir.'
+    return 'Sıradaki üye kendi katkısını yatırmadı. Ek süre sonunda tur durur; yalnızca bu turda yatırılmış katkılar iade edilebilir.'
   }
   return null
 })
@@ -171,7 +146,7 @@ const approvalsOk = computed(
 )
 const canExecute = computed(() =>
   round.value?.phase === 'AwaitingPurchase' &&
-  allFunded.value && recipientPaid.value && recipientDebt.value === 0n &&
+  allFunded.value && recipientPaid.value &&
   !!round.value.seller && approvalsOk.value && now.value < round.value.purchaseDeadline,
 )
 
@@ -185,22 +160,21 @@ const canAbort = computed(
 const memberByAddress = computed(() => new Map(members.value.map((m) => [m.address, m])))
 const totalRefundable = computed(() => members.value.reduce((sum, m) => sum + m.refundable, 0n))
 const myRefundable = computed(() => (me.value ? (memberByAddress.value.get(me.value)?.refundable ?? 0n) : 0n))
-const myAdvance = computed(() => (me.value ? (memberByAddress.value.get(me.value)?.advanceOwed ?? 0n) : 0n))
 
 const proposedVerifiers = computed(() => verifiersInput.value.split(/[\s,;]+/).map((v) => v.trim()).filter(Boolean))
 const verifiersValid = computed(() => {
   if (!pool.value || proposedVerifiers.value.length < 3) return false
-  const excluded = new Set([pool.value.creator, pool.value.sponsor, ...pool.value.members])
+  const excluded = new Set([pool.value.creator, ...pool.value.members])
   return new Set(proposedVerifiers.value).size === proposedVerifiers.value.length &&
     proposedVerifiers.value.every((v) => StrKey.isValidEd25519PublicKey(v) && !excluded.has(v))
 })
 const termsReady = computed(() => {
   if (!pool.value || pool.value.termsVersion === 0) return false
-  return [pool.value.sponsor, ...pool.value.members].every((v) => pool.value!.termsApprovals.includes(v))
+  return pool.value.members.every((v) => pool.value!.termsApprovals.includes(v))
 })
 const canApproveTerms = computed(() =>
   !!pool.value && pool.value.status === 'Filling' && pool.value.termsVersion > 0 &&
-  !!me.value && (isMember.value || isSponsor.value) && !pool.value.termsApprovals.includes(me.value),
+  !!me.value && isMember.value && !pool.value.termsApprovals.includes(me.value),
 )
 const setupExpired = computed(() => !!pool.value && now.value >= pool.value.setupDeadline)
 
@@ -209,26 +183,25 @@ function memberState(address: string) {
   if (!p || p.status === 'Filling') return { label: 'Katıldı', tone: 'slate' as const }
   if (p.status === 'Completed' || p.status === 'Aborted') return { label: '—', tone: 'slate' as const }
   if (paid.value.has(address)) return { label: 'Ödedi ✓', tone: 'green' as const }
-  if (covered.value.has(address)) return { label: 'Sponsor tamamladı ⚠', tone: 'amber' as const }
   return { label: 'Bekliyor', tone: 'slate' as const }
 }
 
 const toneClass = {
-  green: 'bg-emerald-100 text-emerald-800',
-  amber: 'bg-amber-100 text-amber-900',
-  slate: 'bg-slate-100 text-slate-700',
+  green: 'bg-sage-100 text-sage-800',
+  amber: 'bg-gold-100 text-amber-900',
+  slate: 'bg-stone-100 text-stone-700',
 }
 
 const statusLabel = computed(() => {
   switch (pool.value?.status) {
     case 'Filling':
-      return { text: 'Üye ve güvence bekleniyor', cls: 'bg-slate-100 text-slate-700' }
+      return { text: 'Üyeler bekleniyor', cls: 'bg-stone-100 text-stone-700' }
     case 'Active':
       return round.value?.phase === 'Grace'
-        ? { text: 'Ek sürede', cls: 'bg-amber-100 text-amber-900' }
-        : { text: 'Devam ediyor', cls: 'bg-indigo-100 text-indigo-800' }
+        ? { text: 'Ek sürede', cls: 'bg-gold-100 text-amber-900' }
+        : { text: 'Devam ediyor', cls: 'bg-brand-100 text-brand-800' }
     case 'Completed':
-      return { text: 'Tamamlandı', cls: 'bg-emerald-100 text-emerald-800' }
+      return { text: 'Tamamlandı', cls: 'bg-sage-100 text-sage-800' }
     case 'Aborted':
       return { text: 'İptal edildi', cls: 'bg-rose-100 text-rose-800' }
     default:
@@ -295,97 +268,560 @@ const listedMembers = computed(() =>
     ? order.value
     : (pool.value?.recipientOrder.length ? pool.value.recipientOrder : (pool.value?.members ?? [])),
 )
+
+// --- Adım adım rehber ----------------------------------------------------------------------
+interface GuideStep {
+  key: string
+  title: string
+  who: string
+  detail: string
+  done: boolean
+}
+
+const fundedCount = computed(() => (pool.value?.members ?? []).filter(isFunded).length)
+
+const setupSteps = computed<GuideStep[]>(() => {
+  const p = pool.value
+  if (!p) return []
+  const partyCount = p.members.length
+  return [
+    { key: 'join', title: 'Üyeler katılır', who: 'Üyeler', detail: `${p.members.length} / ${p.memberLimit} üye`, done: isFull.value },
+    {
+      key: 'terms',
+      title: 'Sıra ve doğrulayıcılar önerilir',
+      who: 'Kurucu',
+      detail: p.termsVersion ? `Koşul sürümü ${p.termsVersion}` : 'Henüz önerilmedi',
+      done: isFull.value && p.termsVersion > 0,
+    },
+    {
+      key: 'approve',
+      title: 'Herkes koşulları onaylar',
+      who: 'Üyeler',
+      detail: `${p.termsApprovals.length} / ${partyCount} onay`,
+      done: termsReady.value,
+    },
+    { key: 'start', title: 'Havuz başlar', who: 'Herkes başlatabilir', detail: 'Koşullar tamamsa tek tıkla', done: false },
+  ]
+})
+
+const roundSteps = computed<GuideStep[]>(() => {
+  const p = pool.value
+  const r = round.value
+  if (!p || !r) return []
+  const settled = r.phase === 'Settled'
+  return [
+    {
+      key: 'collect',
+      title: 'Katkılar toplanır',
+      who: 'Üyeler',
+      detail: `${fundedCount.value} / ${p.members.length} tamam`,
+      done: settled || allFunded.value,
+    },
+    {
+      key: 'propose',
+      title: 'Satıcı ve alım belgesi önerilir',
+      who: 'Sıradaki üye',
+      detail: r.seller ? 'Öneri kaydedildi' : 'Bekleniyor',
+      done: settled || !!r.seller,
+    },
+    {
+      key: 'verify',
+      title: 'Doğrulayıcılar onaylar',
+      who: 'Doğrulayıcılar',
+      detail: `${approvalsCount.value} / ${p.approvalThreshold} onay`,
+      done: settled || approvalsOk.value,
+    },
+    { key: 'pay', title: 'Tutar satıcıya gider', who: 'Herkes çağırabilir', detail: `${formatStroops(r.pot)} ${token}`, done: settled },
+  ]
+})
+
+const guideSteps = computed<GuideStep[]>(() =>
+  pool.value?.status === 'Filling' ? setupSteps.value : pool.value?.status === 'Active' ? roundSteps.value : [],
+)
+const currentStepKey = computed(() => guideSteps.value.find((s) => !s.done)?.key ?? null)
+
+/** Bağlı cüzdanın şu an yapabileceği bir işlem olan adımlar. */
+const stepMine = computed<Record<string, boolean | undefined>>(() => {
+  const p = pool.value
+  const r = round.value
+  if (!p || !me.value) return {}
+  const purchasing = r?.phase === 'AwaitingPurchase'
+  return {
+    join: !isMember.value && !isFull.value,
+    terms: isCreator.value && isFull.value && !setupExpired.value,
+    approve: canApproveTerms.value && !setupExpired.value,
+    start: isFull.value && termsReady.value && !setupExpired.value,
+    collect:
+      isMember.value && (r?.phase === 'Collecting' || r?.phase === 'Grace') && !myFunded.value,
+    propose:
+      isRecipient.value && purchasing && !r?.seller && recipientPaid.value && remaining.value > 0,
+    verify: isVerifier.value && purchasing && !!r?.seller && !approvedByMe.value && remaining.value > 0,
+    pay: canExecute.value,
+  }
+})
+
+interface Banner {
+  tone: 'mine' | 'wait' | 'warn' | 'done'
+  title: string
+  text: string
+}
+
+const banner = computed<Banner | null>(() => {
+  const p = pool.value
+  if (!p) return null
+  if (p.status === 'Completed') return { tone: 'done', title: 'Havuz tamamlandı', text: 'Tüm turlar satıcılara ödendi.' }
+  if (p.status === 'Aborted') {
+    return {
+      tone: 'warn',
+      title: 'Havuz iptal edildi',
+      text:
+        isMember.value && myRefundable.value > 0n
+          ? `İade hakkın var: ${formatStroops(myRefundable.value)} ${token}. Aşağıdan iadeni alabilirsin.`
+          : 'Yalnızca ödenmemiş turdaki kendi katkıları geri alınabilir. Önceki turların ödemesi geri alınamaz.',
+    }
+  }
+  if (!wallet.isConnected) {
+    return { tone: 'wait', title: 'Önce cüzdanını bağla', text: 'Bu havuzda ne yapabileceğini görmek için sağ üstten cüzdanını bağla.' }
+  }
+  if (p.status === 'Filling' && setupExpired.value) {
+    return { tone: 'warn', title: 'Kuruluş süresi doldu', text: 'Havuz zamanında başlamadı. Aşağıdan iptal edilebilir.' }
+  }
+  if (recipientBlock.value) return { tone: 'warn', title: 'Bu tur şu an ilerleyemez', text: recipientBlock.value }
+  if (canAbort.value) {
+    return { tone: 'warn', title: 'Süre doldu', text: 'Havuz sonlandırılabilir. Yalnızca henüz satıcıya ödenmemiş turun katkıları iade edilir.' }
+  }
+  const open = guideSteps.value.filter((s) => !s.done)
+  const mineStep = open.find((s) => stepMine.value[s.key])
+  if (mineStep) return { tone: 'mine', title: 'Sıra sende', text: mineStep.title }
+  const wait = open[0]
+  if (wait) return { tone: 'wait', title: `Şu an beklenen: ${wait.who}`, text: wait.title }
+  return null
+})
+
+const bannerIllo = { mine: 'sparkles', warn: 'warning', done: 'party', wait: 'hourglass' } as const
+const STEP_ILLO = {
+  join: 'handshake',
+  terms: 'memo',
+  approve: 'check',
+  start: 'rocket',
+  collect: 'moneybag',
+  propose: 'receipt',
+  verify: 'magnifier',
+  pay: 'store',
+} as const
+
+const bannerClass = {
+  mine: 'border-brand-300 bg-brand-50 text-brand-900',
+  wait: 'border-stone-200 bg-stone-50 text-stone-800',
+  warn: 'border-gold-300 bg-gold-100/80 text-amber-950',
+  done: 'border-sage-200 bg-sage-50 text-sage-900',
+}
+
+const roleChips = computed(() => {
+  const chips: string[] = []
+  if (isCreator.value) chips.push('Kurucu')
+  if (isMember.value) chips.push('Üye')
+  if (isVerifier.value) chips.push('Doğrulayıcı')
+  if (isRecipient.value && pool.value?.status === 'Active') chips.push('Bu turun alıcısı')
+  return chips
+})
+
+/** 3B sahnede altın görünen para sayısı: katılan / bu tur ödeyen üye sayısı. */
+const sceneFilled = computed(() => {
+  const p = pool.value
+  if (!p) return -1
+  if (p.status === 'Completed') return -1
+  if (p.status === 'Aborted') return 0
+  return p.status === 'Filling' ? p.members.length : fundedCount.value
+})
+const progressPercent = computed(() => {
+  const p = pool.value
+  if (!p) return 0
+  if (p.status === 'Completed') return 100
+  if (p.status === 'Filling') return 0
+  return Math.min(100, Math.round(((p.currentRound - (round.value?.phase === 'Settled' ? 0 : 1)) / p.memberLimit) * 100))
+})
+const countdownLabel = computed(() =>
+  round.value?.phase === 'Grace' ? 'Ek süre' : round.value?.phase === 'AwaitingPurchase' ? 'Alım onayı süresi' : 'Katkı süresi',
+)
+
 </script>
 
 <template>
   <div class="space-y-6">
-    <RouterLink to="/" class="text-sm text-indigo-700 underline">← Ana sayfa</RouterLink>
+    <RouterLink to="/" class="inline-flex items-center gap-1 text-sm font-medium text-brand-700 hover:underline">
+      <AppIcon name="back" class="!size-4" /> Ana sayfa
+    </RouterLink>
 
     <p
       v-if="!poolContractId"
       role="status"
-      class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"
+      class="flex items-start gap-3 rounded-2xl border border-gold-300/60 bg-gold-100/70 p-4 text-sm text-amber-950"
     >
-      Havuz sözleşmesi henüz yapılandırılmadı, bu yüzden havuz verisi okunamıyor. Sözleşme
-      yayınlanıp adresi <code class="font-mono">VITE_ROTATING_POOL_CONTRACT_ID</code> olarak
-      eklenince bu sayfa gerçek veriyi gösterecek.
+      <Illo name="bulb" :size="28" />
+      <span>
+        Havuz sözleşmesi henüz yapılandırılmadı, bu yüzden havuz verisi okunamıyor. Sözleşme
+        yayınlanıp adresi <code class="font-mono">VITE_ROTATING_POOL_CONTRACT_ID</code> olarak
+        eklenince bu sayfa gerçek veriyi gösterecek.
+      </span>
     </p>
 
-    <p v-else-if="loading" class="text-slate-500">Havuz zincirden okunuyor…</p>
+    <div v-else-if="loading" class="space-y-4" aria-live="polite">
+      <div class="flex items-center gap-3 text-stone-600">
+        <CoinSpinner :size="40" /> Havuz zincirden okunuyor…
+      </div>
+      <div class="skeleton h-48 rounded-[2rem]" />
+      <div class="grid gap-4 sm:grid-cols-3">
+        <div class="skeleton h-24 rounded-3xl" />
+        <div class="skeleton h-24 rounded-3xl" />
+        <div class="skeleton h-24 rounded-3xl" />
+      </div>
+    </div>
 
     <div v-else-if="loadError" role="alert" class="card space-y-3">
-      <h1 class="text-lg font-semibold">Havuz #{{ poolId }} okunamadı</h1>
+      <h1 class="text-2xl font-extrabold">Havuz #{{ poolId }} okunamadı</h1>
       <p class="text-sm text-rose-700">{{ loadError }}</p>
       <button type="button" class="btn-secondary" @click="load()">Tekrar dene</button>
     </div>
 
     <template v-else-if="pool">
-      <header class="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 class="text-2xl font-bold tracking-tight">Tasarruf havuzu #{{ pool.id }}</h1>
-          <p class="mt-1 text-sm text-slate-600">
-            {{ pool.members.length }} / {{ pool.memberLimit }} üye · her tur
-            {{ formatStroops(pool.contributionAmount) }} {{ token }} ·
-            <span class="font-mono" :title="pool.sponsor">sponsor {{ shortAddress(pool.sponsor) }}</span>
-            <span v-if="pool.sponsor === me" class="badge bg-indigo-100 text-indigo-800">Sen</span>
-          </p>
+      <!-- BAŞLIK + 3B SAHNE -->
+      <header class="sunrise relative overflow-hidden rounded-[2rem] p-5 sm:p-8">
+        <div class="grid items-center gap-4 md:grid-cols-[1.3fr_1fr]">
+          <div>
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="badge" :class="statusLabel.cls">{{ statusLabel.text }}</span>
+              <span v-for="c in roleChips" :key="c" class="badge bg-ink text-cream">Sen: {{ c }}</span>
+            </div>
+            <h1 class="mt-3 text-4xl font-extrabold sm:text-5xl">Havuz #{{ pool.id }}</h1>
+            <p class="mt-2 text-stone-700">
+              {{ pool.members.length }} / {{ pool.memberLimit }} üye · her tur
+              <strong>{{ formatStroops(pool.contributionAmount) }} {{ token }}</strong>
+            </p>
+            <p class="mt-1 text-sm text-stone-600">Her tur herkes kendi katkısını yatırır. Ödeme eksikse tahsisat yapılmaz.</p>
+            <div class="mt-5 flex flex-wrap gap-2">
+              <button type="button" class="btn-secondary !min-h-10" @click="copyLink">
+                <AppIcon :name="copied ? 'check' : 'copy'" class="!size-4" />
+                {{ copied ? 'Kopyalandı' : 'Bağlantıyı kopyala' }}
+              </button>
+              <a
+                v-if="poolContractId"
+                :href="explorerContract(poolContractId)"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="btn-secondary !min-h-10"
+              >
+                Zincirde gör <AppIcon name="external" class="!size-4" />
+              </a>
+            </div>
+          </div>
+          <div class="relative h-44 sm:h-56">
+            <Scene3D
+              :coins="pool.memberLimit"
+              :filled="sceneFilled"
+              :label="`${pool.memberLimit} üyeli havuz; ${sceneFilled < 0 ? 'hepsi' : sceneFilled} para altın`"
+            />
+          </div>
         </div>
-        <div class="flex items-center gap-2">
-          <span class="badge" :class="statusLabel.cls">{{ statusLabel.text }}</span>
-          <button type="button" class="btn-secondary !min-h-9 !px-3 !py-1.5" @click="copyLink">
-            {{ copied ? 'Kopyalandı' : 'Bağlantıyı kopyala' }}
-          </button>
+
+        <div v-if="pool.status === 'Active'" class="mt-5">
+          <div class="mb-1 flex justify-between text-xs font-semibold text-stone-700">
+            <span>Tur {{ pool.currentRound }} / {{ pool.memberLimit }}</span>
+            <span class="tabular-nums">%{{ progressPercent }} tamamlandı</span>
+          </div>
+          <div class="h-2.5 overflow-hidden rounded-full bg-white/70" role="progressbar" :aria-valuenow="progressPercent" aria-valuemin="0" aria-valuemax="100" aria-label="Havuz ilerlemesi">
+            <div class="h-full rounded-full bg-gradient-to-r from-brand-500 to-gold-400 transition-[width] duration-700" :style="{ width: `${progressPercent}%` }" />
+          </div>
         </div>
       </header>
 
-      <p
-        v-if="pool.status === 'Active' && round?.phase === 'Grace'"
-        role="status"
-        class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"
-      >
-        Tur ek sürede. Üye kendi eksik katkısını yatırabilir; sponsor yalnızca sıradaki alıcı dışındaki
-        üyelerin açığını yeni test varlığıyla tamamlayabilir.
-        <template v-if="canAbort">Süre doldu; iptal koşulları kontratta denetlenir.</template>
-      </p>
-      <p
-        v-if="pool.status === 'Aborted'"
-        role="status"
-        class="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900"
-      >
-        Havuz iptal edildi. Üyeler hak ettikleri iadeyi kontrattan geri alabilir.
-      </p>
-
-      <!-- Finansal özet: para nerede? -->
-      <section class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4" aria-label="Finansal özet">
-        <div class="card">
-          <p class="text-xs text-slate-500">Kontrattaki toplam {{ token }} (tüm havuzlar)</p>
-          <p class="mt-1 text-xl font-bold">
-            {{ contractBalance === null ? '—' : formatStroops(contractBalance) }}
-          </p>
-          <p class="mt-1 text-xs text-slate-500">Doğrudan zincirden okunur</p>
+      <!-- ADIM ADIM REHBER -->
+      <section class="card space-y-5 !p-5 sm:!p-7" aria-labelledby="rehber">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <h2 id="rehber" class="text-2xl font-extrabold">
+            {{ pool.status === 'Filling' ? 'Havuz nasıl başlar?' : pool.status === 'Active' ? `Tur ${pool.currentRound}: adım adım` : 'Durum' }}
+          </h2>
+          <span v-if="pool.status === 'Active' && roundDeadline > 0" class="badge bg-brand-50 text-brand-800 ring-1 ring-brand-100">
+            <AppIcon name="clock" class="!size-3.5" />
+            {{ countdownLabel }}:
+            <span class="tabular-nums" :class="remaining <= 0 ? 'text-rose-700' : ''">
+              {{ remaining <= 0 ? 'süre doldu' : formatDuration(remaining) }}
+            </span>
+          </span>
         </div>
-        <div class="card">
-          <p class="text-xs text-slate-500">Sponsor güvencesi</p>
-          <p class="mt-1 text-xl font-bold">
-            {{ formatStroops(pool.guaranteeDeposited) }} / {{ formatStroops(pool.requiredGuarantee) }}
-          </p>
-          <div class="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100" aria-hidden="true">
-            <div class="h-full rounded-full bg-emerald-500" :style="{ width: `${guaranteePercent}%` }" />
+
+        <!-- Şimdi ne yapmalı? -->
+        <div
+          v-if="banner"
+          class="pop flex items-start gap-3 rounded-2xl border-2 p-4"
+          :class="bannerClass[banner.tone]"
+          :role="banner.tone === 'warn' ? 'alert' : 'status'"
+        >
+          <Illo :name="bannerIllo[banner.tone]" :size="44" class="mt-0.5" />
+          <div>
+            <p class="font-display text-lg font-bold">{{ banner.title }}</p>
+            <p class="text-sm leading-relaxed">{{ banner.text }}</p>
           </div>
         </div>
-        <div class="card">
-          <p class="text-xs text-slate-500">Üyelerin toplam iade hakkı</p>
-          <p class="mt-1 text-xl font-bold">{{ formatStroops(totalRefundable) }}</p>
-          <p class="mt-1 text-xs text-slate-500">İptal olursa geri alınabilecek</p>
+
+        <div v-if="!wallet.isConnected && (pool.status === 'Filling' || pool.status === 'Active')">
+          <button type="button" class="btn-primary btn-lg" :disabled="wallet.busy" @click="wallet.connect()">
+            <AppIcon name="wallet" class="!size-4" /> Cüzdan bağla
+          </button>
         </div>
-        <div class="card">
-          <p class="text-xs text-slate-500">
-            {{ round?.phase === 'Grace' ? 'Ek süre' : round?.phase === 'AwaitingPurchase' ? 'Alım onayı süresi' : 'Katkı süresi' }}
-          </p>
-          <p
-            class="mt-1 text-xl font-bold tabular-nums"
-            :class="round && remaining <= 0 && pool.status === 'Active' ? 'text-amber-700' : ''"
+
+        <!-- Adım listesi: her adımın kendi işlemi kendi içinde -->
+        <ol v-if="guideSteps.length" class="space-y-0" aria-label="Adımlar">
+          <li v-for="(s, i) in guideSteps" :key="s.key" class="grid grid-cols-[2.5rem_1fr] gap-x-3">
+            <div class="flex flex-col items-center">
+              <span
+                class="relative grid size-10 shrink-0 place-items-center rounded-full text-sm font-bold transition-colors duration-300"
+                :class="
+                  s.done ? 'bg-sage-600 text-white'
+                  : s.key === currentStepKey ? 'bg-brand-600 text-white'
+                  : 'bg-stone-200 text-stone-600'
+                "
+              >
+                <AppIcon v-if="s.done" name="check" class="!size-5" />
+                <template v-else>{{ i + 1 }}</template>
+                <span
+                  v-if="!s.done && s.key === currentStepKey"
+                  class="absolute inset-0 rounded-full border-2 border-brand-500"
+                  style="animation: ring-ping 2s ease-out infinite"
+                  aria-hidden="true"
+                />
+              </span>
+              <span
+                v-if="i < guideSteps.length - 1"
+                class="my-1 w-0.5 flex-1 rounded-full transition-colors duration-500"
+                :class="s.done ? 'bg-sage-500' : 'bg-stone-200'"
+                aria-hidden="true"
+              />
+            </div>
+
+            <div class="min-w-0 pb-6" :class="i === guideSteps.length - 1 ? '!pb-0' : ''">
+              <div class="flex flex-wrap items-center gap-x-2 gap-y-1 pt-1.5">
+                <Illo :name="STEP_ILLO[s.key as keyof typeof STEP_ILLO]" :size="30" :class="s.done ? 'opacity-50 grayscale' : ''" />
+                <h3 class="font-display text-lg font-bold" :class="s.done ? 'text-stone-500' : ''">{{ s.title }}</h3>
+                <span v-if="stepMine[s.key] && !s.done" class="badge bg-brand-600 text-white">Sıra sende</span>
+              </div>
+              <p class="text-sm text-stone-600">
+                <span class="font-semibold text-stone-700">{{ s.who }}</span> · {{ s.detail }}
+              </p>
+
+              <!-- Adıma özel işlemler -->
+              <div v-if="wallet.isConnected" class="mt-3 space-y-3 empty:hidden">
+                <!-- KURULUM -->
+                <template v-if="pool.status === 'Filling'">
+                  <button
+                    v-if="s.key === 'join' && !isMember && !isFull"
+                    type="button"
+                    class="btn-primary"
+                    :disabled="actionBusy !== null"
+                    @click="run('join', (sg) => joinPool(sg, pool!.id))"
+                  >
+                    {{ actionBusy === 'join' ? 'Cüzdanı onayla…' : 'Havuza katıl' }}
+                  </button>
+                  <p v-if="s.key === 'join' && isMember" class="text-sm font-medium text-sage-800">
+                    ✓ Katıldın.
+                    <template v-if="!isFull">Kalan {{ pool.memberLimit - pool.members.length }} üye bekleniyor.</template>
+                  </p>
+
+                  <div v-if="s.key === 'terms' && isCreator && isFull && !setupExpired" class="space-y-2 rounded-2xl bg-sand/60 p-4">
+                    <p class="text-sm text-stone-700">
+                      Sırayı aşağıdaki “Üyeler ve sıra” listesinden ↑ ↓ ile düzenle, sonra doğrulayıcıları yaz.
+                    </p>
+                    <label class="label" for="term-verifiers">Demo doğrulayıcıları (her satıra bir adres)</label>
+                    <textarea id="term-verifiers" v-model="verifiersInput" class="input min-h-24 font-mono" placeholder="G…&#10;G…&#10;G…" />
+                    <p class="text-xs text-stone-600">En az üç farklı adres; kurucu veya üye olamaz. Yeni öneri önceki onayları sıfırlar.</p>
+                    <p v-if="proposedVerifiers.length && !verifiersValid" class="text-xs text-rose-700">Doğrulayıcı adreslerini kontrol et.</p>
+                    <button
+                      type="button"
+                      class="btn-primary"
+                      :disabled="actionBusy !== null || !verifiersValid"
+                      @click="run('terms', (sg) => proposeTerms(sg, pool!.id, order, proposedVerifiers))"
+                    >
+                      {{ actionBusy === 'terms' ? 'Cüzdanı onayla…' : 'Sıra ve doğrulayıcıları öner' }}
+                    </button>
+                  </div>
+
+                  <button
+                    v-if="s.key === 'approve' && canApproveTerms && !setupExpired"
+                    type="button"
+                    class="btn-primary"
+                    :disabled="actionBusy !== null"
+                    @click="run('approve-terms', (sg) => approveTerms(sg, pool!.id, pool!.termsVersion))"
+                  >
+                    {{ actionBusy === 'approve-terms' ? 'Cüzdanı onayla…' : `Koşul sürümü ${pool.termsVersion} onayla` }}
+                  </button>
+
+                  <button
+                    v-if="s.key === 'start' && isFull && termsReady && !setupExpired"
+                    type="button"
+                    class="btn-primary btn-lg"
+                    :disabled="actionBusy !== null"
+                    @click="run('start', (sg) => startPool(sg, pool!.id))"
+                  >
+                    {{ actionBusy === 'start' ? 'Cüzdanı onayla…' : 'Havuzu başlat' }}
+                  </button>
+                </template>
+
+                <!-- AKTİF TUR -->
+                <template v-else-if="pool.status === 'Active' && round">
+                  <template v-if="s.key === 'collect'">
+                    <p v-if="round.phase === 'Grace'" role="status" class="rounded-2xl bg-gold-100/80 p-3 text-sm text-amber-950">
+                      Tur ek sürede. Eksik katkıyı yalnızca ilgili üye kendi cüzdanından yatırabilir.
+                    </p>
+                    <p v-if="recipientBlock" role="status" class="rounded-2xl bg-gold-100/80 p-3 text-sm text-amber-950">
+                      {{ recipientBlock }}
+                    </p>
+                    <div class="flex flex-wrap items-center gap-3">
+                      <button
+                        v-if="isMember && !myFunded && (round.phase === 'Collecting' || round.phase === 'Grace')"
+                        type="button"
+                        class="btn-primary"
+                        :disabled="actionBusy !== null"
+                        @click="run('deposit', (sg) => round!.phase === 'Grace' ? curePayment(sg, pool!.id) : deposit(sg, pool!.id))"
+                      >
+                        {{ actionBusy === 'deposit' ? 'Cüzdanı onayla…' : `Bu turun katkısını öde (${formatStroops(pool.contributionAmount)} ${token})` }}
+                      </button>
+                      <p v-if="isMember && myOwnPaid" class="text-sm font-medium text-sage-800">
+                        ✓ Bu turun katkısını kendin ödedin
+                      </p>
+                      <button
+                        v-if="deadlinePassed && !allFunded"
+                        type="button"
+                        class="btn-danger"
+                        :disabled="actionBusy !== null"
+                        @click="run('overdue', (sg) => markOverdue(sg, pool!.id))"
+                      >
+                        {{ actionBusy === 'overdue' ? 'Cüzdanı onayla…' : 'Süre doldu, turu durdur' }}
+                      </button>
+                    </div>
+                    <p v-if="deadlinePassed && !allFunded" class="text-xs text-stone-600">
+                      Bu işlemi havuzdaki herkes çağırabilir, bir yöneticiye gerek yok.
+                    </p>
+                  </template>
+
+                  <template v-else-if="s.key === 'propose'">
+                    <form
+                      v-if="isRecipient && round.phase === 'AwaitingPurchase' && remaining > 0 && recipientPaid"
+                      class="space-y-3 rounded-2xl bg-sand/60 p-4"
+                      @submit.prevent="propose"
+                    >
+                      <div>
+                        <label class="label" for="seller">Satıcının Stellar adresi</label>
+                        <input id="seller" v-model="sellerInput" class="input font-mono" type="text" placeholder="G…" autocomplete="off" required />
+                        <p v-if="sellerInput && !sellerValid" class="mt-1 text-xs text-rose-700">
+                          Havuzda kayıtlı izinli demo satıcısı adresini gir.
+                        </p>
+                      </div>
+                      <div>
+                        <label class="label" for="doc">Alım belgesi (fatura veya sözleşme özeti)</label>
+                        <textarea id="doc" v-model="docInput" class="input min-h-20" placeholder="Örn. araç/ev, satıcı, tutar, tarih, belge numarası" required />
+                        <p class="mt-1 text-xs text-stone-600">
+                          Belgenin kendisi zincire yazılmaz, yalnızca SHA-256 özeti kaydedilir. Doğrulayıcılar belgeyi
+                          zincir dışında kontrol eder.
+                        </p>
+                      </div>
+                      <button type="submit" class="btn-primary" :disabled="actionBusy !== null || !sellerValid || !docInput.trim()">
+                        {{ actionBusy === 'propose' ? 'Cüzdanı onayla…' : 'Öneriyi kaydet' }}
+                      </button>
+                    </form>
+                    <p v-else-if="round.phase === 'AwaitingPurchase' && allFunded && !round.seller && recipientPaid" class="text-sm text-stone-600">
+                      Katkılar tam. Sıradaki üyenin satıcıyı ve alım kaydını önermesi bekleniyor.
+                    </p>
+                  </template>
+
+                  <template v-else-if="s.key === 'verify'">
+                    <button
+                      v-if="isVerifier && round.phase === 'AwaitingPurchase' && round.seller && !approvedByMe && remaining > 0"
+                      type="button"
+                      class="btn-primary"
+                      :disabled="actionBusy !== null"
+                      @click="run('approve', (sg) => approvePurchase(sg, pool!.id, round!.round, round!.purchaseVersion))"
+                    >
+                      {{ actionBusy === 'approve' ? 'Cüzdanı onayla…' : 'Alım kaydını onayla' }}
+                    </button>
+                  </template>
+
+                  <template v-else-if="s.key === 'pay'">
+                    <button
+                      v-if="canExecute"
+                      type="button"
+                      class="btn-primary btn-lg"
+                      :disabled="actionBusy !== null"
+                      @click="run('execute', (sg) => executeRound(sg, pool!.id))"
+                    >
+                      {{ actionBusy === 'execute' ? 'Cüzdanı onayla…' : 'Tutarı satıcıya gönder' }}
+                    </button>
+                    <p v-if="canExecute" class="text-xs text-stone-600">Bu işlemi havuzdaki herkes çağırabilir, bir yöneticiye gerek yok.</p>
+                  </template>
+                </template>
+              </div>
+            </div>
+          </li>
+        </ol>
+
+        <!-- Kuruluş süresi dolduysa iptal -->
+        <div v-if="wallet.isConnected && pool.status === 'Filling' && setupExpired" class="flex flex-wrap items-center gap-3">
+          <button type="button" class="btn-danger" :disabled="actionBusy !== null" @click="run('cancel', (sg) => cancelUnstartedPool(sg, pool!.id))">
+            {{ actionBusy === 'cancel' ? 'Cüzdanı onayla…' : 'Kuruluş süresi doldu: iptal et' }}
+          </button>
+        </div>
+        <p v-if="pool.status === 'Filling'" class="text-xs text-stone-600">
+          Kuruluş son tarihi: {{ new Date(pool.setupDeadline * 1000).toLocaleString('tr-TR') }}
+        </p>
+
+        <!-- Süre sonunda iptal -->
+        <div v-if="wallet.isConnected && pool.status === 'Active' && canAbort" class="flex flex-wrap items-center gap-3">
+          <button type="button" class="btn-danger" :disabled="actionBusy !== null" @click="run('abort', (sg) => abortPool(sg, pool!.id))">
+            {{ actionBusy === 'abort' ? 'Cüzdanı onayla…' : 'Havuzu sonlandır ve bu turun iadelerini aç' }}
+          </button>
+          <p class="text-sm text-stone-600">İptal şartlarını kontrat denetler; süre dolması tek başına varlık transferi başlatmaz.</p>
+        </div>
+
+        <!-- İptal / Tamamlanma -->
+        <div v-if="wallet.isConnected && (pool.status === 'Aborted' || pool.status === 'Completed')" class="flex flex-wrap items-center gap-3">
+          <button
+            v-if="isMember && pool.status === 'Aborted' && myRefundable > 0n"
+            type="button"
+            class="btn-primary btn-lg"
+            :disabled="actionBusy !== null"
+            @click="run('refund', (sg) => claimRefund(sg, pool!.id))"
           >
+            {{ actionBusy === 'refund' ? 'Cüzdanı onayla…' : `İadeni al (${formatStroops(myRefundable)} ${token})` }}
+          </button>
+        </div>
+
+        <p v-if="actionError" role="alert" class="rounded-2xl bg-rose-50 p-3 text-sm text-rose-800">{{ actionError }}</p>
+        <p v-if="lastTx" class="pop rounded-2xl bg-sage-50 p-3 text-sm text-sage-800">
+          ✓ İşlem tamamlandı:
+          <a :href="explorerTx(lastTx)" target="_blank" rel="noopener noreferrer" class="font-mono underline">{{ lastTx.slice(0, 8) }}…</a>
+          (Stellar Expert’te görüntüle)
+        </p>
+      </section>
+
+      <!-- PARA NEREDE? -->
+      <section class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4" aria-label="Finansal özet">
+        <div v-reveal class="bento">
+          <p class="text-xs font-semibold text-stone-600">Kontrattaki toplam {{ token }}</p>
+          <p class="mt-1 font-display text-2xl font-extrabold tabular-nums">{{ contractBalance === null ? '—' : formatStroops(contractBalance) }}</p>
+          <p class="mt-1 text-xs text-stone-500">Tüm havuzlar; doğrudan zincirden okunur</p>
+        </div>
+        <div v-reveal="1" class="bento">
+          <p class="text-xs font-semibold text-stone-600">Bu turun katkıları</p>
+          <p class="mt-1 font-display text-2xl font-extrabold tabular-nums">{{ fundedCount }} / {{ pool.members.length }}</p>
+          <p class="mt-1 text-xs text-stone-500">Tümü gelmeden tahsisat yapılmaz</p>
+        </div>
+        <div v-reveal="2" class="bento">
+          <p class="text-xs font-semibold text-stone-600">Bu turdaki toplam iade</p>
+          <p class="mt-1 font-display text-2xl font-extrabold tabular-nums">{{ formatStroops(totalRefundable) }}</p>
+          <p class="mt-1 text-xs text-stone-500">Önceki turlardaki ödemeler dahil değil</p>
+        </div>
+        <div v-reveal="3" class="bento">
+          <p class="text-xs font-semibold text-stone-600">{{ countdownLabel }}</p>
+          <p class="mt-1 font-display text-2xl font-extrabold tabular-nums" :class="round && remaining <= 0 && pool.status === 'Active' ? 'text-amber-700' : ''">
             <template v-if="round && pool.status === 'Active' && roundDeadline > 0">
               {{ remaining <= 0 ? 'Süre doldu' : formatDuration(remaining) }}
             </template>
@@ -394,47 +830,40 @@ const listedMembers = computed(() =>
         </div>
       </section>
 
-      <!-- Tur ve alım kaydı -->
-      <section
-        v-if="round && pool.status === 'Active'"
-        class="card space-y-4"
-        aria-labelledby="tur"
-      >
-        <h2 id="tur" class="text-lg font-semibold">
-          Tur {{ pool.currentRound }} / {{ pool.memberLimit }}
-        </h2>
-        <dl class="grid gap-4 sm:grid-cols-3">
-          <div>
-            <dt class="text-xs text-slate-500">Bu turun alıcısı</dt>
+      <!-- BU TURUN AYRINTISI -->
+      <section v-if="round && pool.status === 'Active'" class="card space-y-4" aria-labelledby="tur">
+        <h2 id="tur" class="text-xl font-extrabold">Bu turun ayrıntısı</h2>
+        <dl class="grid gap-3 sm:grid-cols-3">
+          <div class="rounded-2xl bg-sand/60 p-3.5">
+            <dt class="text-xs text-stone-600">Bu turun alıcısı</dt>
             <dd class="mt-0.5 font-mono text-sm font-semibold" :title="round.recipient">
               {{ shortAddress(round.recipient, 6) }}
-              <span v-if="isRecipient" class="badge bg-indigo-100 text-indigo-800">Sen</span>
+              <span v-if="isRecipient" class="badge bg-brand-100 text-brand-800">Sen</span>
             </dd>
           </div>
-          <div>
-            <dt class="text-xs text-slate-500">Satıcıya gidecek tutar</dt>
+          <div class="rounded-2xl bg-sand/60 p-3.5">
+            <dt class="text-xs text-stone-600">Satıcıya gidecek tutar</dt>
             <dd class="mt-0.5 text-sm font-semibold">{{ formatStroops(round.pot) }} {{ token }}</dd>
           </div>
-          <div>
-            <dt class="text-xs text-slate-500">Satıcı</dt>
+          <div class="rounded-2xl bg-sand/60 p-3.5">
+            <dt class="text-xs text-stone-600">Satıcı</dt>
             <dd class="mt-0.5 font-mono text-sm font-semibold" :title="round.seller ?? ''">
               {{ round.seller ? shortAddress(round.seller, 6) : 'Henüz önerilmedi' }}
             </dd>
           </div>
         </dl>
-        <div v-if="round.docHash" class="text-xs text-slate-500">
-          Alım belgesi özeti (SHA-256):
-          <span class="break-all font-mono">{{ round.docHash }}</span>
+        <div v-if="round.docHash" class="text-xs text-stone-600">
+          Alım belgesi özeti (SHA-256): <span class="font-mono break-all">{{ round.docHash }}</span>
         </div>
         <div v-if="round.seller" class="text-sm">
-          <p class="font-medium">
+          <p class="flex flex-wrap items-center gap-2 font-semibold">
             Doğrulayıcı onayı: {{ approvalsCount }} / {{ pool.approvalThreshold }}
-            <span v-if="approvalsOk" class="badge bg-emerald-100 text-emerald-800">Onaylandı ✓</span>
+            <span v-if="approvalsOk" class="badge bg-sage-100 text-sage-800">Onaylandı ✓</span>
           </p>
-          <ul class="mt-2 space-y-1">
-            <li v-for="v in pool.verifiers" :key="v" class="flex items-center gap-2 text-xs">
+          <ul class="mt-2 space-y-1.5">
+            <li v-for="v in pool.verifiers" :key="v" class="flex flex-wrap items-center gap-2 text-xs">
               <span class="font-mono" :title="v">{{ shortAddress(v, 6) }}</span>
-              <span v-if="v === me" class="badge bg-indigo-100 text-indigo-800">Sen</span>
+              <span v-if="v === me" class="badge bg-brand-100 text-brand-800">Sen</span>
               <span class="badge" :class="round.approvals.includes(v) ? toneClass.green : toneClass.slate">
                 {{ round.approvals.includes(v) ? 'Onayladı ✓' : 'Bekliyor' }}
               </span>
@@ -443,352 +872,61 @@ const listedMembers = computed(() =>
         </div>
       </section>
 
-      <!-- Üyeler -->
+      <!-- ÜYELER -->
       <section class="card" aria-labelledby="uyeler">
-        <h2 id="uyeler" class="text-lg font-semibold">Üyeler ve sıra</h2>
-        <ul class="mt-3 divide-y divide-slate-100">
+        <h2 id="uyeler" class="text-xl font-extrabold">Üyeler ve sıra</h2>
+        <ul class="mt-3 space-y-2">
           <li
             v-for="(addr, idx) in listedMembers"
             :key="addr"
-            class="flex flex-wrap items-center justify-between gap-2 py-3"
+            class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-stone-200/80 bg-white p-3 transition-colors duration-200"
+            :class="round && addr === round.recipient && pool.status === 'Active' ? '!border-brand-300 bg-brand-50/60' : ''"
           >
-            <div class="flex flex-wrap items-center gap-2">
-              <span class="w-5 text-sm text-slate-400">{{ idx + 1 }}</span>
+            <div class="flex flex-wrap items-center gap-2.5">
+              <span class="grid size-9 place-items-center rounded-full bg-sand text-sm font-extrabold text-ink-soft">{{ idx + 1 }}</span>
               <span class="font-mono text-sm" :title="addr">{{ shortAddress(addr, 6) }}</span>
-              <span v-if="addr === me" class="badge bg-indigo-100 text-indigo-800">Sen</span>
-              <span v-if="addr === pool.creator" class="badge bg-slate-100 text-slate-700">Kurucu</span>
-              <span
-                v-if="round && addr === round.recipient && pool.status === 'Active'"
-                class="badge bg-emerald-100 text-emerald-800"
-              >
-                Bu turun alıcısı
-              </span>
-              <span v-if="memberByAddress.get(addr)?.received" class="badge bg-slate-100 text-slate-700">
-                Payını aldı
-              </span>
+              <span v-if="addr === me" class="badge bg-brand-100 text-brand-800">Sen</span>
+              <span v-if="addr === pool.creator" class="badge bg-stone-100 text-stone-700">Kurucu</span>
+              <span v-if="round && addr === round.recipient && pool.status === 'Active'" class="badge bg-sage-100 text-sage-800">Bu turun alıcısı</span>
+              <span v-if="memberByAddress.get(addr)?.received" class="badge bg-stone-100 text-stone-700">Payını aldı</span>
             </div>
             <div class="flex flex-wrap items-center gap-3">
-              <span class="text-xs text-slate-500">
-                İade hakkı: {{ formatStroops(memberByAddress.get(addr)?.refundable ?? 0n) }} {{ token }}
-              </span>
-              <span class="badge" :class="toneClass[memberState(addr).tone]">
-                {{ memberState(addr).label }}
-              </span>
-              <button
-                v-if="isSponsor && pool.status === 'Active' && round && (round.phase === 'Collecting' || round.phase === 'Grace') && addr !== round.recipient && !isFunded(addr)"
-                type="button"
-                class="btn-danger !min-h-8 !px-3 !py-1"
-                :disabled="actionBusy !== null"
-                @click="run(`topup-${addr}`, (s) => topUp(s, pool!.id, addr))"
-              >
-                {{ actionBusy === `topup-${addr}` ? 'Onayla…' : `Sponsor olarak tamamla (${formatStroops(pool.contributionAmount)})` }}
-              </button>
+              <span class="text-xs text-stone-600">Bu turdaki iade: {{ formatStroops(memberByAddress.get(addr)?.refundable ?? 0n) }} {{ token }}</span>
+              <span class="badge" :class="toneClass[memberState(addr).tone]">{{ memberState(addr).label }}</span>
               <span v-if="pool.status === 'Filling' && isCreator" class="flex gap-1">
-                <button
-                  type="button"
-                  class="btn-secondary !min-h-8 !px-2 !py-1"
-                  :disabled="idx === 0"
-                  :aria-label="`${shortAddress(addr)} adresini yukarı taşı`"
-                  @click="move(idx, -1)"
-                >
-                  ↑
-                </button>
-                <button
-                  type="button"
-                  class="btn-secondary !min-h-8 !px-2 !py-1"
-                  :disabled="idx === order.length - 1"
-                  :aria-label="`${shortAddress(addr)} adresini aşağı taşı`"
-                  @click="move(idx, 1)"
-                >
-                  ↓
-                </button>
+                <button type="button" class="btn-secondary !min-h-9 !min-w-9 !px-2 !py-1" :disabled="idx === 0" :aria-label="`${shortAddress(addr)} adresini yukarı taşı`" @click="move(idx, -1)">↑</button>
+                <button type="button" class="btn-secondary !min-h-9 !min-w-9 !px-2 !py-1" :disabled="idx === order.length - 1" :aria-label="`${shortAddress(addr)} adresini aşağı taşı`" @click="move(idx, 1)">↓</button>
               </span>
             </div>
           </li>
         </ul>
-        <p v-if="pool.status === 'Filling' && isCreator" class="mt-3 text-xs text-slate-500">
-          Sırayı düzenledikten sonra koşul sürümünü öner. Üyeler ve sponsor aynı sürümü onaylayınca
-          havuz başlatılabilir.
+        <p v-if="!listedMembers.length" class="mt-3 text-sm text-stone-600">Henüz katılan üye yok. İlk üye olarak katılabilirsin.</p>
+        <p v-if="pool.status === 'Filling' && isCreator" class="mt-3 text-xs text-stone-600">
+          Sırayı düzenledikten sonra koşul sürümünü öner. Tüm üyeler aynı sürümü onaylayınca havuz başlatılabilir.
         </p>
       </section>
 
-      <!-- İşlemler -->
-      <section class="card space-y-4" aria-labelledby="islemler">
-        <h2 id="islemler" class="text-lg font-semibold">İşlemler</h2>
+      <!-- KELİMELER -->
+      <details class="card group cursor-pointer !p-0">
+        <summary class="flex min-h-14 list-none items-center justify-between gap-3 px-5 py-3 font-display font-bold marker:hidden [&::-webkit-details-marker]:hidden">
+          Kelimeler ne demek?
+          <AppIcon name="chevron" class="text-brand-600 transition-transform duration-300 group-open:rotate-180" />
+        </summary>
+        <dl class="grid gap-3 px-5 pb-5 text-sm sm:grid-cols-2">
+          <div><dt class="font-semibold">Risk</dt><dd class="text-stone-600">Erken teslim alan sonraki katkıyı bırakırsa bekleyenlerin geçmiş tur ödemeleri otomatik geri alınamaz.</dd></div>
+          <div><dt class="font-semibold">Doğrulayıcı</dt><dd class="text-stone-600">Alım belgesini kontrol edip onaylayan kişi. Yeterli onay olmadan tutar çıkmaz.</dd></div>
+          <div><dt class="font-semibold">Ek süre</dt><dd class="text-stone-600">Katkı süresi dolduktan sonra geciken üyeye tanınan son şans.</dd></div>
+          <div><dt class="font-semibold">İade hakkı</dt><dd class="text-stone-600">Henüz satıcıya ödenmemiş turda bizzat yatırdığın katkı.</dd></div>
+          <div><dt class="font-semibold">Koşul sürümü</dt><dd class="text-stone-600">Sıra ve doğrulayıcıların onaylanan hali. Değişirse herkes yeniden onaylar.</dd></div>
+        </dl>
+      </details>
 
-        <div v-if="!wallet.isConnected">
-          <button type="button" class="btn-primary" :disabled="wallet.busy" @click="wallet.connect()">
-            İşlem yapmak için cüzdan bağla
-          </button>
-        </div>
-
-        <div v-else class="space-y-4">
-          <!-- Kurulum -->
-          <div v-if="pool.status === 'Filling'" class="flex flex-wrap items-center gap-3">
-            <button
-              v-if="isSponsor && !guaranteeOk"
-              type="button"
-              class="btn-primary"
-              :disabled="actionBusy !== null"
-              @click="run('fund', (s) => fundGuarantee(s, pool!.id, guaranteeMissing))"
-            >
-              {{ actionBusy === 'fund' ? 'Cüzdanı onayla…' : `Sponsor güvencesini yatır (${formatStroops(guaranteeMissing)} ${token})` }}
-            </button>
-            <button
-              v-if="!isMember && !isFull"
-              type="button"
-              class="btn-primary"
-              :disabled="actionBusy !== null"
-              @click="run('join', (s) => joinPool(s, pool!.id))"
-            >
-              {{ actionBusy === 'join' ? 'Cüzdanı onayla…' : 'Havuza katıl' }}
-            </button>
-            <button
-              v-if="isCreator && isFull && !setupExpired"
-              type="button"
-              class="btn-secondary"
-              :disabled="actionBusy !== null || !verifiersValid"
-              @click="run('terms', (s) => proposeTerms(s, pool!.id, order, proposedVerifiers))"
-            >
-              {{ actionBusy === 'terms' ? 'Cüzdanı onayla…' : 'Sıra ve doğrulayıcıları öner' }}
-            </button>
-            <button
-              v-if="canApproveTerms && !setupExpired"
-              type="button"
-              class="btn-secondary"
-              :disabled="actionBusy !== null"
-              @click="run('approve-terms', (s) => approveTerms(s, pool!.id, pool!.termsVersion))"
-            >
-              {{ actionBusy === 'approve-terms' ? 'Cüzdanı onayla…' : `Koşul sürümü ${pool.termsVersion} onayla` }}
-            </button>
-            <button
-              v-if="isFull && guaranteeOk && termsReady && !setupExpired"
-              type="button"
-              class="btn-primary"
-              :disabled="actionBusy !== null"
-              @click="run('start', (s) => startPool(s, pool!.id))"
-            >
-              {{ actionBusy === 'start' ? 'Cüzdanı onayla…' : 'Havuzu başlat' }}
-            </button>
-            <button
-              v-if="setupExpired"
-              type="button"
-              class="btn-danger"
-              :disabled="actionBusy !== null"
-              @click="run('cancel', (s) => cancelUnstartedPool(s, pool!.id))"
-            >
-              {{ actionBusy === 'cancel' ? 'Cüzdanı onayla…' : 'Kuruluş süresi doldu: iptal et' }}
-            </button>
-            <p v-if="isMember" class="text-sm text-slate-600">
-              Katıldın.
-              <template v-if="!isFull">Kalan {{ pool.memberLimit - pool.members.length }} üye bekleniyor.</template>
-            </p>
-            <p v-if="!guaranteeOk" class="text-sm text-slate-600">
-              Havuz, sponsor güvencesi tamamlanmadan başlayamaz.
-            </p>
-            <p v-else-if="isFull && !termsReady" class="text-sm text-slate-600">
-              Aynı sıra ve doğrulayıcı koşullarının tüm üyelerle sponsor tarafından onaylanması bekleniyor.
-            </p>
-          </div>
-
-          <div v-if="pool.status === 'Filling'" class="space-y-3 rounded-xl border border-slate-200 p-4 text-sm">
-            <p>Koşul sürümü: {{ pool.termsVersion || 'Henüz önerilmedi' }} · onay: {{ pool.termsApprovals.length }} / {{ new Set([pool.sponsor, ...pool.members]).size }}</p>
-            <p>Kuruluş son tarihi: {{ new Date(pool.setupDeadline * 1000).toLocaleString('tr-TR') }}</p>
-            <div v-if="isCreator" class="space-y-2">
-              <label class="label" for="term-verifiers">Demo doğrulayıcıları (her satıra bir adres)</label>
-              <textarea id="term-verifiers" v-model="verifiersInput" class="input min-h-24 font-mono" placeholder="G…&#10;G…&#10;G…" />
-              <p class="text-xs text-slate-600">En az üç farklı adres; kurucu, sponsor veya üye olamaz. Yeni öneri önceki onayları sıfırlar.</p>
-              <p v-if="proposedVerifiers.length && !verifiersValid" class="text-xs text-rose-700">Doğrulayıcı adreslerini kontrol et.</p>
-            </div>
-          </div>
-
-          <!-- Aktif tur -->
-          <div v-if="pool.status === 'Active' && round" class="space-y-4">
-            <p
-              v-if="recipientBlock"
-              role="status"
-              class="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900"
-            >
-              {{ recipientBlock }}
-            </p>
-            <div class="flex flex-wrap items-center gap-3">
-              <button
-                v-if="isMember && !myFunded && (round.phase === 'Collecting' || round.phase === 'Grace')"
-                type="button"
-                class="btn-primary"
-                :disabled="actionBusy !== null"
-                @click="run('deposit', (s) => round!.phase === 'Grace' ? curePayment(s, pool!.id) : deposit(s, pool!.id))"
-              >
-                {{ actionBusy === 'deposit' ? 'Cüzdanı onayla…' : `Bu turun katkısını öde (${formatStroops(pool.contributionAmount)} ${token})` }}
-              </button>
-              <p v-if="isMember && myOwnPaid" class="text-sm text-emerald-800">
-                Bu turun katkısını kendin ödedin ✓
-              </p>
-              <p v-else-if="isMember && myCoveredBySponsor" class="text-sm text-amber-900">
-                Bu turun katkın sponsor tarafından tamamlandı. Bu senin kendi ödemen sayılmaz; avansı
-                sponsora geri ödemen gerekir.
-              </p>
-
-              <button
-                v-if="isMember && myAdvance > 0n"
-                type="button"
-                class="btn-secondary"
-                :disabled="actionBusy !== null"
-                @click="run('repay', (s) => repayAdvance(s, pool!.id))"
-              >
-                {{ actionBusy === 'repay' ? 'Cüzdanı onayla…' : `Sponsor avansını kapat (${formatStroops(myAdvance)} ${token})` }}
-              </button>
-
-              <button
-                v-if="isVerifier && round.phase === 'AwaitingPurchase' && round.seller && !approvedByMe && remaining > 0"
-                type="button"
-                class="btn-secondary"
-                :disabled="actionBusy !== null"
-                @click="run('approve', (s) => approvePurchase(s, pool!.id, round!.round, round!.purchaseVersion))"
-              >
-                {{ actionBusy === 'approve' ? 'Cüzdanı onayla…' : 'Alım kaydını onayla' }}
-              </button>
-
-              <button
-                v-if="canExecute"
-                type="button"
-                class="btn-primary"
-                :disabled="actionBusy !== null"
-                @click="run('execute', (s) => executeRound(s, pool!.id))"
-              >
-                {{ actionBusy === 'execute' ? 'Cüzdanı onayla…' : 'Tutarı satıcıya gönder' }}
-              </button>
-
-              <button
-                v-if="deadlinePassed && (!allFunded || recipientDebt > 0n)"
-                type="button"
-                class="btn-danger"
-                :disabled="actionBusy !== null"
-                @click="run('overdue', (s) => markOverdue(s, pool!.id))"
-              >
-                {{ actionBusy === 'overdue' ? 'Cüzdanı onayla…' : 'Süre doldu, turu durdur' }}
-              </button>
-            </div>
-            <p v-if="canExecute || (deadlinePassed && (!allFunded || recipientDebt > 0n))" class="text-xs text-slate-500">
-              Bu işlemi havuzdaki herkes çağırabilir, bir yöneticiye gerek yok.
-            </p>
-            <p v-if="round.phase === 'AwaitingPurchase' && allFunded && !round.seller && recipientPaid && recipientDebt === 0n" class="text-sm text-slate-600">
-              Katkılar tam. Sıradaki üyenin satıcıyı ve alım kaydını önermesi bekleniyor.
-            </p>
-
-            <!-- Satıcı önerisi (sıradaki üye) -->
-            <form
-              v-if="isRecipient && round.phase === 'AwaitingPurchase' && remaining > 0 && recipientPaid && recipientDebt === 0n"
-              class="space-y-3 rounded-xl border border-slate-200 p-4"
-              @submit.prevent="propose"
-            >
-              <h3 class="font-semibold">Satıcıyı ve alım kaydını öner</h3>
-              <div>
-                <label class="label" for="seller">Satıcının Stellar adresi</label>
-                <input
-                  id="seller"
-                  v-model="sellerInput"
-                  class="input font-mono"
-                  type="text"
-                  placeholder="G…"
-                  autocomplete="off"
-                  required
-                />
-                <p v-if="sellerInput && !sellerValid" class="mt-1 text-xs text-rose-700">
-                  Havuzda kayıtlı izinli demo satıcısı adresini gir.
-                </p>
-              </div>
-              <div>
-                <label class="label" for="doc">Alım belgesi (fatura veya sözleşme özeti)</label>
-                <textarea
-                  id="doc"
-                  v-model="docInput"
-                  class="input min-h-20"
-                  placeholder="Örn. araç/ev, satıcı, tutar, tarih, belge numarası"
-                  required
-                />
-                <p class="mt-1 text-xs text-slate-500">
-                  Belgenin kendisi zincire yazılmaz, yalnızca SHA-256 özeti kaydedilir. Doğrulayıcılar belgeyi
-                  zincir dışında kontrol eder.
-                </p>
-              </div>
-              <button
-                type="submit"
-                class="btn-primary"
-                :disabled="actionBusy !== null || !sellerValid || !docInput.trim()"
-              >
-                {{ actionBusy === 'propose' ? 'Cüzdanı onayla…' : 'Öneriyi kaydet' }}
-              </button>
-            </form>
-          </div>
-
-          <!-- Süre sonunda iptal -->
-          <div v-if="pool.status === 'Active' && canAbort" class="flex flex-wrap items-center gap-3">
-            <button
-              v-if="canAbort"
-              type="button"
-              class="btn-danger"
-              :disabled="actionBusy !== null"
-              @click="run('abort', (s) => abortPool(s, pool!.id))"
-            >
-              {{ actionBusy === 'abort' ? 'Cüzdanı onayla…' : 'Havuzu iptal et ve iadeleri aç' }}
-            </button>
-            <p class="text-sm text-slate-600">İptal şartlarını kontrat denetler; süre dolması tek başına varlık transferi başlatmaz.</p>
-          </div>
-
-          <!-- İptal / Tamamlanma -->
-          <div
-            v-if="pool.status === 'Aborted' || pool.status === 'Completed'"
-            class="flex flex-wrap items-center gap-3"
-          >
-            <button
-              v-if="isMember && pool.status === 'Aborted' && myRefundable > 0n"
-              type="button"
-              class="btn-primary"
-              :disabled="actionBusy !== null"
-              @click="run('refund', (s) => claimRefund(s, pool!.id))"
-            >
-              {{ actionBusy === 'refund' ? 'Cüzdanı onayla…' : `İadeni al (${formatStroops(myRefundable)} ${token})` }}
-            </button>
-            <button
-              v-if="isSponsor"
-              type="button"
-              class="btn-secondary"
-              :disabled="actionBusy !== null"
-              @click="run('remainder', (s) => claimSponsorRemainder(s, pool!.id))"
-            >
-              {{ actionBusy === 'remainder' ? 'Cüzdanı onayla…' : 'Sponsor kalanını geri al' }}
-            </button>
-            <p v-if="pool.status === 'Completed'" class="text-sm text-slate-600">
-              Havuz tamamlandı. Tüm turlar satıcılara ödendi.
-            </p>
-          </div>
-
-          <p v-if="actionError" role="alert" class="text-sm text-rose-700">{{ actionError }}</p>
-          <p v-if="lastTx" class="text-sm text-emerald-800">
-            İşlem tamamlandı:
-            <a :href="explorerTx(lastTx)" target="_blank" rel="noopener noreferrer" class="font-mono underline">
-              {{ lastTx.slice(0, 8) }}…
-            </a>
-            (Stellar Expert'te görüntüle)
-          </p>
-        </div>
-      </section>
-
-      <section class="card text-sm text-slate-600" aria-label="Doğrulama">
-        <p>
-          Bu sayfadaki her bilgi doğrudan Stellar ağındaki sözleşmeden okunuyor.
-          <a
-            v-if="poolContractId"
-            :href="explorerContract(poolContractId)"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="text-indigo-700 underline"
-          >
-            Sözleşmeyi blockchain üzerinde görüntüle
-          </a>
-        </p>
-      </section>
+      <p class="px-2 text-center text-sm text-stone-600">
+        Bu sayfadaki her bilgi doğrudan Stellar ağındaki sözleşmeden okunuyor.
+        <a v-if="poolContractId" :href="explorerContract(poolContractId)" target="_blank" rel="noopener noreferrer" class="text-brand-700 underline">
+          Sözleşmeyi blockchain üzerinde görüntüle
+        </a>
+      </p>
     </template>
   </div>
 </template>

@@ -1,171 +1,119 @@
-# Stellerpool — korumalı ev/araç tasarruf havuzu planı
+# Stellerpool — davetli tasarruf grubu planı
 
-**Amaç:** FuzulEv/FuzulOto benzeri düzenli birikim ve sıralı teslimat deneyimini Stellar üzerinde, fonları organizatörün kullanımından ayırarak kurmak. Ana güven vaadi: organizatör ortak parayı kendi hesabına çekemez; her tahsisatın koşulları, alıcısı ve tutarı denetlenebilir.
+**Amaç:** Tanıdık kişilerin altın günü gibi sabit sıralı katkılarını görünür kurallarla koordine eden Stellar prototipi. Hedef Soroban kontratında kurucunun ortak parayı serbestçe çekme yetkisi olmayacak; katkı, sıra ve ödeme koşulları üyelerce onaylanacak. Bu teknik sınır, erken tahsisat alan üyenin gelecek katkılarını garanti etmez.
 
-**Aşama ve karar (19 Eylül 2026):** Şimdi lisans başvurusu veya gerçek müşteri fonu yok. Ürün, davetli altın günü fikrini anlatan bir **Mainnet tanıtım sitesi** ile fon akışının yalnızca test varlığıyla sınanacağı ayrı bir **Testnet demosu** olarak ilerler. Anchor, gerçek TRY dönüşümü yerine açıkça simüle edilen adım akışı olarak kalır. Mainnet'teki mevcut site salt okunurdur; kontrat, cüzdan imzası veya ödeme içermez. Anchor akış simülasyonu ekranda çalışır; havuz kontratı ve AI denetçisi henüz tamamlanmadı. [Dağıtım ve kapsam kaydı](mainnet-showcase.md) bu ayrımı açıklar.
+**Aşama (19 Eylül 2026):** Lisans başvurusu veya gerçek müşteri fonu yok. Mainnet sitesi salt okunur tanıtımdır; cüzdan imzası, fon ve havuz işlemi yoktur. Testnet havuz kontratı henüz yazılıp yayınlanmadı. Anchor yalnızca etiketli simülasyon; gerçek TRY veya kullanılabilir bakiye yaratmaz. [Yayın kapsamı](mainnet-showcase.md) ve [hukuki sınır](altin-gunu-legal-boundary.md) ayrı kaydedildi. Hackathon DOC'unun gerçek TL giriş/çıkış ölçütü karşılanmıyor.
 
-**Hackathon ölçütü:** DOC gerçek TL giriş/çıkışı ile kullanılabilir Stellar bakiyesi istiyor. Seçilen simülasyon bu şartı **karşılamaz**; sunumda eksik kalem olarak belirtilecek. [AI denetimi ve Türkiye'de gerçek ürün yolu](legal-ai-path.md) ileride değerlendirilebilecek ayrı akışları anlatır.
+## 1. Eminevim ve Fuzul ile karşılaştırma
 
-**Hukuki kapsam:** Bu plan, Fuzul benzeri ev/araç finansmanı vaadini inceler. Kapalı arkadaş grubu şeklindeki altın günüyle aynı hukuki statüde olduğu varsayılmamalıdır; [farklar ve açık sorular](altin-gunu-legal-boundary.md) ayrıca yazıldı.
+Her iki şirketin açıklamasında katkılar bir araya getirilir; çekilişli veya teslim tarihi belirli modeller vardır. Fuzul, grup dağılsa da kendi organizasyonunun taahhüdün arkasında olduğunu, ödeme dondurulursa teslimatın ertelendiğini ve teslim edilen ev/araç için ipotek/rehin kurulduğunu açıklıyor. Eminevim de ipotek teminatı, teslimat öncesi taksit dondurma/teslimat erteleme ve sözleşmeye dayalı tahsisat süreci anlatıyor. BDDK lisanslı şirketin sözleşme, ayrılmış fon havuzu ve müşteri hakları çerçevesini açıklıyor. **Bu açıklamalar ayrı bir sponsor cüzdanı modeli tarif etmiyor; yükümlülük şirketin hukuki ve mali yapısında.** Kamuya açık sayfalar teslimat sonrası her gecikmenin iç tahsilat adımlarını açıklamıyor.
 
-**Hackathon:** Rise In x Stellar Pro Hackathon 2026, Genesis; teslim 20 Eylül 2026 12:00.
-
-## 1. Referans model ve farkımız
-
-Fuzul'ün resmi anlatımında kişiler ödeme güçlerine göre gruplara ayrılıyor; çekilişli ve teslim tarihi baştan belirlenen seçenekler bulunuyor. Teslimat sonrasında taksitler sürüyor. Fuzul, teslimat öncesinde taksit dondurmanın teslimatı da ertelediğini, grup dağılmasına karşı organizasyonun arkasında durduğunu ve teslim edilen ev/araç için ipotek veya rehin uyguladığını söylüyor. BDDK, ödemesini aksatan tasarruf dönemi müşterisinin tahsisatının sözleşmeye göre ertelenebileceğini veya sözleşmesinin feshedilebileceğini açıklıyor. Fuzul'ün kamuya açık SSS'si teslimat **sonrası** tahsilatın tüm adımlarını açıklamıyor. Bizim prototipimiz bu kurumsal, hukuki ve bilanço güvencelerinin yerine geçmez.
-
-| İhtiyaç | Prototipteki karşılık | Açık sınır |
+| İhtiyaç | Testnet hedefi | Sınır |
 |---|---|---|
-| Organizatör parayı alıp kaçamasın | Katkı ve sponsor güvencesi Soroban kontratında; creator'ın serbest çekim yetkisi yok | Kontrat hatası, anahtar ve varlık ihraççısı riski sürer |
-| Sıra ve ödemeler değiştirilemesin | Grup başladıktan sonra üye, katkı, sıra ve süre kilitli; olaylar zincirde | Kura ve esnek ödeme planları MVP dışında |
-| Erken teslim alan taksitleri bırakırsa diğerleri korunabilsin | Havuz başlamadan sponsorun ayrı varlığı kilitlenir; güvenli devam mümkün değilse bekleyenlere iade | Sponsor ekonomik kaybı üstlenir; gerçek dünyadaki tahsilat ayrı iştir |
-| Tahsisat amaç dışına gitmesin | Alıcı, satıcı adresini ve alım kaydını önerir; doğrulama sonrası ödeme doğrudan satıcı cüzdanına | Tapu, ruhsat ve gerçek satıcı kimliği zincir dışında doğrulanır |
-| Şüpheli sözleşme veya alım belgesi fark edilsin | Planlanan AI denetçisi sürüm, tutar ve satıcı tutarsızlığını gerekçeli raporlar; insanlar inceler | AI raporu tek başına hukuki onay, kontrat denetimi veya ödeme yetkisi değildir |
-| TL bağlantısı anlaşılsın | Demo ekranında TRY → test varlığı adımları simüle edilebilir; gerçek aktarım ve kullanılabilir TRY bakiyesi yoktur | Simülasyon hackathon'un gerçek TL şartını karşılamaz; gerçek anchor ve izinler ayrıca değerlendirilir |
+| Kurucunun fonu alıp kaçamaması | Kurucuda serbest çekim fonksiyonu yok; ödeme yalnız kayıtlı tura/satıcıya | Kontrat, anahtar ve varlık ihraççısı riski sürer |
+| Sıra ve koşulların değişmemesi | Tüm üyeler aynı sürümü onaylar; başlangıçtan sonra kilitlenir | Cüzdan adresleri gerçek kimliği kanıtlamaz |
+| Eksik ödeme | Katkı son tarihi, ek süre ve turun durması | Gelecek ödemeler ve teslimat garanti edilmez |
+| İptal/iade | Yalnız henüz satıcıya gitmemiş turun katkıları sahiplerine geri verilir | Önceki turda harcanmış katkılar kontrattan iade edilemez |
+| Alım doğrulaması | Test satıcısı, belge özeti ve insan doğrulayıcı onayı | Gerçek tapu, ruhsat veya satıcı kimliği doğrulanmaz |
 
-## 2. Ürün kararı
+## 2. Sponsorsuz ürün kararı
 
-1. **MVP: sabit sıralı, sponsor güvenceli havuz.** Üye başına bir teslimat ve her dönem bir katkı. Kura ve bireysel teslim tarihi varyantları sonraya bırakılır.
-2. **Organizatör yalnızca kurulum önerir.** Sıra, doğrulayıcılar, ödeme takvimi ve diğer koşullar tüm üyeler ile sponsor tarafından cüzdanlarıyla onaylanmadan havuz başlamaz. Her değişiklik önceki onayları geçersiz kılar. Organizatör başladıktan sonra sırayı veya satıcıyı tek başına değiştiremez, kontrat fonunu çekemez. Kontratta tek taraflı upgrade/kaçış kapısı bulunmaz.
-3. **Katılımcıdan girişte bir taksitlik teminat alınmaz.** Eski plan bu teminatı yeterli koruma gibi sunuyordu; dört üyeli örnekte iki taksitlik açık bırakıyordu. Ayrıca tasarruf dönemindeki teminat kuralları hukuken incelenmelidir.
-4. **Sponsor güvencesi yalnızca Testnet senaryosudur.** Demo sponsoru ileride Testnet varlığını yatırır. Bu mekanizma Mainnet tanıtımında veya gerçek altın günü hizmetinde finansman garantisi diye sunulmaz. Gerçek üründe sponsorun kim olacağı, fonun niteliği ve düzenleyici statü hukuk ve iş ortaklığı kararıdır.
-5. **Gecikme teslimat öncesi ve sonrası ayrı ele alınır.** Önce bildirim ve sözleşmede belirlenmiş ek süre gelir. Teslimat almamış üyenin kendi tahsisat hakkı ertelenebilir. Teslimat almış üyenin borcu sürer; sponsor açığı ayrıca yatırıp bekleyenleri koruyabilir. Güvenli devam sağlanamazsa ek süre sonunda iptal ve iade devreye girer. Başka üyelerin alacağı sessizce azaltılmaz.
-6. **Tahsisat satıcıya yapılır.** Demo için önceden belirlenmiş test satıcısı cüzdanı kullanılır ve gerçek ev/araç satın alındığı söylenmez. Sıradaki üye kendi tur katkısını bizzat ödemiş ve eski sponsor avanslarını kapatmış olmalıdır; sponsor onun yerine ödeme yaparak tahsisatı açamaz. Gerçek ürün, satıcı ve mülkiyet doğrulama ortağı gerektirir.
-7. **Getiri stratejisi yok.** Ortak fonu lending, staking veya likidite havuzuna yatırmak MVP güven vaadini geniş risklere açar. DeFi özelliği programlanabilir saklama ve doğrulanabilir kurallardır.
-8. **AI denetçisi yardımcıdır.** Demo belge ve koşullarını karşılaştırıp insan doğrulayıcıya gerekçeli bulgu sunar; Soroban kodundaki olası yetki/muhasebe hatalarını geliştiriciye işaretler. Fon tutmaz, kontratta özel anahtarı veya bağımsız ödeme/onay yetkisi bulunmaz. AI kod incelemesi bağımsız güvenlik denetimi değildir. Belirsiz AI çıktıları müşterinin iade hakkını veya yasal süreleri değiştiremez. Üretim sözleşmesinin tarafı, kimlik ve imza süreci, fon ve tahsisat yetkisi [hukuki yolda](legal-ai-path.md) tanımlandığı gibi lisanslı yapıyla kurulmalıdır.
+1. Kapalı ve sabit üyeli grup; demo için 2–12 üye, kişi başına her tur aynı `C` katkısı ve `N` tur. Her üye bir kez sıradaki alıcıdır. Kura ve değişken tutar MVP dışında.
+2. Kurucu yalnızca önerir. Katkı, sıra, süreler, satıcı ve doğrulayıcı koşulları üyelerin aynı sürümü onaylamasıyla geçerli olur. Kurucu tek başına değiştiremez veya fon çekemez.
+3. Ayrı sponsor, sponsor güvencesi, başkası adına avans ve platformun teslimat garantisi yoktur. Fon eksiği yeni kullanıcıların katkısıyla kapatılmış varsayılmaz.
+4. Her turda **bütün üyeler kendi katkılarını** yatırmadan tahsisat açılmaz. Son tarih geçince ek süre başlar; eksik üye bu sürede ödeyebilir. Hâlâ eksikse herkes havuzu sonlandırabilir.
+5. Duran turda yalnız bu turda birikmiş ve henüz satıcıya ödenmemiş katkılar sahiplerine iade edilir. Daha önce tamamlanıp satıcıya ödenen turların katkısı geri çağrılamaz. Tahsisat almış üyelerin sonraki ödeme yükümlülüğü gerçek dünyada ancak ayrı sözleşme ve yetkili süreçlerle takip edilebilir; demo bunu garanti etmez.
+6. Demo tahsisatı yalnız önceden belirlenmiş test satıcısına, alıcının önerisi ve insan doğrulayıcı eşiği sonrasında yapılır. Alım için ayrı son tarih vardır; öneri/onay yetişmezse mevcut tur katkıları iade edilir.
+7. Ortak fon lending, staking veya likidite havuzuna gönderilmez. DeFi niteliği programlanabilir fon akışı ve doğrulanabilir kurallardır. AI denetçisi planlanan yardımcı rapordur; fon tutmaz veya tahsisat açmaz.
 
-### Ödeme aksadığında izlenecek yol
+**Açık ekonomik risk:** Dört üye her tur 10 birim yatırırsa ilk turda 40 birim A'nın satıcısına çıkar. İkinci tur başlamadan B, C ve D'nin önceki 10'ar birimi kontratta değildir. A sonraki ödemeyi bırakırsa ikinci tur durabilir; B, C ve D'nin ilk tur ödemeleri otomatik iade edilemez. Üye sayısını büyütmek bu açığı yok etmez. Tam iade veya belirli tarihte teslimat sözü bu modelin dışında ayrı mali/hukuki kaynak ve yükümlülük gerektirir.
 
-| Aşama | Fuzul/BDDK kaynaklarında doğrulanabilen | Stellerpool için karar |
+## 3. Ödeme aksadığında
+
+| Durum | Testnet akışı | Sınır |
 |---|---|---|
-| Teslimat öncesi | Fuzul taksit dondurmanın teslimatı ertelediğini söylüyor; BDDK sözleşmeye göre tahsisatın ötelenebileceğini veya sözleşmenin feshedilebileceğini açıklıyor. | Gecikme bildirimi ve ek süre; ödeme yapılmazsa ilgili üyenin tahsisatı durur. Küçük ve sabit sıralı MVP grubunda başka üyelerin sırası tek taraflı değiştirilmez. Üye değiştirme/yeni sıra gerçek ürünün ayrı tasarımıdır. |
-| Teslimat sonrası | Fuzul teslim edilen ev/araç üzerinde ipotek veya rehin bulunduğunu söylüyor; kamuya açık SSS kesin bir ihtar, yapılandırma veya tahsilat takvimi vermiyor. | Borç kaydı ve bildirim; sözleşme ve lisanslı ortak varsa yapılandırma/tahsilat. Mülkiyet devri, ödeme ve gerekli ipotek/rehin işlemleri yetkili ortakla eşleştirilir. Sponsor, tahsilatı beklerken diğer üyelerin iade hakkını karşılar. |
-| İyileşme olmazsa | Gerçek dünyadaki alacak ve teminat işlemleri sözleşme ve hukuk yoluyla yürütülür. | Testnet'te ek süre sonunda sponsor katkı yapmazsa iptal/iade. Gerçek üründe alacağın takibi ile iptal/iade birbirinden ayrı yürür; kontrat mülke kendiliğinden el koyamaz. |
+| Alıcı henüz teslim almadı, katkıyı geciktirdi | Tur ek süreye geçer; ödeme gelmezse bu tur iptal edilir | Teslimat tarihi garanti edilmez |
+| Daha önce teslim alan kişi sonraki katkıyı geciktirdi | Yeni tur durur; yalnız o turda yatırılmış katkılar iade edilir | Önceki turdaki açığı kontrat kapatamaz; tahsilat ayrı süreçtir |
+| Satıcı veya belge onayı yetişmedi | Mevcut tur satıcıya aktarılmadan durur ve tur katkıları iade edilir | Gerçek mülkiyet/ödeme senkronizasyonu yoktur |
 
-Bildirim, ek süre ve yeniden yapılandırma sırası **bizim ürün önerimizdir**; Fuzul'ün açıklamadığı iç tahsilat süreci olarak sunulmaz. Teslimat sonrası üyeye süre tanınması, sponsor finansmanı veya başka bir onaylı kaynak olmadan diğer üyelerin alacağını eksiltemez. Sponsorun eksik katkıyı yatırması borcu silmez; gerçek para sürümünde kime borç doğacağı sözleşmeyle belirlenir. Sabit sıralı MVP'de sıradaki üye ek sürede kendi borcunu kapatmazsa onun yerine sponsor ödemesiyle tahsisat yapılmaz; havuz iptal/iade sürecine gider. Sıra atlama veya borçlu üyeyi değiştirme ayrı, herkesin önceden kabul ettiği bir ürün tasarımı gerektirir.
-
-## 3. Ekonomik güvence hesabı
-
-N üye, kişi başına her tur C katkı, N tur ve her tur bir tahsisat varsayılır. r tamamlanmış turdan sonra henüz tahsisat almamış N-r kişinin o ana kadar yatırdığı toplam tutar r × (N-r) × C'dir. Bu kişilerin havuz durursa yatırdıklarını geri alabilmesi için kontrat bakiyesi en az bu tutarı karşılamalıdır. Başlangıçta kilitlenecek sponsor güvencesinin alt sınırı, bu dizinin tepe noktası olan **floor(N²/4) × C**'dir. Bu formül yalnızca bu sabit, eşit katkılı model ve aşağıdaki iade kuralı içindir; gerçek varlık değeri, kur ve hukuki tahsilat riskini kapsamaz.
-
-**Örnek:** Dört üye, her tur 10 birim öder. Sponsor başta 40 birim kilitler. İlk tur sonunda A'nın satıcısına 40 ödenir; B, C ve D'nin önceki toplam 30 birimi için kontratta 40 kalır. İkinci turda herkes öderse B'nin satıcısına 40 ödenir ve henüz teslim almamış C ile D'nin yatırdığı 40 birim kontratta kalır. İlk teslim alan A ikinci turda ödemezse tahsisat kendiliğinden gerçekleşmez: sponsor tamamlayıp iade yeterliliğini koruyabilir veya havuz iptal edilir ve bekleyenler yatırdıklarını kontrattan geri alır. Sponsor bu durumda kayıp yaşayabilir.
-
-**İade hakkı:** İptalde teslimat almamış üyeler bizzat yaptıkları tüm katkıları; teslimat almış üyeler yalnızca henüz tamamlanmamış tur için bizzat yatırdıkları katkıyı geri alır. Tamamlanmış turların katkısı geri alınamaz. Sponsorun üye yerine yaptığı tamamlama üyenin ödemesi veya iade alacağı sayılmaz. Sponsor, tüm üye iadelerinden sonra kalan havuz bakiyesini alır; dışarıdaki alacağını kontrat bu bakiyenin ötesinde garanti etmez. Aynı varlık için havuzlar arası borç/alacak mahsuplaşması yapılmaz.
-
-**Sponsor avansı ayrı kayıttır:** Bir turun eksik katkısını sponsor yeni fon yatırarak tamamladığında ilgili üye için avans/borç kaydı oluşur. Üye avansı geri öderse ödeme sponsora gider ve borç kaydı kapanır; geçmiş turun üye katkısı veya iade hakkı geriye dönük artmaz. Başlangıç güvencesi, tur tamamlaması ve üye katkısı üç ayrı muhasebe kalemidir. `floor(N²/4) × C` başlangıç güvencesi, yalnızca yukarıdaki iade yükümlülüğünün teorik alt sınırıdır; her tahsisat öncesi fiili bakiye kontrolü zorunludur. N büyüdükçe güvence ikinci dereceden artar: 100 üyede 2500 × C, yani bir turun toplam katkısının 25 katı gerekir. Gerçek üründe sponsor sermayesi, zarar fiyatlaması ve grup üst sınırı ayrıca kurulmalıdır; demo için en çok 12 üye kabul edilir.
+Fuzul'ün taksit dondurma ve ipotek/rehin açıklaması kendi lisanslı ürününe ilişkindir. Bizim demo bu sözleşme ve teminatı sunmaz. Gerçek ürün yolunda [lisanslı ortaklık ve AI rolü](legal-ai-path.md) ayrıca değerlendirilir.
 
 ## 4. Kullanıcı akışı
 
 ~~~mermaid
 flowchart TD
-  A[Havuz ve bitiş tarihi oluştur] --> B[Sponsor güvencesini kontrata kilitle]
-  B --> C[Üyeler katılır; sıra ve koşulları herkes onaylar]
-  C --> D{Kuruluş süresi doldu mu?}
-  D -->|Evet, başlamadı| O[İptal ve hak sahiplerine iade]
-  D -->|Hayır, koşullar tamam| S[Herkes havuzu başlatabilir]
-  S --> E[Tur katkıları yatırılır]
-  E --> F{Üye katkıları veya sponsor tamamlamasıyla tur tutarı hazır mı?}
-  F -->|Evet| R{Sıradaki üye kendi katkısını ve eski avanslarını kapattı mı?}
-  R -->|Evet| G[Alıcı satıcıyı ve alım kaydını önerir]
-  G --> AI[AI varsa gerekçeli risk raporu sunar]
-  AI --> H[Bağımsız insan doğrulaması ve imzalar; satıcı varlık alabilir]
-  H --> T{Alım için son süre doldu mu?}
-  T -->|Evet| O
-  T -->|Hayır| I{Ödeme sonrası iade yeterliliği korunuyor mu?}
-  I -->|Evet| J[Tutar doğrudan satıcıya gider]
+  A[Kurucu havuzu açar] --> B[Üyeler katılır ve koşulları onaylar]
+  B --> C{Kuruluş süresinde grup tamam mı?}
+  C -->|Hayır| X[Başlamadan iptal]
+  C -->|Evet| D[Herkes havuzu başlatabilir]
+  D --> E[Her üye kendi tur katkısını yatırır]
+  E --> F{Tüm katkılar hazır mı?}
+  F -->|Hayır, süre doldu| G[Ek süre]
+  G -->|Ödeme geldi| F
+  G -->|Ödeme gelmedi| R[Bu turun katkılarını iade et]
+  F -->|Evet| H[Alıcı demo satıcısını ve belge özetini önerir]
+  H --> I{İnsan onayı ve alım süresi uygun mu?}
+  I -->|Hayır| R
+  I -->|Evet| J[Bu turun tutarı satıcıya gider]
   J --> K{Son tur mu?}
   K -->|Hayır| E
-  K -->|Evet| L[Sponsor kalanı geri alır]
-  F -->|Süre doldu| M[Tur durur, üye bilgilendirilir]
-  R -->|Hayır, ek süre doldu| O
-  M --> P[Ek süre ve teslimat öncesi/sonrası durumu]
-  P --> N{Üye öder veya sponsor açık tutarı tamamlar mı?}
-  N -->|Evet: ödeme kayda geçer| F
-  N -->|Hayır| O
-  I -->|Hayır| O
+  K -->|Evet| L[Havuz tamamlanır]
 ~~~
 
-Demo sırasında alım doğrulaması imzalı test verisidir; gerçek satıcı veya tapu entegrasyonu değildir. AI adımı planlanmıştır, çalışan entegrasyon olarak sunulmaz. Model erişilemezse insan doğrulaması ve kontratın kesin kuralları geçerlidir; AI raporu sözleşmeyi resmîleştirmez. Kontrat fon transferini doğrular, fiziksel mülkiyet devrini kendi başına bilemez. Zaman aşımı zincirde otomatik işlem başlatmaz; süre dolunca herkes iptal/iade çağrısını yapabilir.
+Zaman aşımı kendiliğinden zincir işlemi başlatmaz; süre dolunca herkes ilgili fonksiyonu çağırabilir. Tamamlanmış bir turun ödemesi geri alınamaz.
 
-## 5. Kontrat tasarımı
+## 5. Hedef kontrat ve değişmezler
 
-**Durumlar ve saatler:** Havuz `Filling → Active → Completed / Aborted`; her tur `Collecting → AwaitingPurchase → Settled` geçişlerini kullanır, ödeme veya eski avans kapanışı gecikirse `Collecting → Grace → AwaitingPurchase` olur. Katkı süresi `start_pool` veya önceki `execute_round` ile başlar. Tur hazır değilken katkı son tarihi geçince herkes turu `Grace` yapabilir; ek süre **ilk katkı son tarihinden** hesaplanır, geç `mark_overdue` çağrısıyla uzamaz. Ek süre sonunda eksik ödeme veya sıradaki üyenin açık avansı varsa herkes havuzu iptal edebilir. Tüm katkılar tamamlanıp sıradaki üye kendi katkısını ve eski avanslarını kapattığı işlemde alım için ayrı, sınırlı süre başlar. Satıcı önerisini değiştirmek bu süreyi sıfırlamaz. Bu sürede geçerli satıcı önerisi ve yeterli onay gelmezse herkes iptali tetikleyebilir. Ödeme öncesi bakiye kontrolü başarısızsa tahsisat yapılmaz; iade yalnızca fiili bakiye tüm hakları karşılıyorsa tam olarak ödenebilir. Başlama, katkı, ek süre ve alım son tarihleri oluşturulan koşullarda sabittir; kontrat çağrısı olmadan zincirde kendiliğinden işlem olmaz.
+**Durumlar:** Havuz `Filling → Active → Completed / Aborted`. Tur `Collecting → Grace → AwaitingPurchase → Settled` olabilir. Katkı son tarihi ve ek süre ilk belirlenen zamanlara bağlıdır; gecikmiş çağrı süreyi uzatmaz. Tüm katkılar geldiğinde alım için ayrı süre başlar; satıcı önerisini yenilemek bu süreyi sıfırlamaz.
 
 **P0 fonksiyonlar**
-- create_pool: varlık, katkı, en çok 12 üye, tur/ek süre/alım süreleri, kuruluş son tarihi, sponsor ve demo için izinli test satıcısını belirler. Demo satıcısı creator veya sponsor adresi olamaz. Ekonomik koşullar değiştirilemez; farklı tutar veya süre için yeni havuz gerekir. Tarihler sıralı, süreler pozitiftir.
-- fund_guarantee: sponsor güvencesini ayrı muhasebe kaydına yatırır; yeterli güvence olmadan havuz başlamaz. Sponsor fonu kuruluş süresince kilitlidir.
-- join_pool: üyeyi kaydeder; cüzdan ve varlık uygunluğunu doğrular. Demo satıcısıyla aynı üye adresi kabul edilmez; farklı adresler aynı gerçek kişiye ait olabilir.
-- propose_terms, approve_terms: creator sırayı ve doğrulayıcı adreslerini önerir; tüm üyeler ve sponsor, ekonomik koşulları da içeren aynı sürümü onaylar. Sıra veya doğrulayıcılar değişirse bütün onaylar silinir. Doğrulayıcı adresleri creator, sponsor, üyeler ve birbirinden farklıdır; demo için en az 2/3 eşik kullanılır. Adres ayrılığı gerçek kişi/kurum bağımsızlığını kanıtlamaz.
-- start_pool: tüm koltuklar dolu, aynı koşul sürümü herkesçe onaylı ve güvence tam ise **herkes** havuzu başlatabilir; creator çevrim dışı kalsa da fon kilitli kalmaz.
-- cancel_unstarted_pool: kuruluş son tarihi geçip havuz başlamadıysa herkes iptal edebilir; sponsor kilitlediği tutarın tamamını alır. Bu aşamada üyeden tur katkısı alınmaz.
-- deposit, cure_payment: üyenin mevcut tur katkısını bir kez alır; ek sürede ödeme aynı borcu kapatır. Sponsor tarafından karşılanmış katkı üyenin kendi katkısı sayılmaz.
-- top_up, repay_advance: sponsor eksik katkıyı **yeni fonla** ilgili üye ve tur adına tamamlar; başlangıç güvencesi buraya aktarılmaz. Cari turda sıradaki üye adına top_up kabul edilmez. Üyenin sponsora geri ödemesi eski avansı kapatır, fakat geçmiş turu ikinci kez finanse etmez veya yeni iade hakkı oluşturmaz. Sıradaki üye kendi katkısı ve eski avansları açıkken tahsisat alamaz.
-- propose_purchase: yalnızca sıradaki üye, alım süresi içinde satıcı adresi, varlık/tutar ve zincir dışı belge özetini sürümlü kaydeder. Demo satıcısı havuzun izinli test satıcısı olmalıdır. Değişiklik önceki tüm alım onaylarını siler.
-- approve_purchase: onay, havuz + tur + alıcı + satıcı + varlık + tutar + belge özeti + öneri sürümüne bağlanır; en az 2/3 doğrulayıcı gerekir. Demo satıcısı önceden belirlenmiş ayrı cüzdandır; gerçek satıcı kimliği ve danışıklı işlem riski için yetkili dış doğrulama gerekir.
-- AI risk incelemesi (zincir dışı, planlanan): mevcut koşul sürümü ve demo alım belgesi için gerekçeli uyarı üretir. İnsan doğrulayıcı AI çıktısını görebilir; AI adresi doğrulayıcı eşiğine dahil edilmez. Gerekirse rapor sürümünün özeti kayda bağlanır; modelin serbest metni `execute_round` önkoşulu değildir. Gerçek müşteri verileri bu akışa girmez.
-- execute_round: tüm katkılar üye veya kayıtlı sponsor avansıyla tam, sıradaki üye **kendi** cari katkısını ödemiş ve eski avanslarını kapatmış, onaylar geçerli, satıcı varlığı alabilir ve ödeme sonrası tüm iade hakları karşılanabilir ise yalnızca o turun tutarını kayıtlı satıcıya yollar. Herkes çağırabilir; herhangi bir önkoşul yoksa transfer yapılmaz.
-- mark_overdue, abort_pool: turun hazır olmaması için ek süreyi işaretler. Ek sürenin veya alım süresinin sonunda koşullar sağlanmadıysa herkes iptali tetikleyebilir. Bakiye değişmezi başarısızsa fon çıkışı durur ve durum güvenlik olayı olarak görünür; eksik bakiyeyle tam iade vaadi yapılamaz. Bekleme yalnızca sözleşmede belirli sürelerle sınırlıdır.
-- claim_refund, claim_sponsor_remainder: iptal veya tamamlanma durumuna göre hak sahibine iade. İki kez talep engellenir.
-- get_pool, get_round, get_member_status, get_refund_claim, get_sponsor_advance: okuma.
+- `create_pool`: test varlığı, katkı, üye sınırı, süreler, kuruluş son tarihi ve izinli demo satıcısı. Ekonomik koşullar oluşturulduktan sonra değişmez.
+- `join_pool`, `propose_terms`, `approve_terms`, `start_pool`, `cancel_unstarted_pool`: üyelik, sürümlü ortak onay ve kuruluş son tarihi. Tüm üyeler onaylamadan başlanmaz; kurucu çevrim dışı olsa da koşullar tamamsa herkes başlatabilir.
+- `deposit`, `cure_payment`: yalnız ilgili üye kendi tur katkısını bir kez yatırır. Başkası adına ödeme veya avans modeli yoktur.
+- `propose_purchase`, `approve_purchase`: alıcı izinli demo satıcısını, tutarı ve belge özetini önerir; onaylar havuz/tur/alıcı/satıcı/tutar/belge/sürümüne bağlıdır. Yeni öneri eski onayları siler.
+- `execute_round`: bütün üye katkıları, geçerli doğrulayıcı eşiği, alım süresi ve satıcının varlığı alabilmesi doğrulanır; yalnız o turda toplanan tutar satıcıya çıkar.
+- `mark_overdue`, `abort_pool`, `claim_refund`: ek süre veya alım süresi dolunca havuz sonlandırılabilir. İade hakkı yalnız henüz ödenmemiş **mevcut turun** bizzat yatırılmış katkısıdır; aynı iade iki kez alınamaz.
+- `get_pool`, `get_round`, `get_member_status`: salt okunur durum.
 
 **Değişmezler**
-- Hiçbir fonksiyon havuzun toplam kontrat bakiyesini doğrudan tahsisat tutarı saymaz.
-- Her transfer belirli pool_id, tur ve hak sahibi ile ilişkilidir; başka havuzun varlığı kullanılamaz.
-- Her tahsisat sonrasında kontratın o havuza atanan bakiyesi, teslimat almamış üyelerin tüm katkıları ile teslimat almış üyelerin henüz tamamlanmamış tur katkılarından doğan iade hakları toplamından az olamaz; aynı katkı iki kez sayılmaz.
-- Üye katkısı, sponsor avansı ve başlangıç güvencesi ayrı kayıtlardır. Sponsor avansı üyenin iade hesabına katılmaz; aynı tur ödemesi iki kaynakla iki kez tahsil edilmez.
-- Sıradaki üyenin cari katkısı kendi cüzdanından gelmiş ve eski sponsor avansları kapatılmış olmalıdır; aksi halde o tur satıcısına ödeme yoktur.
-- Onaylar yalnızca geçerli koşul/alım sürümü için sayılır. Satıcı değişince önceki imzalar kullanılamaz. Satıcı varlığın transferini kabul edebilmelidir; Stellar klasik hesapta gerekli trustline/izin yoksa ödeme durur.
-- Sponsor güvencesi, üye alacakları kapatılmadan çekilemez.
-- Aynı üye aynı turda ikinci kez ödeme veya aynı iade için ikinci kez talep yapamaz.
-- Kuruluş, başlama, katkı, ek süre ve alım son tarihleri zincirde saklanır; fon veya iade hakkı dururken depolama TTL'sinin yenilenmesi ve arşivden geri getirme akışı tasarlanıp test edilir. İptal ve iade süre dolunca herkesçe tetiklenebilir.
-- Varlık tutarları tamsayı en küçük birimle saklanır; arayüzde string/BigInt kullanılır.
+- Her havuz ve tur ayrı muhasebeleştirilir; başka havuzun varlığı kullanılamaz. Kontratın toplam bakiyesi bir turun tahsisat tutarı sayılmaz.
+- Bir tur satıcıya ödenmeden önce gereken tutar `N × C` ve bütün üyeler `paid` olarak kayıtlı olmalıdır. Transfer ve tur durum değişimi atomiktir.
+- İptalde mevcut turdaki üyelerin iade toplamı, o turun kontratta tuttuğu bakiyeye eşittir. Önceki tamamlanmış turlara iade hakkı yazılmaz.
+- Kurucuya serbest çekim, yöneticinin tek taraflı sıra/satıcı değiştirme veya tek taraflı kod yükseltme yetkisi verilmez. Onaylar yalnız geçerli sürüm için sayılır.
+- Kuruluş, katkı, ek süre, alım ve iade erişimi için Soroban TTL/arşiv davranışı tasarlanıp test edilir. Tutarlar en küçük birimde tamsayı olarak tutulur.
 
-**Güvenlik:** Yetkilendirme, taşma, yeniden giriş/çapraz kontrat çağrısı, çok havuzlu muhasebe, kötü niyetli satıcı, hatalı doğrulama, eksik ödeme, iade yarışı ve TTL test edilir. Özel durum testleri: grup dolmazken sponsor iadesi; creator yokken başlatma; koşul/satıcı değişince onayların sıfırlanması; doğrulayıcı adres çakışması; sponsorca tamamlanmış sıradaki üyenin ödeme alamaması; açık avans; satıcı veya onay yokken alım süresi aşımı; satıcının varlığı alamaması; sponsor avansının üye iadesine eklenmemesi; havuzlar arası bakiye sızıntısı. Gerçek fonlardan önce bağımsız kontrat denetimi gerekir.
+**Anlamlı testler:** İlk ve son turun tam akışı; daha önce tahsisat alan üyenin sonraki turda ödememesi; mevcut tur katkılarının tam iadesi ve geçmiş turun iade edilmemesi; aynı turda çift ödeme/iade; farklı havuzların bakiyeleri; eksik üyelik veya onay; satıcı değişince onayın sıfırlanması; satıcının trustline/izin eksikliği; süre aşımı; kurucu çevrim dışıyken başlatma; TTL. Kontrat henüz bulunmadığından bu testler yapılmış sayılmaz.
 
-## 6. Zincir dışı parçalar ve mevzuat
+## 6. Zincir dışı parçalar ve hukuki sınır
 
-- **Anchor demosu:** Seçilen kapsamda gerçek banka/TRY yatırma, çekme veya token ihraç entegrasyonu yapılmaz. Mevcut arayüz, para tutarı veya kişisel bilgi almadan giriş/çıkış adımlarını yerel simülasyon olarak gösterir; ödeme talimatı, cüzdan imzası ve zincir işlemi üretmez. Her adım “Simülasyon” diye etiketlenir ve kullanılabilir bakiye oluşturulmadığı açıkça söylenir. Demo, hackathon DOC'unun gerçek TL şartını karşılamış sayılmaz. Gerçek sağlayıcıya bağlanma ayrı hukuki ve teknik karar gerektirir.
-- **Varlık:** Testnet havuz senaryosu yalnızca test varlığı kullanır. Gelecekte gerçek anchor düşünülürse varlık, ihraççı, geri ödeme hakkı, freeze/clawback yetkileri ve kur riski ayrıca gösterilir. TL olmayan varlıkta taksit ile TL satın alma gücü aynı şey değildir.
-- **Gerçek ev/araç:** Satıcı kimliği, fatura/sözleşme, tapu/ruhsat ve ipotek/rehin işlemlerinin ödeme ile güvenli biçimde eşleşmesi zincir dışı doğrulayıcı veya lisanslı ortak gerektirir. Doğrulayıcı yanlış bilgi verirse kontratın doğru ödeme yapması tek başına kaybı önlemez. Kontrat, ihtar veya taşınmaz/araç üzerindeki hukuki tahsilatı yürütemez.
-- **Hukuki model:** [Ayrıntılı hukuki yol](legal-ai-path.md): lisanslı şirket müşteriyle usulüne uygun elektronik sözleşme kurar; ayrılmış TL fon havuzu ve satıcıya banka ödemesi uygulanır. Cüzdan imzası veya AI incelemesi bu sözleşmeye resmiyet ya da faaliyet izni vermez. Dış hizmet, müşteri hakları, tahsisat zamanları, sponsor güvencesi, ipotek/rehin, KYC/AML ve ödeme hizmetleri uzmanla ve yetkili kurumlarla netleştirilir. Testnet demosu faaliyet izni anlamına gelmez. Katılımcıdan tasarruf döneminde nakit teminat alma fikri ayrıca değerlendirilmeden geri getirilmeyecek.
-- **Çekiliş:** MVP'de yok. Gelecekte eklenirse doğrulanabilir rastgelelik, katılım ve iptal kuralları ayrıca tasarlanacak.
+- **Anchor:** Arayüzde yalnız simülasyon var; banka, TRY varlığı, kullanılabilir bakiye veya cüzdan imzası yok. Gerçek sağlayıcı/izinler ayrı doğrulanmadan hackathon'un TL şartı karşılandı denmez.
+- **Ev/araç:** Demo satıcısı test cüzdanıdır. Tapu, ruhsat, satıcı kimliği, rehin/ipotek ve alacak tahsilatı kontratla yapılmaz. Gerçek ürün belirli teslimat vaadi sunacaksa sözleşme tarafı, fon ve ödeme akışı için lisanslı yapı ve yetkili süreç gerekir.
+- **AI:** Yalnız yardımcı risk raporu; insan incelemesi ve kesin kontrat kuralları geçerlidir. Modelin çıktısı sözleşmeyi resmîleştirmez.
+- **Kullanıcı verisi:** Gerçek müşteri verisi Testnet demo belgesine veya zincire konmaz.
 
-## 7. Hackathon demosu ve teslim ölçütü
+## 7. Demo ve teslim durumu
 
-1. Dört üye ve bir demo sponsoru Testnet cüzdanlarıyla katılır; örnek katkı 10 birim, sponsor güvencesi 40 birim. Üyeler ve sponsor aynı sıra/koşul sürümünü onaylar; herkes başlatabilir.
-2. Arayüz, havuz bakiyesini, sponsor güvencesini, bekleyen üyelerin iade hakkını, sırayı ve tur son tarihini ayrı gösterir.
-3. TRY → test varlığı anchor yolculuğu hazırlanırsa tüm tutarlar ve adımlar simülasyon olarak işaretlenir; gerçekte banka, anchor ve cüzdan bakiyesi değişmez. Hackathon DOC'unun gerçek TL ve kullanılabilir bakiye ölçütü karşılanmadığı açıkça belirtilir.
-4. İlk turda herkes öder; önceden belirlenmiş ve varlığı alabilen demo satıcısına 40 birim gider. Zincir işlemi ve satıcı adresi gösterilir.
-5. İkinci turda daha önce tahsisat alan A ödemez; ödeme süresi dolunca tur durur, gecikme ve ek süre gösterilir. A ödemez ve sponsor tamamlamazsa ek süre sonunda iptal tetiklenir; teslimat almamış üyeler katkılarını geri alır ve sponsorun zararı görünür.
-6. Pozitif ikinci senaryoda A ek sürede bizzat öder **veya** sponsor A'nın açığını yeni fonla kapatır; B kendi katkısını ödemişse ve iade yeterliliği korunuyorsa B'nin turu tamamlanır. Sponsorun A'ya yaptığı avans A'nın iade hakkı sayılmaz. Ayrı negatif senaryoda sıradaki alıcı B kendi katkısını ödemez; sponsor B adına top_up yapamaz ve B'nin satıcısına ödeme açılmaz.
-7. Testler: normal tur, farklı havuzların ayrılığı, dolmayan grupta sponsor iadesi, creator yokken başlama, sıra/koşul onayı, alım onayı sıfırlama, sıradaki borçlu üyenin bloklanması, eksik trustline/izin, alım süresi aşımı, avans/üye iadesi ayrımı, yetersiz güvence, çift talep ve muhasebe değişmezi.
-8. Testnet contract ID, kurulum adımları, demo URL, gerçek/simüle edilen parçaların sınırları ve sunum hazırlanır.
-9. AI denetçisi yetişirse tutarsız demo alımını gerekçeli olarak işaretleyen gerçek model çalışması ve insan doğrulayıcı kararı gösterilir; yetişmezse özellik planlanan olarak sunulur. AI bir satıcıya ödemeyi kendi başına açamaz ve kontrat fonksiyonu yerine geçmez.
-
-**Arayüz eşleştirmesi (P0):** Kontrat ABI'si hazır olunca frontend durumları havuz ve tur olarak ayrılacak; `Grace` ve `AwaitingPurchase`, `cure_payment`, kuruluş iptali, koşul/onay sürümü, alım son tarihi, alım önerisi yenileme, sponsor avansı ile üyenin kendi katkısı ve sıradaki üyenin ödeme engeli arayüzde gösterilecek. Mevcut arayüzde bu alanların bulunması kontrat kuralı yerine geçmez; kontrat ve istemci aynı durum geçişlerini kullanana kadar demo tamamlanmış sayılmaz.
-
-**Öncelik:** Mainnet tanıtımında işlemleri kapalı ve kapsamı açık tut; Testnet için önce fon muhasebesi ve iptal/iade, ardından demo satıcı ödemesi ve cüzdan uyumunu tamamla. Anchor simülasyonu ayrı ve gerçek bakiye üretmeyen bir anlatım olarak kalır. AI denetçisi yalnızca çalıştırılıp kanıtlandığında demo özelliği sayılır. Gerçek para havuzu veya ev/araç teslim vaadi yapılmaz.
+1. Dört test cüzdanı; her tur 10 test birimi. Tüm üyeler sırayı ve kuralları onaylar.
+2. İlk tur dört katkıyla 40 birim demo satıcısına gider; işlem bağımsız ağ gezgininde gösterilir.
+3. İkinci turda ilk teslim alan üye ödemez. Ek süre sonunda yalnız ikinci turda yatırılan katkılar iade edilir; ilk tur katkılarının geri alınamadığı açık gösterilir.
+4. Alternatif akışta geciken üye ek sürede kendi payını yatırır; ikinci tur ancak bütün katkılar tamamlanınca ilerler.
+5. Kontrat ID, işlem bağlantıları ve yukarıdaki testler olmadan zincir üstü havuz demosu tamamlandı denmez. Bugünkü Mainnet tanıtımı işlemsizdir.
 
 ## 8. Açık kararlar
 
-1. Sponsor kim olacak ve gerçek üründe kaybı hangi bilanço taşıyacak?
-2. Satıcı ve mülkiyet doğrulamasını hangi yetkili taraf yapacak? Sahte satıcı ve danışıklı işlem nasıl engellenecek?
-3. Seçilen anchor gerçek TL'yi hangi ağda, hangi varlık ve minimum tutarla destekliyor?
-4. Düzenlenmiş tasarruf finansmanı kapsamındaki gerçek ürün için hangi lisanslı şirket sözleşme tarafı olacak? AI ve teknik sağlayıcının görevi Yönetmelik md. 32 ile nasıl uyumlu tutulacak?
-5. Havuz başına ayrı kontrat mı kullanılacak? Tek kontrat, ayrı muhasebeye rağmen ortak kod riski taşır.
-6. Üyelerin para birimi TL ise token/TL kur değişimi ve satın alma gücü riski kime ait?
-7. Elektronik sözleşme, uzaktan kimlik, müşteri hakları ve belge arşivi hangi yetkili kurumun sistemlerinde yürütülecek? AI incelemesi ve insan kararı nasıl kayıt altına alınacak?
+1. Grup içindeki gerçek alacak ve uyuşmazlıklar hangi sözleşme/kanalda yürütülecek? Uygulama bunu garanti etmeyecek.
+2. Gerçek satıcı ve mülkiyet doğrulamasını hangi yetkili taraf yapacak?
+3. Seçilen anchor gerçek TRY'yi hangi ağ, varlık ve koşullarla destekliyor?
+4. Gerçek ev/araç finansmanı istenirse hangi lisanslı şirket sözleşme ve fon sorumlusu olacak?
+5. Havuz başına ayrı kontrat mı, tek kontratta ayrık muhasebe mi kullanılacak?
+6. Token/TL kuru ve satın alma gücü riski kullanıcıya nasıl anlatılacak?
 
-## 9. Araştırma kaynakları
+## Kaynaklar
 
-- Fuzul sistemin işleyişi: https://www.fuzulev.com.tr/nasil-calisir
-- Fuzul SSS (teslimat sonrası taksit, grup güvencesi, ipotek/rehin): https://www.fuzulev.com.tr/merak-edilenler
-- BDDK tasarruf finansman SSS (gecikme, tahsisat erteleme, fon ayrımı ve müşteri hakları): https://www.bddk.org.tr/Sss/Liste/117
-- BDDK lisanslı şirket listesi: https://www.bddk.org.tr/Kurulus/Liste/89
-- 6361 sayılı Kanun, 39/A ve 39/B: https://www.mevzuat.gov.tr/mevzuat?MevzuatNo=6361&MevzuatTur=1&MevzuatTertip=5
-- Tasarruf Finansman Yönetmeliği, 17, 21-23 ve 32: https://www.mevzuat.gov.tr/mevzuat?MevzuatNo=38500&MevzuatTur=7&MevzuatTertip=5
-- BDDK uzaktan kimlik ve elektronik sözleşme yönetmeliği, 12-13: https://www.mevzuat.gov.tr/mevzuat?MevzuatNo=39368&MevzuatTur=7&MevzuatTertip=5
-- Stellar Asset Contract ve ihraççı yetkileri: https://developers.stellar.org/docs/tokens/stellar-asset-contract
-- Stellar varlık trustline doğrulama: https://developers.stellar.org/docs/build/guides/basics/verify-trustlines
+- [Eminevim Merak Edilenler](https://kiosk.eminevim.com.tr/merak-edilenler)
+- [Fuzul Merak Edilenler](https://www.fuzulev.com.tr/merak-edilenler)
+- [BDDK Tasarruf Finansman SSS](https://www.bddk.org.tr/Sss/Liste/117)
+- [6361 sayılı Kanun](https://www.mevzuat.gov.tr/mevzuat?MevzuatNo=6361&MevzuatTur=1&MevzuatTertip=5)
+- [Stellar Asset Contract](https://developers.stellar.org/docs/tokens/stellar-asset-contract)
 
-Kaynaklar 19 Eylül 2026 tarihinde incelendi. Bu belge ürün ve teknik planıdır; hukuki görüş veya gerçek para güvencesi değildir.
+Kaynaklar 19 Eylül 2026 tarihinde yeniden incelendi. Bu belge ürün/teknik planıdır; hukuki görüş veya gerçek para güvencesi değildir.

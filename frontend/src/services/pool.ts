@@ -35,7 +35,6 @@ interface PoolMethods {
   create_pool: Method<
     {
       creator: string
-      sponsor: string
       token: string
       contribution_amount: bigint
       member_limit: number
@@ -47,7 +46,6 @@ interface PoolMethods {
     },
     number
   >
-  fund_guarantee: Method<{ pool_id: number; sponsor: string; amount: bigint }, null>
   join_pool: Method<{ pool_id: number; member: string }, null>
   propose_terms: Method<
     { pool_id: number; creator: string; recipient_order: string[]; verifiers: string[] },
@@ -58,8 +56,6 @@ interface PoolMethods {
   cancel_unstarted_pool: Method<{ pool_id: number }, null>
   deposit: Method<{ pool_id: number; member: string }, null>
   cure_payment: Method<{ pool_id: number; member: string }, null>
-  top_up: Method<{ pool_id: number; sponsor: string; member: string }, null>
-  repay_advance: Method<{ pool_id: number; member: string }, null>
   propose_purchase: Method<
     {
       pool_id: number
@@ -79,11 +75,9 @@ interface PoolMethods {
   mark_overdue: Method<{ pool_id: number }, null>
   abort_pool: Method<{ pool_id: number }, null>
   claim_refund: Method<{ pool_id: number; member: string }, null>
-  claim_sponsor_remainder: Method<{ pool_id: number; sponsor: string }, null>
   get_pool: Method<{ pool_id: number }, unknown>
   get_round: Method<{ pool_id: number; round: number }, unknown>
   get_member_status: Method<{ pool_id: number; member: string }, unknown>
-  get_sponsor_advance: Method<{ pool_id: number; member: string }, unknown>
 }
 
 type PoolClient = contract.Client & PoolMethods
@@ -100,7 +94,6 @@ export interface Signer {
 /** Arayüzün çağırdığı kontrat fonksiyonları (docs/plan.md bölüm 5). */
 const EXPECTED_METHODS = [
   'create_pool',
-  'fund_guarantee',
   'join_pool',
   'propose_terms',
   'approve_terms',
@@ -108,19 +101,15 @@ const EXPECTED_METHODS = [
   'cancel_unstarted_pool',
   'deposit',
   'cure_payment',
-  'top_up',
-  'repay_advance',
   'propose_purchase',
   'approve_purchase',
   'execute_round',
   'mark_overdue',
   'abort_pool',
   'claim_refund',
-  'claim_sponsor_remainder',
   'get_pool',
   'get_round',
   'get_member_status',
-  'get_sponsor_advance',
 ] as const
 
 export class ContractInterfaceError extends Error {
@@ -197,7 +186,6 @@ function mapPool(id: number, raw: unknown): PoolInfo {
   return {
     id,
     creator: String(r.creator),
-    sponsor: String(r.sponsor),
     token: String(r.token),
     contributionAmount: toBigInt(r.contribution_amount),
     memberLimit: toNumber(r.member_limit),
@@ -214,8 +202,6 @@ function mapPool(id: number, raw: unknown): PoolInfo {
     purchaseDuration: toNumber(r.purchase_duration),
     setupDeadline: toNumber(r.setup_deadline),
     demoSeller: String(r.demo_seller),
-    requiredGuarantee: toBigInt(r.required_guarantee),
-    guaranteeDeposited: toBigInt(r.guarantee_deposited),
   }
 }
 
@@ -232,7 +218,6 @@ function mapRound(raw: unknown): RoundInfo {
     graceDeadline: toNumber(r.grace_deadline),
     purchaseDeadline: toNumber(r.purchase_deadline),
     paid: toStringList(r.paid),
-    sponsorAdvanced: toStringList(r.sponsor_advanced),
     pot: toBigInt(r.pot),
     seller: toOptionalString(r.seller),
     docHash: toHexOrNull(r.doc_hash),
@@ -241,13 +226,12 @@ function mapRound(raw: unknown): RoundInfo {
   }
 }
 
-function mapMember(address: string, raw: unknown, advance: unknown): MemberStatus {
+function mapMember(address: string, raw: unknown): MemberStatus {
   const r = record(raw, 'üye')
   return {
     address,
     refundable: toBigInt(r.refundable),
     received: Boolean(r.received),
-    advanceOwed: toBigInt(advance),
   }
 }
 
@@ -267,11 +251,8 @@ export async function getRound(poolId: number, round: number): Promise<RoundInfo
 
 export async function getMemberStatus(poolId: number, member: string): Promise<MemberStatus> {
   const c = await getClient()
-  const [status, advance] = await Promise.all([
-    c.get_member_status({ pool_id: poolId, member }),
-    c.get_sponsor_advance({ pool_id: poolId, member }),
-  ])
-  return mapMember(member, status.result, advance.result)
+  const status = await c.get_member_status({ pool_id: poolId, member })
+  return mapMember(member, status.result)
 }
 
 // --- Yazma (cüzdan imzası gerekir) -------------------------------------------------------
@@ -279,7 +260,6 @@ export async function getMemberStatus(poolId: number, member: string): Promise<M
 export async function createPool(
   signer: Signer,
   params: {
-    sponsor: string
     token: string
     contributionAmount: bigint
     memberLimit: number
@@ -294,7 +274,6 @@ export async function createPool(
   const c = await getClient(signer)
   const tx = await c.create_pool({
     creator: signer.address,
-    sponsor: params.sponsor,
     token: params.token,
     contribution_amount: params.contributionAmount,
     member_limit: params.memberLimit,
@@ -306,12 +285,6 @@ export async function createPool(
   })
   const sent = (await tx.signAndSend()) as SentTx
   return { hash: hashOf(sent), poolId: sent.result === undefined ? null : Number(sent.result) }
-}
-
-/** Sponsor güvencesini kontrata kilitler. Yeterli güvence olmadan havuz başlamaz. */
-export async function fundGuarantee(signer: Signer, poolId: number, amount: bigint) {
-  const c = await getClient(signer)
-  return send(await c.fund_guarantee({ pool_id: poolId, sponsor: signer.address, amount }))
 }
 
 export async function joinPool(signer: Signer, poolId: number) {
@@ -337,7 +310,7 @@ export async function proposeTerms(
   )
 }
 
-/** Üye veya sponsor, geçerli koşul sürümünü cüzdanıyla onaylar. */
+/** Üye, geçerli koşul sürümünü cüzdanıyla onaylar. */
 export async function approveTerms(signer: Signer, poolId: number, version: number) {
   const c = await getClient(signer)
   return send(await c.approve_terms({ pool_id: poolId, approver: signer.address, version }))
@@ -349,7 +322,7 @@ export async function startPool(signer: Signer, poolId: number) {
   return send(await c.start_pool({ pool_id: poolId }))
 }
 
-/** Kuruluş son tarihi geçip havuz başlamadıysa herkes iptal edebilir; sponsor güvencesini geri alır. */
+/** Kuruluş son tarihi geçip havuz başlamadıysa herkes iptal edebilir. */
 export async function cancelUnstartedPool(signer: Signer, poolId: number) {
   const c = await getClient(signer)
   return send(await c.cancel_unstarted_pool({ pool_id: poolId }))
@@ -364,18 +337,6 @@ export async function deposit(signer: Signer, poolId: number) {
 export async function curePayment(signer: Signer, poolId: number) {
   const c = await getClient(signer)
   return send(await c.cure_payment({ pool_id: poolId, member: signer.address }))
-}
-
-/** Sponsor, eksik üyenin katkısını YENİ fonla tamamlar (avans olarak kaydedilir). */
-export async function topUp(signer: Signer, poolId: number, member: string) {
-  const c = await getClient(signer)
-  return send(await c.top_up({ pool_id: poolId, sponsor: signer.address, member }))
-}
-
-/** Üye, sponsordan aldığı avansı sponsora geri öder. */
-export async function repayAdvance(signer: Signer, poolId: number) {
-  const c = await getClient(signer)
-  return send(await c.repay_advance({ pool_id: poolId, member: signer.address }))
 }
 
 /**
@@ -444,9 +405,4 @@ export async function abortPool(signer: Signer, poolId: number) {
 export async function claimRefund(signer: Signer, poolId: number) {
   const c = await getClient(signer)
   return send(await c.claim_refund({ pool_id: poolId, member: signer.address }))
-}
-
-export async function claimSponsorRemainder(signer: Signer, poolId: number) {
-  const c = await getClient(signer)
-  return send(await c.claim_sponsor_remainder({ pool_id: poolId, sponsor: signer.address }))
 }

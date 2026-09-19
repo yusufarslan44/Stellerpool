@@ -2,28 +2,12 @@
 import { computed, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import AppIcon from '@/components/AppIcon.vue'
+import Illo from '@/components/Illo.vue'
+import Scene3D from '@/components/Scene3D.vue'
 import { formatStroops, parseAmount, toPlainAmount } from '@/lib/format'
-import { requiredGuarantee } from '@/lib/guarantee'
+import { contributionFor, GOALS } from '@/lib/goals'
+import type { Goal } from '@/lib/goals'
 import { poolAsset, poolContractId } from '@/lib/stellar'
-import type { IconName } from '@/types/icons'
-
-interface Goal {
-  id: string
-  label: string
-  icon: IconName
-  /** Örnek hedef tutar (bir turda satıcıya giden). Yalnızca başlangıç değeridir. */
-  pot: string
-  members: number
-}
-
-// Kategoriler yalnızca arayüz etiketidir; kontrat için hepsi aynıdır.
-const GOALS: Goal[] = [
-  { id: 'home', label: 'Ev', icon: 'home', pot: '60000', members: 12 },
-  { id: 'car', label: 'Araç', icon: 'car', pot: '20000', members: 6 },
-  { id: 'work', label: 'İş yeri', icon: 'briefcase', pot: '30000', members: 8 },
-  { id: 'other', label: 'Diğer', icon: 'layers', pot: '6000', members: 6 },
-  { id: 'demo', label: 'Demo', icon: 'shield', pot: '40', members: 4 },
-]
 
 const token = poolAsset.getCode()
 const goal = ref('demo')
@@ -46,18 +30,12 @@ const potStroops = computed(() => {
 })
 
 // Tur başına katkı: hedef tutar / üye sayısı, 0,01 birime aşağı yuvarlanır.
-const contribution = computed(() => {
-  if (potStroops.value === null) return null
-  const c = (potStroops.value / BigInt(members.value) / 100_000n) * 100_000n
-  return c > 0n ? c : null
-})
+const contribution = computed(() =>
+  potStroops.value === null ? null : contributionFor(potStroops.value, members.value),
+)
 
 const effectivePot = computed(() =>
   contribution.value === null ? null : contribution.value * BigInt(members.value),
-)
-
-const guarantee = computed(() =>
-  contribution.value === null ? null : requiredGuarantee(members.value, contribution.value),
 )
 
 const createLink = computed(() => ({
@@ -70,93 +48,110 @@ const createLink = computed(() => ({
 </script>
 
 <template>
-  <section class="glass rounded-bento p-5 text-slate-900 sm:p-6" aria-labelledby="hesap-araci">
-    <h2 id="hesap-araci" class="text-lg font-semibold">Planını hesapla</h2>
-    <p class="mt-0.5 text-sm text-slate-600">Testnet senaryosu için örnek katkı ve sponsor güvencesini hesapla.</p>
+  <section class="card overflow-hidden !p-0" aria-labelledby="hesap-araci">
+    <div class="grid lg:grid-cols-[1.1fr_1fr]">
+      <div class="space-y-6 p-5 sm:p-8">
+        <div>
+          <h3 id="hesap-araci" class="text-2xl font-extrabold">Planını hesapla</h3>
+          <p class="mt-1 text-sm text-stone-600">Testnet senaryosu için örnek katkı ve tur tutarı.</p>
+        </div>
 
-    <div class="mt-4 flex flex-wrap gap-2" role="group" aria-label="Amaç">
-      <button
-        v-for="g in GOALS"
-        :key="g.id"
-        type="button"
-        class="inline-flex min-h-10 cursor-pointer items-center gap-1.5 rounded-full border px-3.5 text-sm font-medium transition-colors duration-200"
-        :class="
-          goal === g.id
-            ? 'border-indigo-600 bg-indigo-600 text-white'
-            : 'border-slate-300 bg-white text-slate-700 hover:border-slate-400'
-        "
-        :aria-pressed="goal === g.id"
-        @click="pick(g)"
-      >
-        <AppIcon :name="g.icon" class="!size-4" />
-        {{ g.label }}
-      </button>
+        <div>
+          <p class="label" id="calc-goal">1. Ne için biriktiriyorsun?</p>
+          <div class="flex flex-wrap gap-2" role="group" aria-labelledby="calc-goal">
+            <button
+              v-for="g in GOALS"
+              :key="g.id"
+              type="button"
+              class="inline-flex min-h-11 cursor-pointer items-center gap-1.5 rounded-full border-2 px-4 text-sm font-semibold transition-[background-color,border-color,transform] duration-200 active:scale-95"
+              :class="
+                goal === g.id
+                  ? 'border-brand-600 bg-brand-600 text-white'
+                  : 'border-stone-200 bg-white text-stone-700 hover:border-brand-300'
+              "
+              :aria-pressed="goal === g.id"
+              @click="pick(g)"
+            >
+              <Illo :name="g.icon" :size="22" />
+              {{ g.label }}
+            </button>
+          </div>
+        </div>
+
+        <div class="grid gap-5 sm:grid-cols-2">
+          <div>
+            <label class="label" for="calc-pot">2. Her turda alınacak tutar ({{ token }})</label>
+            <input
+              id="calc-pot"
+              v-model="pot"
+              class="input text-lg font-bold"
+              type="text"
+              inputmode="decimal"
+              autocomplete="off"
+            />
+          </div>
+          <div>
+            <label class="label" for="calc-members">3. Kaç kişi? <span class="text-brand-700">{{ members }}</span></label>
+            <input
+              id="calc-members"
+              v-model.number="members"
+              class="h-11 w-full cursor-pointer accent-brand-600"
+              type="range"
+              min="2"
+              max="12"
+              step="1"
+            />
+            <div class="flex justify-between text-xs text-stone-500" aria-hidden="true"><span>2</span><span>12</span></div>
+          </div>
+        </div>
+
+        <dl v-if="contribution !== null && effectivePot !== null" class="grid grid-cols-2 gap-3">
+          <div class="rounded-2xl bg-sand/70 p-3.5">
+            <dt class="text-xs text-stone-600">Tur başına katkın</dt>
+            <dd class="mt-0.5 font-display text-xl font-extrabold tabular-nums">{{ formatStroops(contribution) }}</dd>
+          </div>
+          <div class="rounded-2xl bg-sand/70 p-3.5">
+            <dt class="text-xs text-stone-600">Toplam tur</dt>
+            <dd class="mt-0.5 font-display text-xl font-extrabold tabular-nums">{{ members }}</dd>
+          </div>
+          <div class="rounded-2xl bg-brand-50 p-3.5 ring-1 ring-brand-100">
+            <dt class="text-xs text-brand-800">Örnek tur tutarı</dt>
+            <dd class="mt-0.5 font-display text-xl font-extrabold tabular-nums text-brand-900">
+              {{ formatStroops(effectivePot) }}
+            </dd>
+          </div>
+          <div class="rounded-2xl bg-sage-50 p-3.5 ring-1 ring-sage-100">
+            <dt class="text-xs text-sage-800">Ödeme kuralı</dt>
+            <dd class="mt-0.5 text-sm font-bold text-sage-900">Tüm katkılar gelince</dd>
+          </div>
+        </dl>
+        <p v-else class="rounded-2xl bg-gold-100 p-3 text-sm text-amber-950" role="status">Geçerli bir tutar gir.</p>
+
+        <div>
+          <RouterLink
+            :to="createLink"
+            class="btn-primary btn-lg w-full sm:w-auto"
+            :class="contribution === null ? 'pointer-events-none opacity-50' : ''"
+            :aria-disabled="contribution === null"
+          >
+            {{ poolContractId ? 'Bu planla havuz oluştur' : 'Planı incele (kontrat bekleniyor)' }}
+            <AppIcon name="arrow" class="!size-4" />
+          </RouterLink>
+          <p class="mt-3 text-xs leading-relaxed text-stone-600">
+            Örnek hesaptır, {{ token }} cinsindendir. Faiz ve vade farkı modellenmez. Havuz kontratı henüz
+            yayınlanmadı; gerçek para veya teslimat garantisi yoktur.
+          </p>
+        </div>
+      </div>
+
+      <!-- 3B: üye sayısı kadar para yörüngede döner -->
+      <div class="sunrise relative min-h-[300px] border-t border-stone-100 lg:min-h-0 lg:border-t-0 lg:border-l">
+        <Scene3D :coins="members" :label="`${members} üyeyi temsil eden ${members} altın para havuzun çevresinde dönüyor`" />
+        <div class="glass absolute right-4 bottom-4 left-4 flex items-center justify-between gap-2 rounded-2xl px-4 py-2.5 text-sm font-semibold">
+          <span>{{ members }} üye · {{ members }} tur</span>
+          <span v-if="effectivePot !== null" class="tabular-nums text-brand-800">Tur: {{ formatStroops(effectivePot) }} {{ token }}</span>
+        </div>
+      </div>
     </div>
-
-    <div class="mt-4 grid gap-4 sm:grid-cols-2">
-      <div>
-        <label class="label" for="calc-pot">Her turda alınacak tutar ({{ token }})</label>
-        <input
-          id="calc-pot"
-          v-model="pot"
-          class="input"
-          type="text"
-          inputmode="decimal"
-          autocomplete="off"
-        />
-      </div>
-      <div>
-        <label class="label" for="calc-members">Üye sayısı: {{ members }}</label>
-        <input
-          id="calc-members"
-          v-model.number="members"
-          class="h-11 w-full cursor-pointer accent-indigo-600"
-          type="range"
-          min="2"
-          max="12"
-          step="1"
-        />
-      </div>
-    </div>
-
-    <dl v-if="contribution !== null && effectivePot !== null && guarantee !== null" class="mt-4 grid grid-cols-2 gap-3">
-      <div class="rounded-2xl bg-slate-100/80 p-3">
-        <dt class="text-xs text-slate-600">Tur başına katkın</dt>
-        <dd class="mt-0.5 text-lg font-bold tabular-nums">{{ formatStroops(contribution) }}</dd>
-      </div>
-      <div class="rounded-2xl bg-slate-100/80 p-3">
-        <dt class="text-xs text-slate-600">Toplam tur</dt>
-        <dd class="mt-0.5 text-lg font-bold tabular-nums">{{ members }}</dd>
-      </div>
-      <div class="rounded-2xl bg-indigo-50 p-3">
-        <dt class="text-xs text-indigo-800">Örnek tur tutarı</dt>
-        <dd class="mt-0.5 text-lg font-bold tabular-nums text-indigo-900">
-          {{ formatStroops(effectivePot) }}
-        </dd>
-      </div>
-      <div class="rounded-2xl bg-emerald-50 p-3">
-        <dt class="text-xs text-emerald-800">Sponsor güvencesi</dt>
-        <dd class="mt-0.5 text-lg font-bold tabular-nums text-emerald-900">
-          {{ formatStroops(guarantee) }}
-        </dd>
-      </div>
-    </dl>
-    <p v-else class="mt-4 rounded-2xl bg-amber-50 p-3 text-sm text-amber-900" role="status">
-      Geçerli bir tutar gir.
-    </p>
-
-    <RouterLink
-      :to="createLink"
-      class="btn-primary mt-4 w-full"
-      :class="contribution === null ? 'pointer-events-none opacity-50' : ''"
-      :aria-disabled="contribution === null"
-    >
-      {{ poolContractId ? 'Bu planla havuz oluştur' : 'Planı incele (kontrat bekleniyor)' }}
-      <AppIcon name="arrow" class="!size-4" />
-    </RouterLink>
-    <p class="mt-3 text-xs leading-relaxed text-slate-600">
-      Örnek hesaptır, {{ token }} cinsindendir. Faiz ve vade farkı modellenmez. Havuz kontratı henüz
-      yayınlanmadı; gerçek para veya teslimat garantisi yoktur.
-    </p>
   </section>
 </template>

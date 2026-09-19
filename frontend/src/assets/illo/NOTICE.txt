@@ -1,0 +1,4 @@
+Bu klasördeki SVG çizimleri Microsoft Fluent Emoji (renkli set) simgelerinden ayıklanmıştır.
+Lisans: MIT, Copyright (c) Microsoft Corporation. https://github.com/microsoft/fluentui-emoji
+Arayüz simgeleri (src/lib/icon-data.ts): Phosphor Icons, MIT, Copyright (c) Phosphor Icons. https://phosphoricons.com
+Yeniden üretmek için: node scripts/build-icons.mjs (yalnızca .svg dosyalarını yeniler).
