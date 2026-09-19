@@ -11,8 +11,11 @@ import { getTokenBalance } from '@/services/account'
 import {
   abortPool,
   approvePurchase,
+  approveTerms,
+  cancelUnstartedPool,
   claimRefund,
   claimSponsorRemainder,
+  curePayment,
   deposit,
   executeRound,
   fundGuarantee,
@@ -22,6 +25,8 @@ import {
   joinPool,
   markOverdue,
   proposePurchase,
+  proposeTerms,
+  repayAdvance,
   startPool,
   topUp,
 } from '@/services/pool'
@@ -47,6 +52,7 @@ const actionError = ref<string | null>(null)
 const lastTx = ref<string | null>(null)
 /** Havuz başlamadan önce kurucunun belirleyeceği tahsisat sırası. */
 const order = ref<string[]>([])
+const verifiersInput = ref('')
 const sellerInput = ref('')
 const docInput = ref('')
 
@@ -64,21 +70,18 @@ async function load(silent = false) {
     if (p.status === 'Filling') {
       // Başlamadan önce sıra = katılım sırası; kurucu değiştirebilir.
       if (order.value.length !== p.members.length || !order.value.every((m) => p.members.includes(m))) {
-        order.value = [...p.members]
+        order.value = p.recipientOrder.length === p.members.length ? [...p.recipientOrder] : [...p.members]
       }
+      if (!verifiersInput.value && p.verifiers.length) verifiersInput.value = p.verifiers.join('\n')
       round.value = null
+    } else if (p.status === 'Active') {
+      round.value = await getRound(p.id, p.currentRound)
     } else {
-      round.value = await getRound(p.id, p.currentRound).catch(() => null)
+      round.value = p.currentRound > 0 ? await getRound(p.id, p.currentRound).catch(() => null) : null
     }
 
     const [statuses, balance] = await Promise.all([
-      Promise.all(
-        p.members.map((m) =>
-          getMemberStatus(p.id, m).catch(
-            (): MemberStatus => ({ address: m, contributed: 0n, refundable: 0n, received: false }),
-          ),
-        ),
-      ),
+      Promise.all(p.members.map((m) => getMemberStatus(p.id, m))),
       getTokenBalance(poolContractId).catch(() => null),
     ])
     members.value = statuses
@@ -122,32 +125,84 @@ const guaranteePercent = computed(() => {
 
 // --- Tur durumu --------------------------------------------------------------------------
 const paid = computed(() => new Set(round.value?.paid ?? []))
-const covered = computed(() => new Set(round.value?.sponsorCovered ?? []))
+const covered = computed(() => new Set(round.value?.sponsorAdvanced ?? []))
 const isFunded = (m: string) => paid.value.has(m) || covered.value.has(m)
 const missingMembers = computed(() => (pool.value?.members ?? []).filter((m) => !isFunded(m)))
 const allFunded = computed(() => !!pool.value && pool.value.members.length > 0 && missingMembers.value.length === 0)
-const remaining = computed(() => (round.value ? round.value.deadline - now.value : 0))
-const deadlinePassed = computed(() => !!round.value && remaining.value <= 0)
+const roundDeadline = computed(() => {
+  if (!round.value) return 0
+  switch (round.value.phase) {
+    case 'Collecting': return round.value.collectDeadline
+    case 'Grace': return round.value.graceDeadline
+    case 'AwaitingPurchase': return round.value.purchaseDeadline
+    default: return 0
+  }
+})
+const remaining = computed(() => (roundDeadline.value ? roundDeadline.value - now.value : 0))
+const deadlinePassed = computed(() => round.value?.phase === 'Collecting' && now.value >= round.value.collectDeadline)
 const myFunded = computed(() => !!me.value && isFunded(me.value))
+const recipientPaid = computed(() => !!round.value && paid.value.has(round.value.recipient))
+const recipientDebt = computed(() =>
+  round.value ? (memberByAddress.value.get(round.value.recipient)?.advanceOwed ?? 0n) : 0n,
+)
+const myOwnPaid = computed(() => !!me.value && paid.value.has(me.value))
+/** Katkısı sponsorun yeni fonuyla tamamlanmış: üyenin kendi ödemesi sayılmaz, avans borcu doğar. */
+const myCoveredBySponsor = computed(
+  () => !!me.value && covered.value.has(me.value) && !paid.value.has(me.value),
+)
+/** Sıradaki üye kendi katkısını bizzat ödemeden veya eski avanslarını kapatmadan tahsisat açılmaz (plan §2.6). */
+const recipientBlock = computed<string | null>(() => {
+  if (!pool.value || pool.value.status !== 'Active' || !round.value) return null
+  const phase = round.value.phase
+  if (phase === 'Settled') return null
+  if (recipientDebt.value > 0n) {
+    return `Sıradaki üyenin sponsora ${formatStroops(recipientDebt.value)} ${token} açık avansı var. Avans kapanmadan bu turun tahsisatı açılmaz.`
+  }
+  if (!recipientPaid.value && (phase === 'Grace' || deadlinePassed.value)) {
+    return 'Sıradaki üye kendi katkısını bizzat ödemedi. Sponsor onun yerine ödeyemez; ek süre sonunda ödenmezse havuz iptal edilebilir.'
+  }
+  return null
+})
 
 const approvalsCount = computed(() => round.value?.approvals.length ?? 0)
 const approvedByMe = computed(() => !!me.value && !!round.value?.approvals.includes(me.value))
 const approvalsOk = computed(
   () => !!pool.value && approvalsCount.value >= pool.value.approvalThreshold,
 )
-const canExecute = computed(() => allFunded.value && !!round.value?.seller && approvalsOk.value)
+const canExecute = computed(() =>
+  round.value?.phase === 'AwaitingPurchase' &&
+  allFunded.value && recipientPaid.value && recipientDebt.value === 0n &&
+  !!round.value.seller && approvalsOk.value && now.value < round.value.purchaseDeadline,
+)
 
 const canAbort = computed(
   () =>
-    pool.value?.status === 'Paused' &&
-    !!round.value &&
-    (round.value.abortAfter === 0 || now.value >= round.value.abortAfter),
+    pool.value?.status === 'Active' && !!round.value &&
+    ((round.value.phase === 'Grace' && round.value.graceDeadline > 0 && now.value >= round.value.graceDeadline) ||
+      (round.value.phase === 'AwaitingPurchase' && round.value.purchaseDeadline > 0 && now.value >= round.value.purchaseDeadline)),
 )
-const abortRemaining = computed(() => (round.value ? round.value.abortAfter - now.value : 0))
 
 const memberByAddress = computed(() => new Map(members.value.map((m) => [m.address, m])))
 const totalRefundable = computed(() => members.value.reduce((sum, m) => sum + m.refundable, 0n))
 const myRefundable = computed(() => (me.value ? (memberByAddress.value.get(me.value)?.refundable ?? 0n) : 0n))
+const myAdvance = computed(() => (me.value ? (memberByAddress.value.get(me.value)?.advanceOwed ?? 0n) : 0n))
+
+const proposedVerifiers = computed(() => verifiersInput.value.split(/[\s,;]+/).map((v) => v.trim()).filter(Boolean))
+const verifiersValid = computed(() => {
+  if (!pool.value || proposedVerifiers.value.length < 3) return false
+  const excluded = new Set([pool.value.creator, pool.value.sponsor, ...pool.value.members])
+  return new Set(proposedVerifiers.value).size === proposedVerifiers.value.length &&
+    proposedVerifiers.value.every((v) => StrKey.isValidEd25519PublicKey(v) && !excluded.has(v))
+})
+const termsReady = computed(() => {
+  if (!pool.value || pool.value.termsVersion === 0) return false
+  return [pool.value.sponsor, ...pool.value.members].every((v) => pool.value!.termsApprovals.includes(v))
+})
+const canApproveTerms = computed(() =>
+  !!pool.value && pool.value.status === 'Filling' && pool.value.termsVersion > 0 &&
+  !!me.value && (isMember.value || isSponsor.value) && !pool.value.termsApprovals.includes(me.value),
+)
+const setupExpired = computed(() => !!pool.value && now.value >= pool.value.setupDeadline)
 
 function memberState(address: string) {
   const p = pool.value
@@ -169,9 +224,9 @@ const statusLabel = computed(() => {
     case 'Filling':
       return { text: 'Üye ve güvence bekleniyor', cls: 'bg-slate-100 text-slate-700' }
     case 'Active':
-      return { text: 'Devam ediyor', cls: 'bg-indigo-100 text-indigo-800' }
-    case 'Paused':
-      return { text: 'Durduruldu: eksik katkı', cls: 'bg-amber-100 text-amber-900' }
+      return round.value?.phase === 'Grace'
+        ? { text: 'Ek sürede', cls: 'bg-amber-100 text-amber-900' }
+        : { text: 'Devam ediyor', cls: 'bg-indigo-100 text-indigo-800' }
     case 'Completed':
       return { text: 'Tamamlandı', cls: 'bg-emerald-100 text-emerald-800' }
     case 'Aborted':
@@ -201,14 +256,22 @@ async function run(name: string, fn: (s: Signer) => Promise<TxResult>) {
   }
 }
 
-const sellerValid = computed(() => StrKey.isValidEd25519PublicKey(sellerInput.value.trim()))
+const sellerValid = computed(() =>
+  StrKey.isValidEd25519PublicKey(sellerInput.value.trim()) && sellerInput.value.trim() === pool.value?.demoSeller,
+)
 
 async function propose() {
   const seller = sellerInput.value.trim()
   const doc = docInput.value.trim()
-  if (!pool.value || !sellerValid.value || !doc) return
+  if (!pool.value || !round.value || !sellerValid.value || !doc) return
   const hash = await sha256(doc)
-  await run('propose', (s) => proposePurchase(s, pool.value!.id, seller, hash))
+  await run('propose', (s) => proposePurchase(s, {
+    poolId: pool.value!.id,
+    seller,
+    asset: pool.value!.token,
+    amount: round.value!.pot,
+    docHash: hash,
+  }))
 }
 
 function move(index: number, delta: -1 | 1) {
@@ -228,7 +291,9 @@ async function copyLink() {
 }
 
 const listedMembers = computed(() =>
-  pool.value?.status === 'Filling' && isCreator.value ? order.value : (pool.value?.members ?? []),
+  pool.value?.status === 'Filling' && isCreator.value
+    ? order.value
+    : (pool.value?.recipientOrder.length ? pool.value.recipientOrder : (pool.value?.members ?? [])),
 )
 </script>
 
@@ -274,15 +339,13 @@ const listedMembers = computed(() =>
       </header>
 
       <p
-        v-if="pool.status === 'Paused'"
+        v-if="pool.status === 'Active' && round?.phase === 'Grace'"
         role="status"
         class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"
       >
-        Tur durdu: bazı üyelerin katkısı eksik. Sponsor eksik katkıyı ilave fonla tamamlayabilir.
-        <template v-if="canAbort">Bekleme süresi doldu, iptal tetiklenebilir.</template>
-        <template v-else-if="round && round.abortAfter > 0">
-          İptal {{ formatDuration(abortRemaining) }} sonra tetiklenebilir.
-        </template>
+        Tur ek sürede. Üye kendi eksik katkısını yatırabilir; sponsor yalnızca sıradaki alıcı dışındaki
+        üyelerin açığını yeni test varlığıyla tamamlayabilir.
+        <template v-if="canAbort">Süre doldu; iptal koşulları kontratta denetlenir.</template>
       </p>
       <p
         v-if="pool.status === 'Aborted'"
@@ -295,7 +358,7 @@ const listedMembers = computed(() =>
       <!-- Finansal özet: para nerede? -->
       <section class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4" aria-label="Finansal özet">
         <div class="card">
-          <p class="text-xs text-slate-500">Kontrattaki toplam {{ token }}</p>
+          <p class="text-xs text-slate-500">Kontrattaki toplam {{ token }} (tüm havuzlar)</p>
           <p class="mt-1 text-xl font-bold">
             {{ contractBalance === null ? '—' : formatStroops(contractBalance) }}
           </p>
@@ -316,13 +379,15 @@ const listedMembers = computed(() =>
           <p class="mt-1 text-xs text-slate-500">İptal olursa geri alınabilecek</p>
         </div>
         <div class="card">
-          <p class="text-xs text-slate-500">Tur son ödeme</p>
+          <p class="text-xs text-slate-500">
+            {{ round?.phase === 'Grace' ? 'Ek süre' : round?.phase === 'AwaitingPurchase' ? 'Alım onayı süresi' : 'Katkı süresi' }}
+          </p>
           <p
             class="mt-1 text-xl font-bold tabular-nums"
-            :class="round && deadlinePassed && pool.status === 'Active' ? 'text-amber-700' : ''"
+            :class="round && remaining <= 0 && pool.status === 'Active' ? 'text-amber-700' : ''"
           >
-            <template v-if="round && (pool.status === 'Active' || pool.status === 'Paused')">
-              {{ deadlinePassed ? 'Süre doldu' : formatDuration(remaining) }}
+            <template v-if="round && pool.status === 'Active' && roundDeadline > 0">
+              {{ remaining <= 0 ? 'Süre doldu' : formatDuration(remaining) }}
             </template>
             <template v-else>—</template>
           </p>
@@ -331,7 +396,7 @@ const listedMembers = computed(() =>
 
       <!-- Tur ve alım kaydı -->
       <section
-        v-if="round && (pool.status === 'Active' || pool.status === 'Paused')"
+        v-if="round && pool.status === 'Active'"
         class="card space-y-4"
         aria-labelledby="tur"
       >
@@ -393,7 +458,7 @@ const listedMembers = computed(() =>
               <span v-if="addr === me" class="badge bg-indigo-100 text-indigo-800">Sen</span>
               <span v-if="addr === pool.creator" class="badge bg-slate-100 text-slate-700">Kurucu</span>
               <span
-                v-if="round && addr === round.recipient && (pool.status === 'Active' || pool.status === 'Paused')"
+                v-if="round && addr === round.recipient && pool.status === 'Active'"
                 class="badge bg-emerald-100 text-emerald-800"
               >
                 Bu turun alıcısı
@@ -410,7 +475,7 @@ const listedMembers = computed(() =>
                 {{ memberState(addr).label }}
               </span>
               <button
-                v-if="isSponsor && pool.status === 'Paused' && !isFunded(addr)"
+                v-if="isSponsor && pool.status === 'Active' && round && (round.phase === 'Collecting' || round.phase === 'Grace') && addr !== round.recipient && !isFunded(addr)"
                 type="button"
                 class="btn-danger !min-h-8 !px-3 !py-1"
                 :disabled="actionBusy !== null"
@@ -442,7 +507,8 @@ const listedMembers = computed(() =>
           </li>
         </ul>
         <p v-if="pool.status === 'Filling' && isCreator" class="mt-3 text-xs text-slate-500">
-          Başlatınca sıra kilitlenir ve kimse değiştiremez. Yukarıdan aşağıya her tur bir kişi alır.
+          Sırayı düzenledikten sonra koşul sürümünü öner. Üyeler ve sponsor aynı sürümü onaylayınca
+          havuz başlatılabilir.
         </p>
       </section>
 
@@ -478,13 +544,40 @@ const listedMembers = computed(() =>
               {{ actionBusy === 'join' ? 'Cüzdanı onayla…' : 'Havuza katıl' }}
             </button>
             <button
-              v-if="isCreator && isFull && guaranteeOk"
+              v-if="isCreator && isFull && !setupExpired"
+              type="button"
+              class="btn-secondary"
+              :disabled="actionBusy !== null || !verifiersValid"
+              @click="run('terms', (s) => proposeTerms(s, pool!.id, order, proposedVerifiers))"
+            >
+              {{ actionBusy === 'terms' ? 'Cüzdanı onayla…' : 'Sıra ve doğrulayıcıları öner' }}
+            </button>
+            <button
+              v-if="canApproveTerms && !setupExpired"
+              type="button"
+              class="btn-secondary"
+              :disabled="actionBusy !== null"
+              @click="run('approve-terms', (s) => approveTerms(s, pool!.id, pool!.termsVersion))"
+            >
+              {{ actionBusy === 'approve-terms' ? 'Cüzdanı onayla…' : `Koşul sürümü ${pool.termsVersion} onayla` }}
+            </button>
+            <button
+              v-if="isFull && guaranteeOk && termsReady && !setupExpired"
               type="button"
               class="btn-primary"
               :disabled="actionBusy !== null"
-              @click="run('start', (s) => startPool(s, pool!.id, order))"
+              @click="run('start', (s) => startPool(s, pool!.id))"
             >
-              {{ actionBusy === 'start' ? 'Cüzdanı onayla…' : 'Sırayı kilitle ve başlat' }}
+              {{ actionBusy === 'start' ? 'Cüzdanı onayla…' : 'Havuzu başlat' }}
+            </button>
+            <button
+              v-if="setupExpired"
+              type="button"
+              class="btn-danger"
+              :disabled="actionBusy !== null"
+              @click="run('cancel', (s) => cancelUnstartedPool(s, pool!.id))"
+            >
+              {{ actionBusy === 'cancel' ? 'Cüzdanı onayla…' : 'Kuruluş süresi doldu: iptal et' }}
             </button>
             <p v-if="isMember" class="text-sm text-slate-600">
               Katıldın.
@@ -493,31 +586,65 @@ const listedMembers = computed(() =>
             <p v-if="!guaranteeOk" class="text-sm text-slate-600">
               Havuz, sponsor güvencesi tamamlanmadan başlayamaz.
             </p>
-            <p v-else-if="isFull && !isCreator" class="text-sm text-slate-600">
-              Havuz hazır, kurucunun başlatması bekleniyor.
+            <p v-else-if="isFull && !termsReady" class="text-sm text-slate-600">
+              Aynı sıra ve doğrulayıcı koşullarının tüm üyelerle sponsor tarafından onaylanması bekleniyor.
             </p>
+          </div>
+
+          <div v-if="pool.status === 'Filling'" class="space-y-3 rounded-xl border border-slate-200 p-4 text-sm">
+            <p>Koşul sürümü: {{ pool.termsVersion || 'Henüz önerilmedi' }} · onay: {{ pool.termsApprovals.length }} / {{ new Set([pool.sponsor, ...pool.members]).size }}</p>
+            <p>Kuruluş son tarihi: {{ new Date(pool.setupDeadline * 1000).toLocaleString('tr-TR') }}</p>
+            <div v-if="isCreator" class="space-y-2">
+              <label class="label" for="term-verifiers">Demo doğrulayıcıları (her satıra bir adres)</label>
+              <textarea id="term-verifiers" v-model="verifiersInput" class="input min-h-24 font-mono" placeholder="G…&#10;G…&#10;G…" />
+              <p class="text-xs text-slate-600">En az üç farklı adres; kurucu, sponsor veya üye olamaz. Yeni öneri önceki onayları sıfırlar.</p>
+              <p v-if="proposedVerifiers.length && !verifiersValid" class="text-xs text-rose-700">Doğrulayıcı adreslerini kontrol et.</p>
+            </div>
           </div>
 
           <!-- Aktif tur -->
           <div v-if="pool.status === 'Active' && round" class="space-y-4">
+            <p
+              v-if="recipientBlock"
+              role="status"
+              class="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900"
+            >
+              {{ recipientBlock }}
+            </p>
             <div class="flex flex-wrap items-center gap-3">
               <button
-                v-if="isMember && !myFunded"
+                v-if="isMember && !myFunded && (round.phase === 'Collecting' || round.phase === 'Grace')"
                 type="button"
                 class="btn-primary"
                 :disabled="actionBusy !== null"
-                @click="run('deposit', (s) => deposit(s, pool!.id))"
+                @click="run('deposit', (s) => round!.phase === 'Grace' ? curePayment(s, pool!.id) : deposit(s, pool!.id))"
               >
                 {{ actionBusy === 'deposit' ? 'Cüzdanı onayla…' : `Bu turun katkısını öde (${formatStroops(pool.contributionAmount)} ${token})` }}
               </button>
-              <p v-if="isMember && myFunded" class="text-sm text-emerald-800">Bu turun katkısı tamam ✓</p>
+              <p v-if="isMember && myOwnPaid" class="text-sm text-emerald-800">
+                Bu turun katkısını kendin ödedin ✓
+              </p>
+              <p v-else-if="isMember && myCoveredBySponsor" class="text-sm text-amber-900">
+                Bu turun katkın sponsor tarafından tamamlandı. Bu senin kendi ödemen sayılmaz; avansı
+                sponsora geri ödemen gerekir.
+              </p>
 
               <button
-                v-if="isVerifier && round.seller && !approvedByMe"
+                v-if="isMember && myAdvance > 0n"
                 type="button"
                 class="btn-secondary"
                 :disabled="actionBusy !== null"
-                @click="run('approve', (s) => approvePurchase(s, pool!.id, round!.round))"
+                @click="run('repay', (s) => repayAdvance(s, pool!.id))"
+              >
+                {{ actionBusy === 'repay' ? 'Cüzdanı onayla…' : `Sponsor avansını kapat (${formatStroops(myAdvance)} ${token})` }}
+              </button>
+
+              <button
+                v-if="isVerifier && round.phase === 'AwaitingPurchase' && round.seller && !approvedByMe && remaining > 0"
+                type="button"
+                class="btn-secondary"
+                :disabled="actionBusy !== null"
+                @click="run('approve', (s) => approvePurchase(s, pool!.id, round!.round, round!.purchaseVersion))"
               >
                 {{ actionBusy === 'approve' ? 'Cüzdanı onayla…' : 'Alım kaydını onayla' }}
               </button>
@@ -533,7 +660,7 @@ const listedMembers = computed(() =>
               </button>
 
               <button
-                v-if="deadlinePassed && !allFunded"
+                v-if="deadlinePassed && (!allFunded || recipientDebt > 0n)"
                 type="button"
                 class="btn-danger"
                 :disabled="actionBusy !== null"
@@ -542,16 +669,16 @@ const listedMembers = computed(() =>
                 {{ actionBusy === 'overdue' ? 'Cüzdanı onayla…' : 'Süre doldu, turu durdur' }}
               </button>
             </div>
-            <p v-if="canExecute || (deadlinePassed && !allFunded)" class="text-xs text-slate-500">
+            <p v-if="canExecute || (deadlinePassed && (!allFunded || recipientDebt > 0n))" class="text-xs text-slate-500">
               Bu işlemi havuzdaki herkes çağırabilir, bir yöneticiye gerek yok.
             </p>
-            <p v-if="allFunded && !round.seller" class="text-sm text-slate-600">
+            <p v-if="round.phase === 'AwaitingPurchase' && allFunded && !round.seller && recipientPaid && recipientDebt === 0n" class="text-sm text-slate-600">
               Katkılar tam. Sıradaki üyenin satıcıyı ve alım kaydını önermesi bekleniyor.
             </p>
 
             <!-- Satıcı önerisi (sıradaki üye) -->
             <form
-              v-if="isRecipient && !round.seller"
+              v-if="isRecipient && round.phase === 'AwaitingPurchase' && remaining > 0 && recipientPaid && recipientDebt === 0n"
               class="space-y-3 rounded-xl border border-slate-200 p-4"
               @submit.prevent="propose"
             >
@@ -568,7 +695,7 @@ const listedMembers = computed(() =>
                   required
                 />
                 <p v-if="sellerInput && !sellerValid" class="mt-1 text-xs text-rose-700">
-                  Geçerli bir Stellar adresi gir.
+                  Havuzda kayıtlı izinli demo satıcısı adresini gir.
                 </p>
               </div>
               <div>
@@ -595,8 +722,8 @@ const listedMembers = computed(() =>
             </form>
           </div>
 
-          <!-- Duraklatılmış -->
-          <div v-if="pool.status === 'Paused'" class="flex flex-wrap items-center gap-3">
+          <!-- Süre sonunda iptal -->
+          <div v-if="pool.status === 'Active' && canAbort" class="flex flex-wrap items-center gap-3">
             <button
               v-if="canAbort"
               type="button"
@@ -606,9 +733,7 @@ const listedMembers = computed(() =>
             >
               {{ actionBusy === 'abort' ? 'Cüzdanı onayla…' : 'Havuzu iptal et ve iadeleri aç' }}
             </button>
-            <p v-if="!isSponsor" class="text-sm text-slate-600">
-              Sponsor eksik katkıyı tamamlarsa tur devam eder, tamamlamazsa iptal edilebilir.
-            </p>
+            <p class="text-sm text-slate-600">İptal şartlarını kontrat denetler; süre dolması tek başına varlık transferi başlatmaz.</p>
           </div>
 
           <!-- İptal / Tamamlanma -->
