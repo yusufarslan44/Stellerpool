@@ -44,7 +44,7 @@ Hackathon jüri kriteri (Ecosystem Fit): *"Makes effective use of Stellar SDKs, 
 - `soroban-sdk` ana sürümü protokol sürümünü izler; ağın protokol sürümüne göre sabitleyin.
 - Depolama: instance (ayarlar), persistent (kalıcı veri), temporary. Her kayıt kiralıktır ve arşivlenebilir, `extend_ttl` düzenli çağrılmalı.
 - Kimlik: durum değiştiren her fonksiyonda `require_auth()`. Kritik: `overflow-checks = true` (release profili).
-- Event'ler tipli struct ve `#[topic]` alanlarıyla yayınlanır (arayüz sponsor güvencesi, eksik ödeme, tahsisat ve iade olaylarını dinler).
+- Event'ler tipli struct ve `#[topic]` alanlarıyla yayınlanır (arayüz üye katkısı, eksik ödeme, tahsisat ve yalnız mevcut tur iadesi olaylarını dinler).
 - Test: `testutils` ve `env.mock_all_auths()`. Deploy: `stellar contract build`, `stellar contract deploy --wasm ... --source-account <hesap> --network testnet`.
 - Kontrol listesi: "Soroban Common Mistakes" skill'i ile deploy öncesi gözden geçirin. Kontrat upgrade edilemez kalacak (plan kararı), bunu README'de yazın.
 
