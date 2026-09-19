@@ -8,27 +8,14 @@ pub struct PoolCreated {
     pub pool_id: u64,
     #[topic]
     pub creator: Address,
-    #[topic]
-    pub sponsor: Address,
     pub token: Address,
     pub contribution_amount: i128,
-    pub required_guarantee: i128,
     pub member_limit: u32,
     pub round_duration: u64,
     pub grace_duration: u64,
     pub purchase_duration: u64,
     pub setup_deadline: u64,
     pub demo_seller: Address,
-}
-
-#[contractevent]
-pub struct GuaranteeFunded {
-    #[topic]
-    pub pool_id: u64,
-    #[topic]
-    pub sponsor: Address,
-    pub amount: i128,
-    pub total_guarantee: i128,
 }
 
 #[contractevent]
@@ -66,14 +53,12 @@ pub struct PoolStarted {
     pub pool_id: u64,
     pub started_at: u64,
     pub first_deadline: u64,
-    pub funded_guarantee: i128,
 }
 
 #[contractevent]
 pub struct PoolCancelled {
     #[topic]
     pub pool_id: u64,
-    pub refunded_guarantee: i128,
 }
 
 #[contractevent]
@@ -93,28 +78,6 @@ pub struct PaymentCured {
     pub pool_id: u64,
     #[topic]
     pub round: u32,
-    #[topic]
-    pub member: Address,
-    pub amount: i128,
-}
-
-#[contractevent]
-pub struct SponsorAdvanced {
-    #[topic]
-    pub pool_id: u64,
-    #[topic]
-    pub round: u32,
-    #[topic]
-    pub member: Address,
-    pub sponsor: Address,
-    pub amount: i128,
-    pub total_advance: i128,
-}
-
-#[contractevent]
-pub struct AdvanceRepaid {
-    #[topic]
-    pub pool_id: u64,
     #[topic]
     pub member: Address,
     pub amount: i128,
@@ -196,14 +159,5 @@ pub struct RefundClaimed {
     pub pool_id: u64,
     #[topic]
     pub member: Address,
-    pub amount: i128,
-}
-
-#[contractevent]
-pub struct SponsorRemainderClaimed {
-    #[topic]
-    pub pool_id: u64,
-    #[topic]
-    pub sponsor: Address,
     pub amount: i128,
 }

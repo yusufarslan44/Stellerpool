@@ -13,7 +13,7 @@ pub use types::{
 
 use soroban_sdk::{contract, contractimpl, token, Address, BytesN, Env, Vec};
 
-pub const CONTRACT_VERSION: u32 = 8;
+pub const CONTRACT_VERSION: u32 = 9;
 pub const MIN_MEMBERS: u32 = 2;
 pub const MAX_MEMBERS: u32 = 12;
 pub const MIN_VERIFIERS: u32 = 2;
@@ -27,7 +27,6 @@ impl RotatingPoolContract {
     pub fn create_pool(
         env: Env,
         creator: Address,
-        sponsor: Address,
         token: Address,
         contribution_amount: i128,
         member_limit: u32,
@@ -48,7 +47,7 @@ impl RotatingPoolContract {
             setup_deadline,
             created_at,
         )?;
-        if demo_seller == creator || demo_seller == sponsor {
+        if demo_seller == creator {
             return Err(ContractError::SellerCannotBeParticipant);
         }
 
@@ -56,11 +55,9 @@ impl RotatingPoolContract {
         let next_pool_id = pool_id
             .checked_add(1)
             .ok_or(ContractError::ArithmeticOverflow)?;
-        let required_guarantee = calculate_required_guarantee(member_limit, contribution_amount)?;
         let pool = Pool {
             id: pool_id,
             creator: creator.clone(),
-            sponsor: sponsor.clone(),
             token: token.clone(),
             contribution_amount,
             member_limit,
@@ -77,24 +74,19 @@ impl RotatingPoolContract {
             purchase_duration,
             setup_deadline,
             demo_seller: demo_seller.clone(),
-            required_guarantee,
-            guarantee_deposited: 0,
             created_at,
             started_at: None,
         };
 
         storage::write_pool(&env, &pool);
         storage::write_pool_assigned_balance(&env, pool_id, 0);
-        storage::write_total_refund_liability(&env, pool_id, 0);
         storage::write_next_pool_id(&env, next_pool_id);
 
         PoolCreated {
             pool_id,
             creator,
-            sponsor,
             token,
             contribution_amount,
-            required_guarantee,
             member_limit,
             round_duration,
             grace_duration,
@@ -105,52 +97,6 @@ impl RotatingPoolContract {
         .publish(&env);
 
         Ok(pool_id)
-    }
-
-    pub fn fund_guarantee(
-        env: Env,
-        pool_id: u64,
-        sponsor: Address,
-        amount: i128,
-    ) -> Result<i128, ContractError> {
-        if amount <= 0 {
-            return Err(ContractError::InvalidAmount);
-        }
-        let mut pool = get_pool_or_error(&env, pool_id)?;
-        if sponsor != pool.sponsor {
-            return Err(ContractError::SponsorOnly);
-        }
-        if pool.status != PoolStatus::Filling {
-            return Err(ContractError::InvalidPoolStatus);
-        }
-        sponsor.require_auth();
-
-        let total_guarantee = pool
-            .guarantee_deposited
-            .checked_add(amount)
-            .ok_or(ContractError::ArithmeticOverflow)?;
-        let assigned_balance = storage::read_pool_assigned_balance(&env, pool_id)
-            .checked_add(amount)
-            .ok_or(ContractError::ArithmeticOverflow)?;
-
-        token::TokenClient::new(&env, &pool.token).transfer(
-            &sponsor,
-            &env.current_contract_address(),
-            &amount,
-        );
-        pool.guarantee_deposited = total_guarantee;
-        storage::write_pool(&env, &pool);
-        storage::write_pool_assigned_balance(&env, pool_id, assigned_balance);
-
-        GuaranteeFunded {
-            pool_id,
-            sponsor,
-            amount,
-            total_guarantee,
-        }
-        .publish(&env);
-
-        Ok(total_guarantee)
     }
 
     pub fn join_pool(env: Env, member: Address, pool_id: u64) -> Result<(), ContractError> {
@@ -175,9 +121,7 @@ impl RotatingPoolContract {
         let joined_at = env.ledger().timestamp();
         let state = MemberState {
             joined_at,
-            active: true,
             received: false,
-            contributions_paid: 0,
         };
         pool.members.push_back(member.clone());
         storage::write_member(&env, pool_id, &member, &state);
@@ -251,8 +195,7 @@ impl RotatingPoolContract {
         if version != pool.terms_version {
             return Err(ContractError::TermsVersionMismatch);
         }
-        let is_member = storage::read_member(&env, pool_id, &approver).is_some();
-        if !is_member && approver != pool.sponsor {
+        if storage::read_member(&env, pool_id, &approver).is_none() {
             return Err(ContractError::NotApprover);
         }
         if storage::has_terms_approval(&env, pool_id, version, &approver) {
@@ -300,12 +243,6 @@ impl RotatingPoolContract {
                 return Err(ContractError::TermsNotFullyApproved);
             }
         }
-        if !storage::has_terms_approval(&env, pool_id, pool.terms_version, &pool.sponsor) {
-            return Err(ContractError::TermsNotFullyApproved);
-        }
-        if pool.guarantee_deposited < pool.required_guarantee {
-            return Err(ContractError::InsufficientGuarantee);
-        }
 
         let started_at = now;
         let collect_deadline = started_at
@@ -324,11 +261,8 @@ impl RotatingPoolContract {
             grace_deadline: None,
             purchase_deadline: None,
             paid: Vec::new(&env),
-            sponsor_advanced: Vec::new(&env),
             pot: 0,
             seller: None,
-            asset: None,
-            amount: None,
             doc_hash: None,
             purchase_version: 0,
             approvals: Vec::new(&env),
@@ -337,7 +271,6 @@ impl RotatingPoolContract {
         pool.status = PoolStatus::Active;
         pool.started_at = Some(started_at);
         pool.current_round = 1;
-        let funded_guarantee = pool.guarantee_deposited;
         storage::write_round(&env, pool_id, &round);
         storage::write_pool(&env, &pool);
 
@@ -345,13 +278,12 @@ impl RotatingPoolContract {
             pool_id,
             started_at,
             first_deadline: collect_deadline,
-            funded_guarantee,
         }
         .publish(&env);
         Ok(())
     }
 
-    pub fn cancel_unstarted_pool(env: Env, pool_id: u64) -> Result<i128, ContractError> {
+    pub fn cancel_unstarted_pool(env: Env, pool_id: u64) -> Result<(), ContractError> {
         let mut pool = get_pool_or_error(&env, pool_id)?;
         if pool.status != PoolStatus::Filling {
             return Err(ContractError::InvalidPoolStatus);
@@ -361,28 +293,11 @@ impl RotatingPoolContract {
             return Err(ContractError::SetupDeadlineNotReached);
         }
 
-        let refund_amount = pool.guarantee_deposited;
         pool.status = PoolStatus::Aborted;
-        pool.guarantee_deposited = 0;
-        let sponsor = pool.sponsor.clone();
-        let token_address = pool.token.clone();
-        storage::write_pool_assigned_balance(&env, pool_id, 0);
         storage::write_pool(&env, &pool);
 
-        if refund_amount > 0 {
-            token::TokenClient::new(&env, &token_address).transfer(
-                &env.current_contract_address(),
-                &sponsor,
-                &refund_amount,
-            );
-        }
-
-        PoolCancelled {
-            pool_id,
-            refunded_guarantee: refund_amount,
-        }
-        .publish(&env);
-        Ok(refund_amount)
+        PoolCancelled { pool_id }.publish(&env);
+        Ok(())
     }
 
     pub fn deposit(env: Env, member: Address, pool_id: u64) -> Result<i128, ContractError> {
@@ -431,129 +346,6 @@ impl RotatingPoolContract {
         Ok(pot)
     }
 
-    pub fn top_up(
-        env: Env,
-        pool_id: u64,
-        sponsor: Address,
-        member: Address,
-    ) -> Result<i128, ContractError> {
-        let pool = get_pool_or_error(&env, pool_id)?;
-        if sponsor != pool.sponsor {
-            return Err(ContractError::SponsorOnly);
-        }
-        if pool.status != PoolStatus::Active {
-            return Err(ContractError::InvalidPoolStatus);
-        }
-        sponsor.require_auth();
-        let round_index = pool.current_round;
-        let mut round = storage::read_round(&env, pool_id, round_index)
-            .ok_or(ContractError::StorageInvariantViolation)?;
-        let now = env.ledger().timestamp();
-        match round.phase {
-            RoundPhase::Collecting => {
-                if now >= round.collect_deadline {
-                    return Err(ContractError::DeadlineReached);
-                }
-            }
-            RoundPhase::Grace => {
-                let grace_deadline = round
-                    .grace_deadline
-                    .ok_or(ContractError::StorageInvariantViolation)?;
-                if now >= grace_deadline {
-                    return Err(ContractError::DeadlineReached);
-                }
-            }
-            _ => return Err(ContractError::RoundAlreadyFinalized),
-        }
-        if member == round.recipient {
-            return Err(ContractError::TopUpNotAllowedForRecipient);
-        }
-        if storage::read_member(&env, pool_id, &member).is_none() {
-            return Err(ContractError::NotMember);
-        }
-        if storage::has_deposit(&env, pool_id, round_index, &member)
-            || storage::has_advance_covered(&env, pool_id, round_index, &member)
-        {
-            return Err(ContractError::AlreadyDeposited);
-        }
-
-        let amount = pool.contribution_amount;
-        let expected = expected_pot(&pool)?;
-        let pot_after = round
-            .pot
-            .checked_add(amount)
-            .ok_or(ContractError::ArithmeticOverflow)?;
-        if pot_after > expected {
-            return Err(ContractError::StorageInvariantViolation);
-        }
-
-        let advance_total = storage::read_sponsor_advance(&env, pool_id, &member)
-            .checked_add(amount)
-            .ok_or(ContractError::ArithmeticOverflow)?;
-        let assigned_balance = storage::read_pool_assigned_balance(&env, pool_id)
-            .checked_add(amount)
-            .ok_or(ContractError::ArithmeticOverflow)?;
-
-        round.pot = pot_after;
-        round.sponsor_advanced.push_back(member.clone());
-        storage::write_advance_covered(&env, pool_id, round_index, &member);
-        maybe_transition_round(&env, &pool, &mut round)?;
-
-        storage::write_sponsor_advance(&env, pool_id, &member, advance_total);
-        storage::write_pool_assigned_balance(&env, pool_id, assigned_balance);
-        storage::write_round(&env, pool_id, &round);
-
-        token::TokenClient::new(&env, &pool.token).transfer(
-            &sponsor,
-            &env.current_contract_address(),
-            &amount,
-        );
-
-        SponsorAdvanced {
-            pool_id,
-            round: round_index,
-            member,
-            sponsor,
-            amount,
-            total_advance: advance_total,
-        }
-        .publish(&env);
-        Ok(advance_total)
-    }
-
-    pub fn repay_advance(env: Env, member: Address, pool_id: u64) -> Result<i128, ContractError> {
-        member.require_auth();
-        let pool = get_pool_or_error(&env, pool_id)?;
-        let owed = storage::read_sponsor_advance(&env, pool_id, &member);
-        if owed <= 0 {
-            return Err(ContractError::NoOutstandingAdvance);
-        }
-
-        storage::write_sponsor_advance(&env, pool_id, &member, 0);
-
-        if pool.status == PoolStatus::Active {
-            let round_index = pool.current_round;
-            if let Some(mut round) = storage::read_round(&env, pool_id, round_index) {
-                if round.recipient == member
-                    && (round.phase == RoundPhase::Collecting || round.phase == RoundPhase::Grace)
-                {
-                    maybe_transition_round(&env, &pool, &mut round)?;
-                    storage::write_round(&env, pool_id, &round);
-                }
-            }
-        }
-
-        token::TokenClient::new(&env, &pool.token).transfer(&member, &pool.sponsor, &owed);
-
-        AdvanceRepaid {
-            pool_id,
-            member,
-            amount: owed,
-        }
-        .publish(&env);
-        Ok(owed)
-    }
-
     pub fn propose_purchase(
         env: Env,
         member: Address,
@@ -596,8 +388,6 @@ impl RotatingPoolContract {
             .checked_add(1)
             .ok_or(ContractError::ArithmeticOverflow)?;
         round.seller = Some(seller.clone());
-        round.asset = Some(asset.clone());
-        round.amount = Some(amount);
         round.doc_hash = Some(doc_hash.clone());
         round.purchase_version = version;
         round.approvals = Vec::new(&env);
@@ -677,12 +467,6 @@ impl RotatingPoolContract {
         if round.phase != RoundPhase::AwaitingPurchase {
             return Err(ContractError::RoundNotReady);
         }
-        if !storage::has_deposit(&env, pool_id, round_index, &round.recipient) {
-            return Err(ContractError::RecipientMustSelfPay);
-        }
-        if storage::read_sponsor_advance(&env, pool_id, &round.recipient) != 0 {
-            return Err(ContractError::RecipientOwesAdvance);
-        }
 
         let payout_amount = expected_pot(&pool)?;
         if round.pot != payout_amount {
@@ -694,10 +478,6 @@ impl RotatingPoolContract {
             .clone()
             .ok_or(ContractError::PurchaseNotFound)?;
         if seller != pool.demo_seller {
-            return Err(ContractError::StorageInvariantViolation);
-        }
-        let purchase_amount = round.amount.ok_or(ContractError::PurchaseNotFound)?;
-        if purchase_amount != payout_amount {
             return Err(ContractError::StorageInvariantViolation);
         }
 
@@ -722,43 +502,21 @@ impl RotatingPoolContract {
             return Err(ContractError::PurchaseNotApproved);
         }
 
-        let stored_total_liability = storage::read_total_refund_liability(&env, pool_id);
-        let mut observed_total_liability = 0_i128;
-        let mut released_liability = 0_i128;
-        let mut recipient_found = false;
-        for member in pool.members.iter() {
-            let state = storage::read_member(&env, pool_id, &member)
-                .ok_or(ContractError::StorageInvariantViolation)?;
-            if !state.active {
-                return Err(ContractError::StorageInvariantViolation);
-            }
-            let liability = storage::read_refund_liability(&env, pool_id, &member);
-            if liability < 0 {
-                return Err(ContractError::StorageInvariantViolation);
-            }
-            observed_total_liability = observed_total_liability
-                .checked_add(liability)
-                .ok_or(ContractError::ArithmeticOverflow)?;
-
-            let is_recipient = member == round.recipient;
-            if is_recipient {
-                if state.received {
-                    return Err(ContractError::StorageInvariantViolation);
-                }
-                recipient_found = true;
-            }
-            if state.received || is_recipient {
-                released_liability = released_liability
-                    .checked_add(liability)
-                    .ok_or(ContractError::ArithmeticOverflow)?;
-            }
-        }
-        if !recipient_found || observed_total_liability != stored_total_liability {
+        if pool.members.len() != pool.member_limit {
             return Err(ContractError::StorageInvariantViolation);
         }
-        let remaining_liability = observed_total_liability
-            .checked_sub(released_liability)
-            .ok_or(ContractError::StorageInvariantViolation)?;
+        let mut recipient_found = false;
+        for member in pool.members.iter() {
+            if !storage::has_deposit(&env, pool_id, round_index, &member) {
+                return Err(ContractError::StorageInvariantViolation);
+            }
+            if member == round.recipient {
+                recipient_found = true;
+            }
+        }
+        if !recipient_found {
+            return Err(ContractError::StorageInvariantViolation);
+        }
 
         let assigned_balance = storage::read_pool_assigned_balance(&env, pool_id);
         if assigned_balance < payout_amount {
@@ -767,9 +525,6 @@ impl RotatingPoolContract {
         let assigned_after = assigned_balance
             .checked_sub(payout_amount)
             .ok_or(ContractError::ArithmeticOverflow)?;
-        if assigned_after < remaining_liability {
-            return Err(ContractError::RefundSolvencyViolation);
-        }
 
         let completed_at = env.ledger().timestamp();
         let next_index = round_index
@@ -792,11 +547,8 @@ impl RotatingPoolContract {
                 grace_deadline: None,
                 purchase_deadline: None,
                 paid: Vec::new(&env),
-                sponsor_advanced: Vec::new(&env),
                 pot: 0,
                 seller: None,
-                asset: None,
-                amount: None,
                 doc_hash: None,
                 purchase_version: 0,
                 approvals: Vec::new(&env),
@@ -806,17 +558,13 @@ impl RotatingPoolContract {
         };
 
         for member in pool.members.iter() {
-            let mut state = storage::read_member(&env, pool_id, &member)
-                .ok_or(ContractError::StorageInvariantViolation)?;
-            if state.received || member == round.recipient {
-                storage::write_refund_liability(&env, pool_id, &member, 0);
-            }
-            if member == round.recipient {
-                state.received = true;
-                storage::write_member(&env, pool_id, &member, &state);
-            }
+            storage::write_refund_liability(&env, pool_id, &member, 0);
         }
-        storage::write_total_refund_liability(&env, pool_id, remaining_liability);
+        let mut recipient_state = storage::read_member(&env, pool_id, &round.recipient)
+            .ok_or(ContractError::StorageInvariantViolation)?;
+        recipient_state.received = true;
+        storage::write_member(&env, pool_id, &round.recipient, &recipient_state);
+
         storage::write_pool_assigned_balance(&env, pool_id, assigned_after);
         round.phase = RoundPhase::Settled;
         storage::write_round(&env, pool_id, &round);
@@ -948,20 +696,16 @@ impl RotatingPoolContract {
             return Err(ContractError::RefundNotClaimable);
         }
         let assigned_balance = storage::read_pool_assigned_balance(&env, pool_id);
-        let total_liability = storage::read_total_refund_liability(&env, pool_id);
-        if assigned_balance < entitlement || total_liability < entitlement {
+        if assigned_balance < entitlement {
             return Err(ContractError::StorageInvariantViolation);
         }
         let assigned_after = assigned_balance
             .checked_sub(entitlement)
             .ok_or(ContractError::ArithmeticOverflow)?;
-        let total_after = total_liability
-            .checked_sub(entitlement)
-            .ok_or(ContractError::ArithmeticOverflow)?;
 
         storage::write_refund_claimed(&env, pool_id, &member);
+        storage::write_refund_liability(&env, pool_id, &member, 0);
         storage::write_pool_assigned_balance(&env, pool_id, assigned_after);
-        storage::write_total_refund_liability(&env, pool_id, total_after);
 
         token::TokenClient::new(&env, &pool.token).transfer(
             &env.current_contract_address(),
@@ -976,52 +720,6 @@ impl RotatingPoolContract {
         }
         .publish(&env);
         Ok(entitlement)
-    }
-
-    pub fn claim_sponsor_remainder(
-        env: Env,
-        sponsor: Address,
-        pool_id: u64,
-    ) -> Result<i128, ContractError> {
-        let pool = get_pool_or_error(&env, pool_id)?;
-        if pool.status != PoolStatus::Aborted {
-            return Err(ContractError::SponsorRemainderNotClaimable);
-        }
-        if sponsor != pool.sponsor {
-            return Err(ContractError::SponsorOnly);
-        }
-        sponsor.require_auth();
-        if storage::has_sponsor_remainder_claimed(&env, pool_id) {
-            return Err(ContractError::SponsorRemainderNotClaimable);
-        }
-        let assigned_balance = storage::read_pool_assigned_balance(&env, pool_id);
-        let total_liability = storage::read_total_refund_liability(&env, pool_id);
-        if assigned_balance < total_liability {
-            return Err(ContractError::StorageInvariantViolation);
-        }
-        let remainder = assigned_balance
-            .checked_sub(total_liability)
-            .ok_or(ContractError::ArithmeticOverflow)?;
-        if remainder <= 0 {
-            return Err(ContractError::SponsorRemainderNotClaimable);
-        }
-
-        storage::write_sponsor_remainder_claimed(&env, pool_id);
-        storage::write_pool_assigned_balance(&env, pool_id, total_liability);
-
-        token::TokenClient::new(&env, &pool.token).transfer(
-            &env.current_contract_address(),
-            &sponsor,
-            &remainder,
-        );
-
-        SponsorRemainderClaimed {
-            pool_id,
-            sponsor,
-            amount: remainder,
-        }
-        .publish(&env);
-        Ok(remainder)
     }
 
     pub fn version(env: Env) -> u32 {
@@ -1062,15 +760,6 @@ impl RotatingPoolContract {
         })
     }
 
-    pub fn get_sponsor_advance(
-        env: Env,
-        pool_id: u64,
-        member: Address,
-    ) -> Result<i128, ContractError> {
-        ensure_pool_exists(&env, pool_id)?;
-        Ok(storage::read_sponsor_advance(&env, pool_id, &member))
-    }
-
     pub fn get_refund_claim(
         env: Env,
         pool_id: u64,
@@ -1078,11 +767,6 @@ impl RotatingPoolContract {
     ) -> Result<bool, ContractError> {
         ensure_pool_exists(&env, pool_id)?;
         Ok(storage::has_refund_claimed(&env, pool_id, &member))
-    }
-
-    pub fn get_sponsor_remainder_claimed(env: Env, pool_id: u64) -> Result<bool, ContractError> {
-        ensure_pool_exists(&env, pool_id)?;
-        Ok(storage::has_sponsor_remainder_claimed(&env, pool_id))
     }
 }
 
@@ -1093,9 +777,7 @@ fn apply_member_payment(
 ) -> Result<(u32, i128, i128), ContractError> {
     let pool_id = pool.id;
     let round_index = pool.current_round;
-    let mut member_state =
-        storage::read_member(env, pool_id, member).ok_or(ContractError::NotMember)?;
-    if !member_state.active {
+    if storage::read_member(env, pool_id, member).is_none() {
         return Err(ContractError::NotMember);
     }
     let mut round = storage::read_round(env, pool_id, round_index)
@@ -1117,9 +799,7 @@ fn apply_member_payment(
         }
         _ => return Err(ContractError::RoundAlreadyFinalized),
     }
-    if storage::has_deposit(env, pool_id, round_index, member)
-        || storage::has_advance_covered(env, pool_id, round_index, member)
-    {
+    if storage::has_deposit(env, pool_id, round_index, member) {
         return Err(ContractError::AlreadyDeposited);
     }
 
@@ -1132,20 +812,6 @@ fn apply_member_payment(
     if pot_after > expected {
         return Err(ContractError::StorageInvariantViolation);
     }
-
-    member_state.contributions_paid = member_state
-        .contributions_paid
-        .checked_add(1)
-        .ok_or(ContractError::ArithmeticOverflow)?;
-    let contribution_total = storage::read_member_contribution_total(env, pool_id, member)
-        .checked_add(amount)
-        .ok_or(ContractError::ArithmeticOverflow)?;
-    let refund_liability = storage::read_refund_liability(env, pool_id, member)
-        .checked_add(amount)
-        .ok_or(ContractError::ArithmeticOverflow)?;
-    let total_refund_liability = storage::read_total_refund_liability(env, pool_id)
-        .checked_add(amount)
-        .ok_or(ContractError::ArithmeticOverflow)?;
     let assigned_balance = storage::read_pool_assigned_balance(env, pool_id)
         .checked_add(amount)
         .ok_or(ContractError::ArithmeticOverflow)?;
@@ -1153,14 +819,22 @@ fn apply_member_payment(
     round.pot = pot_after;
     round.paid.push_back(member.clone());
     storage::write_deposit(env, pool_id, round_index, member);
-    maybe_transition_round(env, pool, &mut round)?;
-
-    storage::write_member(env, pool_id, member, &member_state);
-    storage::write_member_contribution_total(env, pool_id, member, contribution_total);
-    storage::write_refund_liability(env, pool_id, member, refund_liability);
-    storage::write_total_refund_liability(env, pool_id, total_refund_liability);
-    storage::write_pool_assigned_balance(env, pool_id, assigned_balance);
+    if round.pot == expected {
+        let purchase_deadline = now
+            .checked_add(pool.purchase_duration)
+            .ok_or(ContractError::ArithmeticOverflow)?;
+        round.phase = RoundPhase::AwaitingPurchase;
+        round.purchase_deadline = Some(purchase_deadline);
+        RoundAwaitingPurchase {
+            pool_id,
+            round: round_index,
+            purchase_deadline,
+        }
+        .publish(env);
+    }
     storage::write_round(env, pool_id, &round);
+    storage::write_refund_liability(env, pool_id, member, amount);
+    storage::write_pool_assigned_balance(env, pool_id, assigned_balance);
 
     token::TokenClient::new(env, &pool.token).transfer(
         member,
@@ -1168,46 +842,6 @@ fn apply_member_payment(
         &amount,
     );
     Ok((round_index, amount, round.pot))
-}
-
-/// Promotes a round from Collecting/Grace to AwaitingPurchase once the pot is fully
-/// funded and the current recipient has personally paid their own contribution and
-/// closed any earlier sponsor advance. Sponsor top-ups can never satisfy this for the
-/// recipient themselves (`top_up` rejects `member == round.recipient`), so a recorded
-/// self-deposit here is always genuinely the recipient's own money.
-fn maybe_transition_round(
-    env: &Env,
-    pool: &Pool,
-    round: &mut RoundState,
-) -> Result<(), ContractError> {
-    if round.phase != RoundPhase::Collecting && round.phase != RoundPhase::Grace {
-        return Ok(());
-    }
-    let expected = expected_pot(pool)?;
-    if round.pot != expected {
-        return Ok(());
-    }
-    if !storage::has_deposit(env, pool.id, round.round, &round.recipient) {
-        return Ok(());
-    }
-    if storage::read_sponsor_advance(env, pool.id, &round.recipient) != 0 {
-        return Ok(());
-    }
-
-    let now = env.ledger().timestamp();
-    let purchase_deadline = now
-        .checked_add(pool.purchase_duration)
-        .ok_or(ContractError::ArithmeticOverflow)?;
-    round.phase = RoundPhase::AwaitingPurchase;
-    round.purchase_deadline = Some(purchase_deadline);
-
-    RoundAwaitingPurchase {
-        pool_id: pool.id,
-        round: round.round,
-        purchase_deadline,
-    }
-    .publish(env);
-    Ok(())
 }
 
 fn expected_pot(pool: &Pool) -> Result<i128, ContractError> {
@@ -1246,20 +880,6 @@ fn validate_pool_parameters(
     Ok(())
 }
 
-fn calculate_required_guarantee(
-    member_limit: u32,
-    contribution_amount: i128,
-) -> Result<i128, ContractError> {
-    let members = i128::from(member_limit);
-    let peak_factor = members
-        .checked_mul(members)
-        .ok_or(ContractError::ArithmeticOverflow)?
-        / 4;
-    peak_factor
-        .checked_mul(contribution_amount)
-        .ok_or(ContractError::ArithmeticOverflow)
-}
-
 fn validate_recipient_order(pool: &Pool, order: &Vec<Address>) -> Result<(), ContractError> {
     if order.len() != pool.members.len() {
         return Err(ContractError::InvalidRecipientOrder);
@@ -1293,7 +913,6 @@ fn validate_verifier_policy(
             .get(index)
             .ok_or(ContractError::InvalidVerifierSet)?;
         if candidate == pool.creator
-            || candidate == pool.sponsor
             || candidate == pool.token
             || candidate == pool.demo_seller
             || candidate == env.current_contract_address()

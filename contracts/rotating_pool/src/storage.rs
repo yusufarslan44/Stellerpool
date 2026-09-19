@@ -20,16 +20,11 @@ pub enum DataKey {
     Member(u64, Address),
     Round(u64, u32),
     Deposit(u64, u32, Address),
-    AdvanceCovered(u64, u32, Address),
-    MemberContributionTotal(u64, Address),
     PoolAssignedBalance(u64),
     RefundLiability(u64, Address),
-    TotalRefundLiability(u64),
-    SponsorAdvance(u64, Address),
     TermsApproval(u64, u32, Address),
     PurchaseApproval(u64, u32, u32, Address),
     RefundClaimed(u64, Address),
-    SponsorRemainderClaimed(u64),
 }
 
 pub(crate) fn extend_instance_ttl(env: &Env) {
@@ -116,41 +111,6 @@ pub(crate) fn write_deposit(env: &Env, pool_id: u64, round: u32, member: &Addres
     extend_persistent_ttl(env, &key);
 }
 
-pub(crate) fn has_advance_covered(env: &Env, pool_id: u64, round: u32, member: &Address) -> bool {
-    let key = DataKey::AdvanceCovered(pool_id, round, member.clone());
-    let covered = env.storage().persistent().get(&key).unwrap_or(false);
-    if covered {
-        extend_persistent_ttl(env, &key);
-    }
-    covered
-}
-
-pub(crate) fn write_advance_covered(env: &Env, pool_id: u64, round: u32, member: &Address) {
-    let key = DataKey::AdvanceCovered(pool_id, round, member.clone());
-    env.storage().persistent().set(&key, &true);
-    extend_persistent_ttl(env, &key);
-}
-
-pub(crate) fn read_member_contribution_total(env: &Env, pool_id: u64, member: &Address) -> i128 {
-    let key = DataKey::MemberContributionTotal(pool_id, member.clone());
-    let value = env.storage().persistent().get(&key).unwrap_or(0);
-    if env.storage().persistent().has(&key) {
-        extend_persistent_ttl(env, &key);
-    }
-    value
-}
-
-pub(crate) fn write_member_contribution_total(
-    env: &Env,
-    pool_id: u64,
-    member: &Address,
-    amount: i128,
-) {
-    let key = DataKey::MemberContributionTotal(pool_id, member.clone());
-    env.storage().persistent().set(&key, &amount);
-    extend_persistent_ttl(env, &key);
-}
-
 pub(crate) fn read_pool_assigned_balance(env: &Env, pool_id: u64) -> i128 {
     let key = DataKey::PoolAssignedBalance(pool_id);
     let value = env.storage().persistent().get(&key).unwrap_or(0);
@@ -177,36 +137,6 @@ pub(crate) fn read_refund_liability(env: &Env, pool_id: u64, member: &Address) -
 
 pub(crate) fn write_refund_liability(env: &Env, pool_id: u64, member: &Address, amount: i128) {
     let key = DataKey::RefundLiability(pool_id, member.clone());
-    env.storage().persistent().set(&key, &amount);
-    extend_persistent_ttl(env, &key);
-}
-
-pub(crate) fn read_total_refund_liability(env: &Env, pool_id: u64) -> i128 {
-    let key = DataKey::TotalRefundLiability(pool_id);
-    let value = env.storage().persistent().get(&key).unwrap_or(0);
-    if env.storage().persistent().has(&key) {
-        extend_persistent_ttl(env, &key);
-    }
-    value
-}
-
-pub(crate) fn write_total_refund_liability(env: &Env, pool_id: u64, amount: i128) {
-    let key = DataKey::TotalRefundLiability(pool_id);
-    env.storage().persistent().set(&key, &amount);
-    extend_persistent_ttl(env, &key);
-}
-
-pub(crate) fn read_sponsor_advance(env: &Env, pool_id: u64, member: &Address) -> i128 {
-    let key = DataKey::SponsorAdvance(pool_id, member.clone());
-    let value = env.storage().persistent().get(&key).unwrap_or(0);
-    if env.storage().persistent().has(&key) {
-        extend_persistent_ttl(env, &key);
-    }
-    value
-}
-
-pub(crate) fn write_sponsor_advance(env: &Env, pool_id: u64, member: &Address, amount: i128) {
-    let key = DataKey::SponsorAdvance(pool_id, member.clone());
     env.storage().persistent().set(&key, &amount);
     extend_persistent_ttl(env, &key);
 }
@@ -269,21 +199,6 @@ pub(crate) fn has_refund_claimed(env: &Env, pool_id: u64, member: &Address) -> b
 
 pub(crate) fn write_refund_claimed(env: &Env, pool_id: u64, member: &Address) {
     let key = DataKey::RefundClaimed(pool_id, member.clone());
-    env.storage().persistent().set(&key, &true);
-    extend_persistent_ttl(env, &key);
-}
-
-pub(crate) fn has_sponsor_remainder_claimed(env: &Env, pool_id: u64) -> bool {
-    let key = DataKey::SponsorRemainderClaimed(pool_id);
-    let claimed = env.storage().persistent().get(&key).unwrap_or(false);
-    if claimed {
-        extend_persistent_ttl(env, &key);
-    }
-    claimed
-}
-
-pub(crate) fn write_sponsor_remainder_claimed(env: &Env, pool_id: u64) {
-    let key = DataKey::SponsorRemainderClaimed(pool_id);
     env.storage().persistent().set(&key, &true);
     extend_persistent_ttl(env, &key);
 }

@@ -45,24 +45,28 @@ sourcing `.env` first.)
 
 Runs two full scenarios against an already-deployed contract, self-issuing
 a demo settlement asset (`STLP`) so it needs no external testnet-USDC
-faucet:
+faucet. The contract is sponsorless (v9): every member always pays their
+own contribution; there is no sponsor, guarantee, or advance.
 
-- **Pool A — happy path**: two members join, the creator proposes terms
-  (recipient order + verifiers), every member and the sponsor approve that
-  terms version, the sponsor funds the guarantee, anyone starts the pool,
-  both rounds are fully funded, proposed against the pool's fixed demo
+- **Pool A — happy path + live cure**: two members join, the creator
+  proposes terms (recipient order + verifiers), every member approves that
+  terms version, anyone starts the pool, both rounds are fully funded
+  (every member pays every round), proposed against the pool's fixed demo
   seller, approved by both verifiers, and executed — the pool reaches
   `Completed`.
-- **Pool B — default/abort/refund**: same members, short round/grace
-  durations. Only one member deposits, the round goes overdue (round-level
-  `Grace`, not a pool-level pause), anyone aborts the pool once grace
-  expires, and the paying member's refund plus the sponsor's freed
-  guarantee remainder are both claimed.
+- **Pool B — the plan's canonical demo scenario**: round 1 is fully paid
+  and settles to the demo seller. In round 2 the member who already
+  received round 1's allocation stops paying entirely; the round goes
+  overdue (round-level `Grace`), anyone aborts once grace expires
+  (`SafetyRecovery`), and only the still-paying member's round-2 deposit
+  is refundable — round 1's amounts are gone for good, matching the
+  plan's accepted economic risk (an early recipient defaulting later
+  cannot be recovered on-chain).
 
-Pool B genuinely waits out its round and grace deadlines in real time
-(Soroban deadlines are wall-clock, not simulatable) — the whole run takes
-a few minutes. Every ID, event, and transaction hash the script prints is
-real Testnet evidence for `docs/IMPLEMENTATION_LOG.md`.
+Both pools genuinely wait out real deadlines where relevant (Soroban
+deadlines are wall-clock, not simulatable) — the whole run takes a few
+minutes. Every ID, event, and transaction hash the script prints is real
+Testnet evidence for `docs/IMPLEMENTATION_LOG.md`.
 
 Secret keys are never printed; they stay in the Stellar CLI's local
 identity store (`stellar keys ls` / `stellar keys address <name>`).

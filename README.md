@@ -54,12 +54,12 @@ flowchart TD
 
 ## Teslim durumu
 
-- [ ] Sponsorsuz tur, satıcı ödemesi ve yalnız mevcut tur iadesi değişmezleri test edilmiş Soroban kontratı
-- [ ] Kuruluş/ödeme/alım son tarihleri, üye onayı ve geçmiş tur iade yasağı testleri
-- [ ] Testnet contract ID ve yeniden üretilebilir kurulum
+- [x] Sponsorsuz tur, satıcı ödemesi ve yalnız mevcut tur iadesi değişmezleri test edilmiş Soroban kontratı (19 birim testi, [docs/IMPLEMENTATION_LOG.md](docs/IMPLEMENTATION_LOG.md) Faz 12)
+- [x] Kuruluş/ödeme/alım son tarihleri, üye onayı ve geçmiş tur iade yasağı testleri
+- [x] Testnet contract ID ve yeniden üretilebilir kurulum ([scripts/deploy_testnet.sh](scripts/deploy_testnet.sh); canlı kontrat `CCAKOEC34WVBKQ427KT5PI5GMPPKSGBHCWBI7FO4GNG247KKDUH67AZH`)
 - [x] Mainnet için işlemsiz, canlı ağ bilgisini okuyan tanıtım derlemesi
-- [ ] Kontrat durumlarıyla uyumlu cüzdanlı arayüz ve demo satıcı ödemesi
-- [ ] Eksik ödeme → ek süre → tur durması → mevcut tur iadesi demosu
+- [ ] Kontrat durumlarıyla uyumlu cüzdanlı arayüz ve demo satıcı ödemesi (kontratın frontend'in `pool.ts`/`types/pool.ts` istemcisiyle birebir alan/fonksiyon eşleşmesi doğrulandı; cüzdan üzerinden tıklanabilir uçtan uca akış henüz denenmedi)
+- [x] Eksik ödeme → ek süre → tur durması → mevcut tur iadesi demosu ([scripts/demo_testnet.sh](scripts/demo_testnet.sh), plan'ın kanonik senaryosu + canlı cure akışı Testnet'te çalıştırıldı)
 - [x] Açıkça simülasyon etiketli anchor akışı
 - [ ] Gerçek TL anchor giriş/çıkışı ve kullanılabilir bakiye kanıtı (hackathon şartı, mevcut kapsamda karşılanmıyor)
 - [ ] AI denetçisi için gerekçeli rapor ve insan kararı

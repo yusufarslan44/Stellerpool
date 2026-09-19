@@ -2,23 +2,23 @@
 
 Source of truth: `docs/plan.md` (sponsorless model, 19 Eylül 2026 revision). This implementation plan translates that product and economic model into phased contract/backend work. When older repository notes conflict with `docs/plan.md`, this plan follows `docs/plan.md`.
 
-Current status: **the deployed contract (schema/API version 8, Phases 1-11) is the superseded sponsor-based generation.** `docs/plan.md` no longer has a sponsor, sponsor guarantee, sponsor advance, or sponsor remainder. **Phase 12 (below) is the open work item**: realign the contract, scripts, and Testnet deployment to the sponsorless plan. The frontend (`frontend/src/services/pool.ts`, `frontend/src/types/pool.ts`) is already sponsorless and is the fixed client target for that phase. Phases 1-11 remain below as historical record of the sponsor-based generation.
+Current status: **Phase 12 is complete.** The contract (schema/API version 9) is sponsorless, redeployed to Testnet, and verified field-for-field against the frontend's already-written client (`frontend/src/services/pool.ts`, `frontend/src/types/pool.ts`). Phases 1-11 below describe the superseded sponsor-based generation (schema/API version 8) and are kept as historical record only.
 
 ## 1. Current Repository State
 
-Implemented (sponsor-based generation, API v8; to be replaced by Phase 12):
+Implemented (sponsorless generation, API v9, Phase 12):
 
 - Protocol 28 Rust workspace with `soroban-sdk 28.0.0`; `rotating_pool` multi-pool contract crate.
 - Typed pool/member/round models, storage keys, errors, events, persistent-storage TTL helpers, read API, SDK test snapshots, canonical WASM build.
-- Terms proposal/approval, verifier quorum, purchase proposal/approval, seller payout, round advancement, Grace/abort/refund, permissionless start and cancel.
-- **Sponsor-specific parts that no longer belong in the model:** `sponsor` on `create_pool`, `fund_guarantee`, `top_up`, `repay_advance`, `claim_sponsor_remainder`, `get_sponsor_advance`, `get_sponsor_remainder_claimed`, guarantee/advance/top-up storage, sponsor events, sponsor-based test names and snapshots.
-- `scripts/deploy_testnet.sh` and `scripts/demo_testnet.sh` (the demo script still funds a guarantee and uses a sponsor identity).
+- Terms proposal/approval (members only), verifier quorum, member-only-pays-own-contribution round funding, purchase proposal/approval, demo-seller payout, round advancement, Grace/abort, current-round-only refund, permissionless start/cancel/mark-overdue/execute/abort.
+- No sponsor, guarantee, advance, or top-up concept anywhere in the contract, storage, events, or errors.
+- Redeployed to Testnet as a new contract instance; `scripts/deploy_testnet.sh` (unchanged, never called `create_pool`) and `scripts/demo_testnet.sh` (rewritten for the sponsorless flow) both target it.
 
 Not implemented yet:
 
-- Sponsorless contract (Phase 12), a redeployed Testnet instance of it, backend, and Anchor adapter.
+- Backend and Anchor adapter (blocked on a real provider/home domain, unchanged since Phase 0).
 
-The frontend is maintained by a separate workstream. It is already written for the sponsorless API and must not be edited by the contract workstream; contract compatibility is achieved from the contract side.
+The frontend is maintained by a separate workstream and was not edited; Phase 12 achieved compatibility entirely from the contract side, verified against `frontend/src/services/pool.ts` and `frontend/src/types/pool.ts`.
 
 ## 2. Requirements Extracted From Documentation
 
@@ -224,9 +224,11 @@ Integration/Testnet tests:
 
 Phases 0-11 describe the **sponsor-based generation** and are kept as historical record. Phase 12 is the current work item.
 
-### PHASE 12 - Sponsorless Realignment (open)
+### PHASE 12 - Sponsorless Realignment
 
-Status: planned. Trigger: `docs/plan.md` revision of 19 Eylül 2026 removed the sponsor model; the frontend client already matches it.
+Status: completed on 2026-09-19. Trigger: `docs/plan.md` revision of 19 Eylül 2026 removed the sponsor model; the frontend client already matched it.
+
+Delivered: the contract was rewritten to exactly the section 6 API (21 exported functions: the 17 the frontend calls plus `version`/`next_pool_id`/`has_pool`/`get_refund_claim`), redeployed to Testnet as a new instance, and the plan's canonical demo scenario plus the cure-during-Grace path were both run live. See `docs/IMPLEMENTATION_LOG.md` for full evidence (contract ID, WASM hash, transaction hashes).
 
 Scope:
 

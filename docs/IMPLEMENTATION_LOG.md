@@ -1032,3 +1032,93 @@ Reconcile the deployed contract with two things that moved out from under it aft
 ### Status
 
 NEEDS REVIEW
+
+## Phase 12 - Sponsorless Realignment
+
+### Goal
+
+Remove the sponsor model entirely from the contract, matching `docs/plan.md`'s 19 Eylül sponsorless revision and the frontend client a teammate had already rewritten to that spec (`frontend/src/services/pool.ts`, `frontend/src/types/pool.ts`). A teammate had also already written the target API and scope directly into `docs/IMPLEMENTATION_PLAN.md` (section 6 and the "PHASE 12" entry) before this phase started; that specification was followed literally.
+
+### Changes Made
+
+- Rewrote `contracts/rotating_pool/src/types.rs`: dropped `sponsor` from `Pool`; dropped `required_guarantee`/`guarantee_deposited`; dropped `sponsor_advanced`/`asset`/`amount` from `RoundState` (asset/amount are validated once at `propose_purchase` time against `pool.token`/the round's fixed payout and never need to be persisted, since neither can change before execution); `MemberState` reduced to `{joined_at, received}` (no more `active`/`contributions_paid`, both unused without `leave_pool` or cross-round totals).
+- Rewrote `contracts/rotating_pool/src/storage.rs`: removed `GuaranteeBalance`, `RoundTopUp`, `SponsorAdvance`, `AdvanceCovered`, `SponsorRemainderClaimed`, `MemberContributionTotal`, and `TotalRefundLiability` keys entirely. `RefundLiability(pool_id, member)` now means only "this member's deposit into the current, not-yet-settled round" — no cumulative/cross-round tracking, no cached total (each member's own entry is authoritative; nothing needs cross-checking against a stored aggregate since `execute_round`/`claim_refund` keep `PoolAssignedBalance` consistent by construction).
+- Rewrote `contracts/rotating_pool/src/error.rs` and `events.rs`: removed every sponsor/guarantee/advance/top-up variant and event (`SponsorOnly`, `InsufficientGuarantee`, `InvalidTopUpAmount`, `TopUpNotAllowedForRecipient`, `RecipientOwesAdvance`, `RecipientMustSelfPay`, `NoOutstandingAdvance`, `SponsorRemainderNotClaimable`, `GuaranteeFunded`, `SponsorAdvanced`, `AdvanceRepaid`, `SponsorRemainderClaimed`).
+- Rewrote `contracts/rotating_pool/src/lib.rs`: dropped `fund_guarantee`, `top_up`, `repay_advance`, `claim_sponsor_remainder`, `get_sponsor_advance`, `get_sponsor_remainder_claimed`, and the `sponsor` parameter of `create_pool`/event. `approve_terms`/`start_pool` now only ever check member approval (no sponsor branch, no guarantee gate). `cancel_unstarted_pool` no longer transfers anything (nothing is ever locked during `Filling` now that there is no guarantee) — it just flips the pool to `Aborted` and emits a parameterless `PoolCancelled`. The shared `apply_member_payment` helper lost the advance-covered branch entirely: a round transitions `Collecting`/`Grace` -> `AwaitingPurchase` the moment `round.pot` reaches every member's contribution, full stop — no more "recipient must have self-paid and be debt-clear" special case, because there is no other way for a contribution to enter the pot. `execute_round` now clears **every** member's `RefundLiability` to `0` when the round settles (previously only the recipient's and already-delivered members'), matching "refund entitlement no longer spans rounds," and no longer computes a cross-round `remaining_liability`/solvency figure — the round's assigned balance is exactly its pot, consumed exactly by the payout.
+- Rewrote `contracts/rotating_pool/src/test.rs` from scratch: 19 tests covering create-pool validation, no-fund join with seller exclusion, member-only terms propose/approve/version-reset, permissionless start gated on full membership and full **member** approval (no guarantee check), setup-deadline cancellation with **no transfer at all**, deposit/cure round-phase gating and the simplified all-N-members-paid AwaitingPurchase transition, purchase proposal/approval validation and quorum, full two-round happy-path completion, insufficient-balance and failed-transfer rollback, grace-then-abort (`SafetyRecovery`), cure-during-grace recovery, purchase-deadline-expiry abort (`BlockedSettlement`), stored-role-auth requirements, multi-pool isolation, verifier-policy exclusion/bounds, and — the plan's canonical scenario, written as its own test — round 1 fully pays and settles, round 2's already-delivered member stops paying entirely, only the still-paying member's round-2 deposit is refundable, and the never-claimable first member's attempt is rejected.
+- Deployed the rewritten contract to Testnet as a **new** instance (the Phase 9-11 sponsor-based instances are API-incompatible and left untouched as historical artifacts).
+- Rewrote `scripts/demo_testnet.sh` for the sponsorless flow (no sponsor identity, no guarantee funding, no remainder claim); combined the plan's canonical demo scenario and a live cure-during-Grace demonstration into the same two-pool run to keep the live-evidence pass efficient. `scripts/deploy_testnet.sh` needed no changes (it only builds/deploys the WASM and resolves a settlement asset). Updated `scripts/README.md` to match.
+- Updated `.env` and `frontend/.env` (local, gitignored) with the new contract ID; updated `README.md`'s delivery checklist and `docs/IMPLEMENTATION_PLAN.md`'s status/section 1 to reflect Phase 12 completion.
+
+### Files Changed
+
+- `contracts/rotating_pool/src/types.rs`
+- `contracts/rotating_pool/src/storage.rs`
+- `contracts/rotating_pool/src/error.rs`
+- `contracts/rotating_pool/src/events.rs`
+- `contracts/rotating_pool/src/lib.rs`
+- `contracts/rotating_pool/src/test.rs`
+- `contracts/rotating_pool/test_snapshots/**`
+- `scripts/demo_testnet.sh`
+- `scripts/README.md`
+- `.env` (local only, gitignored)
+- `frontend/.env` (local only, gitignored)
+- `README.md`
+- `docs/IMPLEMENTATION_PLAN.md`
+- `docs/IMPLEMENTATION_LOG.md`
+
+### Commands Run
+
+- `cargo test --workspace`
+- `cargo fmt --all` / `cargo fmt --all -- --check`
+- `stellar contract build`
+- `stellar contract info interface --wasm target/wasm32v1-none/release/rotating_pool.wasm` (cross-checked `Pool`/`RoundState`/`MemberStatusView` field names one by one against `frontend/src/services/pool.ts`'s `mapPool`/`mapRound`/`mapMember`)
+- `stellar contract deploy --wasm ... --source stellerpool-deployer --network testnet --alias rotating_pool_v3`
+- Full live lifecycle via `stellar contract invoke --id <new contract> ...`: `create_pool`, `join_pool` x2, `propose_terms`, `approve_terms` x2 (members only), `start_pool`, `deposit`, `mark_overdue`, `cure_payment`, `propose_purchase`, `approve_purchase` x2, `execute_round`, `deposit` (round 2), `mark_overdue`, `abort_pool`, `claim_refund` x2, `get_pool`, `get_round`, `get_member_status`
+
+### Test Results
+
+- Unit tests passed: 19 passed, 0 failed.
+- Canonical Protocol 28 WASM build passed. Optimized WASM size: 31,165 bytes (down from 39,823 bytes in the sponsor-based v8 build, reflecting the removed sponsor code paths). WASM SHA-256: `8535d21fc83b242486fd5865b08ae433908a5cf77067215e5b27fdd5f1a55b2f`. Exported functions: 21 — exactly the 17 the frontend's `EXPECTED_METHODS` lists plus `version`/`next_pool_id`/`has_pool`/`get_refund_claim`. No `sponsor`/`guarantee`/`advance`/`top_up` symbol anywhere in the interface.
+- `stellar contract info interface` output compared field-by-field against `frontend/src/types/pool.ts`: `Pool` (20 fields, no `sponsor`/`requiredGuarantee`/`guaranteeDeposited`), `RoundState` (13 fields, no `sponsorAdvanced`), `MemberStatusView` (`{refundable, received}`) — exact match.
+- **Live Testnet deployment**: new contract ID `CCAKOEC34WVBKQ427KT5PI5GMPPKSGBHCWBI7FO4GNG247KKDUH67AZH` (WASM upload tx `83bbb0895b7a7952d5347603b296c7dfd3845444e3c53940682e1a76426a456c`, instance creation tx `730248d5e027d91422114620df41351dc7348e30177db3685e9fc45889783d97`). Reused the existing funded demo identities and `STLP` demo asset (SAC `CAOV35NPIJXHWA7QPXXERRJQ4ZTDUGAEHA7FKB6QIOTIOTI62B35ZNWI`).
+- **Live combined cure-path + plan-demo-scenario run** (`pool_id: 1`, contribution 1 STLP, member_limit 2, `round_duration: 40`, `grace_duration: 40`, `purchase_duration: 900`):
+  - `create_pool` tx `486f97b0d56b08ddb5473586b63ea235add8bbd98dca1c2a6a060ec03200f2dc`; both `join_pool`; `propose_terms` (`approval_threshold: 2` for 2 verifiers); two `approve_terms` (members only, no sponsor call anywhere in the sequence); `start_pool` tx `0d829021ab4cdec22ba824c23bff9fd7fdb93e4e3627f1576dd2f3d45a310abf` (permissionless, no guarantee check).
+  - Round 1: member1 deposits immediately, member2 does not; after the real collect deadline passed, `mark_overdue` tx `9e2db4eec262987cdf77f3c4d79b470f8aa77f95b8ab45ec324533ff1b497ba1` moved the round to `Grace`; member2 then called `cure_payment`, which both paid their contribution **and** transitioned the round straight to `AwaitingPurchase` in the same transaction (confirmed via `RoundAwaitingPurchase` in the same event log) — the cure path proven live, not just in unit tests.
+  - `propose_purchase`/two `approve_purchase`/`execute_round` (tx `fcf9190504f4a9d0a1c84a3d32cfa217ed977f5feab9160eb99c9215564513ab`) paid the demo seller 2 STLP and advanced to round 2.
+  - Round 2: only member2 (this round's recipient) deposits; member1 (round 1's already-delivered recipient) never pays. After the real collect deadline, `mark_overdue` tx `05838e108c3555e1986ec0ae9a6ccec8c728583a828ca10e98f175953c8e5b7f` moved round 2 to `Grace`; after the real grace deadline, `abort_pool` tx `3ccb735023d0a124f42bbf624fd94bb0f94e3e7f31c6ba83e4196a2d78610cb9` aborted the pool with `reason: "SafetyRecovery"`.
+  - Read back before any claim: `get_member_status(member1) = {refundable: 0, received: true}`, `get_member_status(member2) = {refundable: 10000000, received: false}` — exactly the plan's rule (round 1's recipient has nothing left to reclaim; the still-paying member's current-round deposit is fully refundable).
+  - `claim_refund(member1)` failed with contract error `#21` (`RefundNotClaimable`, entitlement `0`) as expected. `claim_refund(member2)` succeeded, transferring exactly `10000000` stroops back and emitting `RefundClaimed`.
+
+### Decisions
+
+- Followed the teammate's already-written `docs/IMPLEMENTATION_PLAN.md` section 6/12 specification literally rather than re-deriving scope from `docs/plan.md` prose independently, since it was written specifically to match the frontend client this phase had to stay compatible with, and cross-checking two independently-written specs against each other would have only introduced risk of a spurious mismatch.
+- Combined the "cure path" and "plan demo scenario" live-evidence requirements into a single two-pool script run (Pool A: happy path ending with an explicit cure-during-Grace step in its first round; Pool B: the canonical round-1-settles/round-2-defaults/abort/refund scenario) rather than four separate runs, to keep the live verification pass efficient while still exercising every required path.
+- `asset`/`amount` on `propose_purchase` remain in the function signature and event (the frontend sends and needs to send them) but are not persisted on `RoundState`, since both are fully determined by immutable pool fields (`pool.token`, `contribution_amount * member_limit`) at the moment they're validated — persisting them would be redundant state that could theoretically drift from the values that were actually checked.
+- Deployed a fresh contract instance rather than attempting any kind of migration from the v8 sponsor-based instance; Soroban has no upgrade mechanism by design (a standing decision since Phase 0), and the storage layout changed regardless.
+
+### Risks / Open Questions
+
+- The now three live Testnet contract instances (Phase 9/10's `CACZQBHHQ3TY33AJIC52MHMCPEKUYO4KQFURHQGPJJ3LNDJZAT6LG4II`, Phase 11's `CBC5DGFAQMEGVJVC6W3Z3J7SNMMFK5LQO3LMZVVJE5YFOPSF4CKW3U4Q`, and this phase's `CCAKOEC34WVBKQ427KT5PI5GMPPKSGBHCWBI7FO4GNG247KKDUH67AZH`) all remain live and queryable; only the last is referenced by `.env`/`frontend/.env`. None can be deleted (no Soroban contract-deletion mechanism); submission material must be careful to cite only the current one.
+- The accepted economic risk this phase's tests and live run demonstrate — an early recipient who stops paying in a later round leaves that round's other payer(s) needing to individually claim a refund, and the early recipient's own already-settled allocation is never clawed back — is by design per `docs/plan.md`, not a bug; it must stay visible in any demo or pitch material, not just in this log.
+- No dedicated TTL test exists yet for the sponsorless storage layout (same gap as every prior phase; Phase 8's full security/invariant suite was explicitly skipped for hackathon time pressure and that decision still stands).
+- The frontend itself was not run (no Node/browser session in this environment); compatibility rests on the generated-interface-vs-TypeScript-source comparison plus live CLI calls using the frontend's exact field shapes, not an actual wallet-driven click-through.
+
+### Stellar Skills Used
+
+- Stellar Smart Contracts: further state-machine simplification (dropping a whole accounting dimension — cross-round liability tracking — once the product rule that motivated it went away), generated-interface cross-checking against an external TypeScript client, and canonical build/deploy.
+- Stellar Assets & SAC: reused the existing self-issued demo asset and SAC wrapper across three contract generations without re-issuing anything.
+- Soroban Common Mistakes: no partial/duplicate storage removal (every sponsor-era key, error, and event was deleted together, not left dangling); fresh contract instance instead of an unsupported in-place upgrade; checks-effects-interactions preserved in every rewritten entrypoint.
+
+### Definition of Done
+
+- Contract matches `docs/IMPLEMENTATION_PLAN.md` section 6's 17-method API plus the four read helpers, with no sponsor/guarantee/advance/top-up symbol remaining: completed, verified via `stellar contract info interface`.
+- Parameter and field names match the frontend client exactly: completed, verified by direct comparison.
+- Plan demo scenario passes as a unit test and live on Testnet: completed.
+- Cure path runs live: completed.
+- New contract ID, WASM hash, and key transaction hashes recorded: completed (above).
+- Frontend untouched: completed.
+
+### Status
+
+NEEDS REVIEW
