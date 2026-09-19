@@ -30,7 +30,7 @@ flowchart TD
   C --> D[Dönem: herkes katkısını yatırır]
   D --> E{Herkes ödedi mi?}
   E -->|Evet| F[execute_round: havuz sıradaki üyeye gider]
-  E -->|Süre doldu| G[settle_round: eksik pay teminattan kapatılır]
+  E -->|Süre doldu| G[settle_round: eksik pay teminattan kapatılır, teminat yetmezse işlem başarısız olur]
   G --> F
   F --> H{Son dönem mi?}
   H -->|Hayır| D
@@ -53,7 +53,7 @@ flowchart TD
 | `docs/` | Plan ve mimari dokümanlar ([plan](docs/plan.md)) |
 
 ## Bilinen sınırlar
-- Teminat bir katkı kadardır; tam temerrüt koruması yoktur.
+- Teminat bir katkı kadardır. MVP her üye için en fazla bir kaçırılmış katkıyı emer; sonraki default'lar havuzu bloke edebilir. Tam temerrüt koruması yoktur.
 - Sıra sabittir, kura yoktur.
 - Non-custodial olan havuz mantığıdır; stablecoin ihraççısı ve anchor merkezi taraflardır.
 - Testnet MVP'dir. Gerçek parayla kullanmadan önce hukuki danışmanlık gerekir.
