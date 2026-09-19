@@ -1,69 +1,56 @@
 # Stellerpool Backend & Soroban Implementation Plan
 
-Source of truth: `docs/plan.md`. This implementation plan translates that product and economic model into phased contract/backend work. When older repository notes conflict with `docs/plan.md`, this plan follows `docs/plan.md`.
+Source of truth: `docs/plan.md` (sponsorless model, 19 Eylül 2026 revision). This implementation plan translates that product and economic model into phased contract/backend work. When older repository notes conflict with `docs/plan.md`, this plan follows `docs/plan.md`.
 
-Current status: Phase 11 is complete and awaiting review. The contract has been rewritten (schema/API version 8) to match the current `docs/plan.md` (post `aa0bc42` revision) precisely, field-for-field compatible with the frontend's already-written contract client. Deployed live on Testnet and exercised end to end. See Phase 11 below for full detail; Phases 1-10 below describe the prior (now superseded) contract generation and remain as historical record.
+Current status: **the deployed contract (schema/API version 8, Phases 1-11) is the superseded sponsor-based generation.** `docs/plan.md` no longer has a sponsor, sponsor guarantee, sponsor advance, or sponsor remainder. **Phase 12 (below) is the open work item**: realign the contract, scripts, and Testnet deployment to the sponsorless plan. The frontend (`frontend/src/services/pool.ts`, `frontend/src/types/pool.ts`) is already sponsorless and is the fixed client target for that phase. Phases 1-11 remain below as historical record of the sponsor-based generation.
 
 ## 1. Current Repository State
 
-Implemented:
+Implemented (sponsor-based generation, API v8; to be replaced by Phase 12):
 
-- Protocol 28 Rust workspace with `soroban-sdk 28.0.0`.
-- `rotating_pool` multi-pool contract crate.
-- Typed pool/member/round models, storage keys, errors, and events.
-- Persistent storage TTL helpers.
-- Read API, unit-test scaffold, SDK test snapshots, and canonical WASM build.
-- Immutable-on-start verifier policy, purchase proposal, and approval quorum flow.
-- Solvency-checked seller payout, liability reclassification, round advancement, and pool completion.
-- Overdue, Grace, member cure, separate sponsor top-up, and Paused recovery lifecycle.
-- Permissionless abort from Paused, delivered/not-delivered member refund claims, and order-independent sponsor remainder claim.
+- Protocol 28 Rust workspace with `soroban-sdk 28.0.0`; `rotating_pool` multi-pool contract crate.
+- Typed pool/member/round models, storage keys, errors, events, persistent-storage TTL helpers, read API, SDK test snapshots, canonical WASM build.
+- Terms proposal/approval, verifier quorum, purchase proposal/approval, seller payout, round advancement, Grace/abort/refund, permissionless start and cancel.
+- **Sponsor-specific parts that no longer belong in the model:** `sponsor` on `create_pool`, `fund_guarantee`, `top_up`, `repay_advance`, `claim_sponsor_remainder`, `get_sponsor_advance`, `get_sponsor_remainder_claimed`, guarantee/advance/top-up storage, sponsor events, sponsor-based test names and snapshots.
+- `scripts/deploy_testnet.sh` and `scripts/demo_testnet.sh` (the demo script still funds a guarantee and uses a sponsor identity).
 
 Not implemented yet:
 
-- Deployment scripts, Testnet evidence, backend, and Anchor adapter.
+- Sponsorless contract (Phase 12), a redeployed Testnet instance of it, backend, and Anchor adapter.
 
-Frontend remains read-only and must not be modified by this workstream.
+The frontend is maintained by a separate workstream. It is already written for the sponsorless API and must not be edited by the contract workstream; contract compatibility is achieved from the contract side.
 
 ## 2. Requirements Extracted From Documentation
 
 The controlling requirements from `docs/plan.md` are:
 
-- MVP is a fixed-order savings pool with one contribution per member per round and one allocation per member.
-- Members do not lock entry collateral. The earlier one-contribution member-collateral model is removed.
-- A separate sponsor funds the pool guarantee.
-- Minimum initial guarantee is `floor(member_count^2 / 4) * contribution_amount`.
-- Sponsor guarantee and member contributions are accounted separately.
-- Creator configures the pool but cannot withdraw pool funds, reorder an active pool, replace a seller unilaterally, or approve a purchase alone.
-- Lifecycle is `Filling -> Active`, with `Grace` and `Paused` for overdue/recovery handling, then `Completed` or `Aborted`.
-- All members, fixed recipient order, and minimum sponsor guarantee must exist before start.
-- A round contribution can be collected once per member.
-- Missing contributions do not silently reduce another member's allocation or refund rights.
-- A member may cure an overdue contribution. The sponsor may separately top up a round shortfall without erasing the member's off-chain debt.
-- The round allocation goes to a recorded seller, not to the recipient member.
-- Seller address and purchase-document digest are proposed by the current recipient.
-- Designated independent verifiers approve a purchase; creator approval alone is insufficient.
-- `execute_round` is permissionless only when the round pot is complete, purchase approval exists, and post-payment refund solvency remains intact.
-- If safe continuation is unavailable after the configured grace period, anyone may trigger abort.
-- On abort, members who have not received an allocation reclaim all completed contributions. Members who already received an allocation reclaim only contributions made into an unfinished round.
-- Sponsor receives only the guarantee remainder left after all member refund liabilities are covered.
-- Every balance and claim is scoped by `pool_id`; pools never cross-subsidize one another.
-- Contract amounts are integer token base units. TRY and fiat conversion remain in the Anchor layer.
-- No yield, lending, staking, liquidity-pool strategy, unilateral upgrade, or admin escape hatch is part of the MVP.
-- Testnet/demo claims must clearly distinguish simulated purchase verification from real property or vehicle delivery.
+- MVP is a closed, fixed-member group (2-12 members) with one equal contribution `C` per member per round, `N` rounds, and each member the recipient exactly once. Lottery and variable amounts are out of scope.
+- Members do not lock entry collateral. There is **no sponsor, sponsor guarantee, sponsor advance, third-party top-up, or platform delivery guarantee**. A shortfall is never assumed to be covered by new users' contributions.
+- The creator only proposes. Order, verifiers, amounts, durations, and the demo seller become valid only when **all members approve the same terms version**. The creator can neither change terms nor withdraw funds alone.
+- Lifecycle is `Filling -> Active -> Completed | Aborted`. A round is `Collecting -> Grace -> AwaitingPurchase -> Settled`.
+- A round proceeds to purchase only when **every member has paid their own contribution** in that round. There is no payment on behalf of another member.
+- After the collect deadline, a fixed, non-extendable grace period starts; a missing member may cure once. If the round is still incomplete, anyone may end the pool.
+- Refund scope is limited to the **current, unfinished round**: each member can reclaim only what they personally deposited into that round. Contributions of rounds already paid to a seller are never refundable by the contract.
+- The round allocation goes to the pre-set demo seller, not to the recipient member. The recipient proposes seller, asset, amount, and document digest; independent verifiers approve; the threshold is `ceil(2/3 x verifier count)`.
+- There is a separate purchase deadline. If the proposal or approvals do not arrive in time, the current round's contributions become refundable.
+- `execute_round` is permissionless once all contributions are in, approvals reach the threshold, the purchase window is open, and the seller can receive the asset.
+- Every balance and claim is scoped by `pool_id`; pools never cross-subsidize one another; the contract's total token balance is never a round's available amount.
+- Amounts are integer token base units. TRY/fiat conversion remains in the Anchor layer.
+- No yield, lending, staking, liquidity strategy, unilateral upgrade, or admin escape hatch.
+- The open economic risk is documented and must stay visible: after an early recipient is paid out, that member's later non-payment cannot be recovered by the contract, and adding more members does not remove it.
+- Testnet/demo claims must distinguish simulated purchase verification from real property or vehicle delivery.
 
 ## 3. Architecture
 
 ```mermaid
 flowchart LR
   Member[Member wallet] --> Pool[Rotating Pool Contract]
-  Sponsor[Sponsor wallet] --> Pool
   Recipient[Current recipient] --> Pool
   Verifier[Independent verifier wallets] --> Pool
   Pool --> SAC[SAC / SEP-41 settlement token]
-  SAC --> Seller[Recorded seller wallet]
-  Pool --> Refunds[Member refund claims]
-  Pool --> SponsorRemainder[Sponsor remainder claim]
-  Frontend[Frontend - read only for this task] --> RPC[Stellar RPC]
+  SAC --> Seller[Recorded demo seller wallet]
+  Pool --> Refunds[Current-round member refund claims]
+  Frontend[Frontend - separate workstream] --> RPC[Stellar RPC]
   Backend[Minimal backend / Anchor adapter] --> RPC
   Backend --> Anchor[TRY Anchor, provider unknown]
   RPC --> Pool
@@ -71,44 +58,39 @@ flowchart LR
 
 Contract:
 
-- Owns authoritative pool configuration, sponsor guarantee, membership, order, rounds, contributions, purchases, approvals, liabilities, claims, and lifecycle.
+- Owns authoritative pool configuration, membership, order, terms approvals, rounds, contributions, purchases, approvals, current-round refund liabilities, claims, and lifecycle.
 - Transfers only the pool's configured token.
-- Pays only the approved seller for the current round.
+- Pays only the recorded demo seller for the current round.
 
 Backend:
 
-- Discovers and orchestrates Anchor flows.
-- May cache RPC/Anchor status and provide diagnostics.
+- Discovers and orchestrates Anchor flows. May cache RPC/Anchor status and provide diagnostics.
 - Never decides financial state, approvals, payout amount, refund entitlement, or pool solvency.
 
 Off-chain verifier/legal layer:
 
-- Validates seller identity, documents, property/vehicle records, and legal security.
-- Produces approvals for test data in the hackathon prototype.
-- Does not make a Testnet demonstration equivalent to legal title transfer.
+- Validates seller identity, documents, property/vehicle records, and legal security. Produces approvals for test data in the hackathon prototype.
+- Recovery of a defaulting early recipient's remaining obligation is an off-chain/legal matter and is not guaranteed by the demo.
 
 ## 4. On-chain vs Off-chain Responsibilities
 
 ON-CHAIN:
 
-- Pool creation and immutable active configuration.
-- Sponsor identity, required guarantee, funded guarantee, and sponsor top-ups.
-- Membership and fixed recipient order.
-- Round deadlines, grace deadlines, and lifecycle transitions.
-- Per-member per-round contribution records.
-- Per-pool assigned balance and refund-liability accounting.
-- Purchase proposal, seller address, document digest, verifier approvals, and quorum.
-- Exact seller payout and post-payment solvency check.
-- Abort, member refund claims, and sponsor remainder claim.
-- Typed events and claim replay protection.
+- Pool creation and immutable active configuration (including durations, setup deadline, demo seller).
+- Membership, versioned terms proposal/approval, and fixed recipient order.
+- Round deadlines, grace deadlines, purchase deadlines, and lifecycle transitions.
+- Per-member per-round contribution records and per-pool assigned balance.
+- Purchase proposal (seller, asset, amount, document digest), verifier approvals bound to a proposal version, and quorum.
+- Exact seller payout, current-round refund entitlement, and claim replay protection.
+- Typed events.
 
 OFF-CHAIN:
 
 - Anchor SEP-1/10/24/6/12/38 orchestration as supported by a real provider.
 - KYC/AML, TRY payment rails, issuer risk, and exchange-rate disclosure.
 - Seller, invoice/contract, title/deed/registration, mortgage/lien, and legal collection verification.
-- Notifications, restructuring negotiation, and off-chain debt collection.
-- Monitoring, indexing, metadata, and demo evidence.
+- Recovery of obligations of members who received an allocation and then stopped paying.
+- Notifications, monitoring, indexing, metadata, and demo evidence.
 
 The backend is never the financial source of truth.
 
@@ -120,136 +102,87 @@ Instance storage:
 
 Persistent storage, always scoped by `pool_id`:
 
-- `Pool(pool_id) -> Pool`
-- `PoolMembers(pool_id) -> Vec<Address>` with a validated hard cap.
-- `Member(pool_id, member) -> MemberState`
-- `RecipientOrder(pool_id) -> Vec<Address>`
-- `VerifierPolicy(pool_id) -> VerifierPolicy`
-- `Round(pool_id, round) -> RoundState`
+- `Pool(pool_id) -> Pool` (members, recipient order, verifiers, terms version/approvals, durations, deadlines, demo seller, status embedded)
+- `Member(pool_id, member) -> MemberState` (`received`)
+- `Round(pool_id, round) -> RoundState` (phase, deadlines, paid list, seller, document digest, purchase version, approvals embedded)
 - `Deposit(pool_id, round, member) -> bool`
-- `RoundPot(pool_id, round) -> i128`
-- `MemberContributionTotal(pool_id, member) -> i128`
-- `PoolAssignedBalance(pool_id) -> i128`
-- `GuaranteeBalance(pool_id) -> i128`
-- `RoundTopUp(pool_id, round) -> i128`
-- `Purchase(pool_id, round) -> PurchaseState`
-- `VerifierApproval(pool_id, round, verifier) -> bool`
-- `RefundLiability(pool_id, member) -> i128`
-- `TotalRefundLiability(pool_id) -> i128`
+- `PoolAssignedBalance(pool_id) -> i128` (equals the sum of current-round deposits)
+- `RefundLiability(pool_id, member) -> i128` (that member's deposit in the current unfinished round only)
 - `RefundClaimed(pool_id, member) -> bool`
-- `SponsorRemainderClaimed(pool_id) -> bool`
 
-No member-collateral key is used. Existing Phase 1 collateral placeholders are removed in Phase 2 before deployment.
-
-Every successful deposit initially increases both the member refund liability and the pool total refund liability. Later seller-payout logic may reduce or reclassify those preliminary liabilities only under the delivered/not-delivered and post-payment solvency rules.
+Removed with the sponsor model: `GuaranteeBalance`, `RoundTopUp`, `SponsorAdvance`, `SponsorRemainderClaimed`, and the cumulative `MemberContributionTotal` and `TotalRefundLiability` keys (refund entitlement no longer spans rounds).
 
 TTL policy:
 
 - Extend instance TTL on global reads/writes.
 - Extend persistent TTL for every touched financial record.
-- Ensure TTL horizons cover the full pool, grace, abort, and claim periods.
-- Add explicit TTL tests before Testnet deployment.
+- Ensure TTL horizons cover the full pool, grace, purchase, abort, and claim periods; keep explicit TTL tests.
 
 ## 6. Contract API
 
-Target P0 API, refined during implementation without weakening the documented economics:
+Target API (17 methods; names and arguments match `frontend/src/services/pool.ts` exactly):
 
-- `create_pool(creator, sponsor, token, contribution_amount, member_limit, round_duration_secs, grace_duration_secs) -> pool_id`
-- `fund_guarantee(pool_id, amount)`; stored sponsor authorization is required.
-- `join_pool(member, pool_id)`; no entry collateral transfer.
-- `leave_pool(member, pool_id)`; Filling-only exit before start.
-- `start_pool(creator, pool_id, recipient_order)`; full membership, minimum guarantee, exact order, and verifier policy required.
-- `deposit(member, pool_id)`
-- `configure_verifiers(creator, pool_id, verifiers, approval_quorum)`; Filling-only, minimum two independent verifiers and minimum two approvals.
-- `propose_purchase(member, pool_id, seller, document_digest)`
-- `approve_purchase(verifier, pool_id, round)`
+- `create_pool(creator, token, contribution_amount, member_limit, round_duration, grace_duration, purchase_duration, setup_deadline, demo_seller) -> pool_id`
+- `join_pool(pool_id, member)`; no entry collateral transfer.
+- `propose_terms(pool_id, creator, recipient_order, verifiers) -> version`; a new proposal clears earlier approvals.
+- `approve_terms(pool_id, approver, version)`; members only, valid for the current version only.
+- `start_pool(pool_id)`; permissionless once membership is full and every member approved the current version.
+- `cancel_unstarted_pool(pool_id)`; permissionless after `setup_deadline` while still `Filling`. Nothing is locked in `Filling`, so no transfer occurs.
+- `deposit(pool_id, member)`; `cure_payment(pool_id, member)` during Grace. Only the member pays their own contribution, once per round.
+- `propose_purchase(pool_id, member, seller, asset, amount, doc_hash) -> proposal_version`; current recipient only; seller must equal `demo_seller`.
+- `approve_purchase(pool_id, round, verifier, proposal_version)`
 - `execute_round(pool_id)`
-- `mark_overdue(pool_id)`
-- `cure_payment(member, pool_id)`
-- `top_up(pool_id, amount)`; sponsor authorization required and recorded separately from member debt.
-- `pause_pool(pool_id)`; permissionless after the fixed grace deadline when the round remains underfunded.
-- `abort_pool(pool_id)`
-- `claim_refund(member, pool_id)`
-- `claim_sponsor_remainder(pool_id)`
-- `get_pool(pool_id)`
-- `get_round(pool_id, round)`
-- `get_member_status(pool_id, member)`
-- `get_refund_claim(pool_id, member)`
+- `mark_overdue(pool_id)`; permissionless after the collect deadline (moves the round to Grace).
+- `abort_pool(pool_id)`; permissionless when Grace or the purchase window has expired without completion.
+- `claim_refund(pool_id, member)`; pays only the member's own current-round deposit, once.
+- Reads: `get_pool`, `get_round`, `get_member_status` (`{refundable, received}`), plus `version`, `next_pool_id`, `has_pool`, `get_refund_claim`.
 
-Verifier configuration and approval quorum are fixed before pool start and immutable while active. The bounded policy permits 2 to 10 verifier addresses and requires a quorum from 2 through the verifier count. Creator, sponsor, token contract, pool contract, and pool members cannot be verifiers.
+Removed: `fund_guarantee`, `top_up`, `repay_advance`, `claim_sponsor_remainder`, `get_sponsor_advance`, `get_sponsor_remainder_claimed`, and the `sponsor` argument of `create_pool`.
+
+Verifier policy: 2 to 10 addresses; approval threshold is computed as `ceil(2/3 x verifier count)`; creator, members, token contract, and pool contract cannot be verifiers.
 
 Authorization:
 
-- Creator: create, configure the Filling-stage verifier policy, and start only.
-- Member: join, leave, deposit/cure, propose purchase for their own current allocation, and claim their refund.
-- Sponsor: fund initial guarantee, top up a shortfall, and claim the final permitted remainder.
-- Verifier: approve a purchase once.
-- Permissionless: execute ready rounds, mark overdue after deadline, pause after grace expiry, and abort after the recovery conditions are satisfied.
+- Creator: create and propose terms only.
+- Member: join, approve terms, deposit/cure, propose a purchase for their own current allocation, and claim their refund.
+- Verifier: approve a purchase once per proposal version.
+- Permissionless: start (when approved), cancel unstarted, mark overdue, execute a ready round, and abort after expiry.
 
 ## 7. Events
 
-Typed event set:
+Typed event set: `PoolCreated`, `MemberJoined`, `TermsProposed`, `TermsApproved`, `PoolStarted`, `PoolCancelled`, `ContributionDeposited`, `PaymentCured`, `RoundOverdue`, `PurchaseProposed`, `PurchaseApproved`, `RoundPaid`, `PoolAborted`, `RefundClaimed`, `PoolCompleted`.
 
-- `PoolCreated`
-- `GuaranteeFunded`
-- `MemberJoined`
-- `MemberLeft`
-- `PoolStarted`
-- `VerifierPolicyConfigured`
-- `ContributionDeposited`
-- `PurchaseProposed`
-- `PurchaseApproved`
-- `RoundPaid`
-- `RoundOverdue`
-- `PaymentCured`
-- `SponsorTopUp`
-- `PoolPaused`
-- `PoolAborted`
-- `RefundClaimed`
-- `SponsorRemainderClaimed`
-- `PoolCompleted`
-
-Events support audit and indexing but do not replace contract storage as financial truth.
+Removed: `GuaranteeFunded`, `SponsorTopUp`, `SponsorRemainderClaimed`. Events support audit and indexing but do not replace contract storage as financial truth.
 
 ## 8. Invariants
 
-- `required_guarantee = floor(member_limit^2 / 4) * contribution_amount` with checked arithmetic.
-- A pool cannot start until membership is full, recipient order is a duplicate-free permutation of members, and funded guarantee meets the minimum.
-- Joining does not transfer or reserve member collateral.
-- No function treats the contract's total token balance as one pool's available balance.
-- Every transfer is charged to one `pool_id` and one defined liability/payout purpose.
-- Sponsor guarantee, member contributions, round top-ups, and refund liabilities remain separately measurable.
-- A member contributes at most once per round.
-- A verifier approves at most once per purchase; creator approval alone cannot satisfy independent verification.
-- Seller payout equals exactly one full round allocation and goes only to the approved recorded seller.
-- After seller payout, the pool-assigned balance cannot fall below all outstanding member refund liabilities.
-- Completing a round clears completed-round refund liabilities for the current and earlier allocation recipients while preserving every future recipient's cumulative contributions.
-- A successful normal-round payout does not reduce the separately recorded sponsor guarantee; that reserve remains locked for refunds or the later sponsor-remainder claim.
-- Missing contributions never reduce another member's allocation or refund claim.
-- Sponsor top-up does not mark the missing member contribution as paid and does not erase off-chain debt.
-- Grace deadline is fixed as `round deadline + configured grace duration`; delayed triggering cannot extend recovery time.
-- Normal deposits close at the round deadline; only authenticated cure payments are accepted during Grace.
-- Aborted-pool claims follow the delivered/not-delivered refund rule and cannot be claimed twice.
-- Sponsor remainder is unavailable until member liabilities are fully reserved or paid.
-- Active financial configuration, order, sponsor, token, amounts, durations, and verifier policy are immutable.
+- The pool cannot start until membership is full and every member approved the current terms version; the recipient order is a duplicate-free permutation of members.
+- Joining does not transfer or reserve member funds.
+- No function treats the contract's total token balance as one pool's available balance; every transfer is charged to one `pool_id` and one defined purpose.
+- A member contributes at most once per round, only for themselves.
+- A round becomes ready for purchase only when all `N` members are recorded as `paid` and the round pot equals `N x C`.
+- `PoolAssignedBalance(pool_id)` equals the sum of `RefundLiability(pool_id, member)` at all times: the contract holds exactly the current unfinished round's deposits for that pool.
+- Seller payout equals exactly one full round pot, goes only to the recorded demo seller, and atomically clears that round's liabilities and assigned balance.
+- Approvals count only for the current `proposal_version` of the current round; a new proposal deletes stale approvals.
+- Grace deadline is fixed as `collect deadline + grace duration`; delayed triggering cannot extend recovery time. Normal deposits close at the collect deadline; only cure payments are accepted during Grace.
+- The purchase window starts once when all contributions are in; renewing a proposal does not reset it.
+- After abort, `claim_refund` returns only the member's own current-round deposit and cannot be claimed twice. Rounds already settled to a seller carry no refund entitlement.
+- Active financial configuration, order, token, amounts, durations, demo seller, and verifier policy are immutable.
 - Failed checks or transfers leave all state and balances unchanged.
 
 ## 9. Security Risks
 
-- Missing or incorrect `require_auth` on creator/member/sponsor/verifier actions.
-- Guarantee formula overflow or an incorrect floor calculation.
-- Cross-pool balance contamination when pools share one token contract.
-- Using total contract token balance instead of per-pool assigned accounting.
-- Paying an unapproved or substituted seller.
+- Missing or incorrect `require_auth` on creator/member/verifier actions.
+- Overflow in `N x C`.
+- Cross-pool balance contamination when pools share one token contract; using total contract balance instead of per-pool assigned accounting.
+- Paying an unapproved or substituted seller, or a seller that cannot receive the asset (trustline, freeze, clawback).
 - Creator/verifier collusion, duplicate verifiers, or a weak approval threshold.
-- Paying a round while future refund liabilities are underfunded.
-- Double deposit, approval, payout, refund, or sponsor remainder claim.
-- Incorrect delivered/not-delivered refund classification.
-- Sponsor top-up accidentally clearing member debt state.
-- Unsafe transitions among Active, Grace, Paused, Completed, and Aborted.
-- Unbounded member/verifier loops.
-- TTL expiry for financial state or claims.
+- Double deposit, approval, payout, or refund.
+- A refund that reaches back into a settled round, or a payout that leaves the current round's refunds underfunded.
+- Unsafe transitions among Collecting, Grace, AwaitingPurchase, Settled and pool Aborted/Completed.
+- Unbounded member/verifier loops; TTL expiry for financial state or claims.
 - Frozen/clawed-back SAC assets and issuer risk.
+- **Accepted, documented economic risk:** an early recipient who stops paying cannot be recovered on-chain; later members' earlier contributions are not returned. This must stay visible in every demo and UI.
 - Misrepresenting simulated Testnet verification as real property delivery.
 - Upgrade/admin escape paths. Default remains no upgrade mechanism.
 
@@ -257,10 +190,8 @@ Events support audit and indexing but do not replace contract storage as financi
 
 The provider remains unknown and must not be invented.
 
-- SEP-1 discovers provider endpoints and capabilities.
-- SEP-10 authenticates when required.
-- SEP-24 is preferred for hosted deposit/withdraw UX.
-- SEP-6 is the fallback for programmatic flows.
+- SEP-1 discovers provider endpoints and capabilities; SEP-10 authenticates when required.
+- SEP-24 is preferred for hosted deposit/withdraw UX; SEP-6 is the fallback for programmatic flows.
 - SEP-12 and SEP-38 are used only when provider requirements/capabilities demand them.
 - Anchor transaction state never marks a Soroban round contribution as paid; only the contract deposit call does.
 - Asset issuer, redemption, freeze/clawback, fees, minimums, and TRY conversion risk must be disclosed.
@@ -269,31 +200,56 @@ The provider remains unknown and must not be invented.
 
 Contract unit tests:
 
-- Guarantee formula, overflow, minimum amount, and N=4/C=10 => 40 example.
-- Creator/sponsor/member/verifier authorization boundaries.
-- Join without collateral, duplicate join, capacity, Filling leave, and no leave after start.
-- Guarantee funding, repeated funding, and wrong signer rejection.
-- Start gating for full membership, exact member permutation, and minimum guarantee.
-- Pool isolation for balances, deposits, liabilities, purchases, and claims.
-- Deposit once per round and exact token transfer.
-- Seller proposal ownership, document digest, verifier allowlist/quorum, and duplicate approval.
-- Exact seller payout and refund-solvency preservation.
-- Deadline, grace, pause, cure, and sponsor top-up behavior.
-- Abort eligibility and delivered/not-delivered refund calculations.
-- Double refund/remainder claims and sponsor-last ordering.
-- TTL and arithmetic boundaries.
-- SDK differential snapshots for ledger/auth/event changes.
+- Authorization boundaries for creator, member, verifier, and permissionless callers.
+- Join without collateral, duplicate join, capacity; terms proposal, version reset, approval only for the current version, start gating on full membership and all approvals.
+- Cancel unstarted after the setup deadline (no transfer).
+- Deposit once per round; cure only during Grace; no deposit after the collect deadline.
+- Round readiness requires all members' own payments; no proxy payment path exists.
+- Purchase proposal: recipient only, seller must be the demo seller, asset and amount must match, document digest non-zero; approvals bound to proposal version; duplicate approval rejected; threshold `ceil(2/3 x n)`.
+- Exact seller payout; failed transfer rolls everything back; pool isolation for balances and claims.
+- Abort eligibility (Grace expiry, purchase deadline expiry) and current-round-only refunds; double-refund rejection; no refund for a settled round.
+- **Plan demo scenario:** first round fully paid and settled, second-round recipient of round 1 stops paying, Grace expires, abort, only round-2 deposits refunded, round-1 amounts unrecoverable.
+- Cure path: the late member pays during Grace and the round proceeds.
+- TTL and arithmetic boundaries; SDK differential snapshots for ledger/auth/event changes.
 
 Integration/Testnet tests:
 
-- Canonical optimized WASM build.
-- SAC/test token setup.
-- Four-member, contribution-10, guarantee-40 happy path.
-- Second-round default, grace, no top-up, abort, and refunds.
-- Positive cure/top-up path without clearing debt incorrectly.
+- Canonical optimized WASM build; SAC/test token setup.
+- Four-member, contribution-10 happy path (first round pays the demo seller 40 units).
+- Second-round default, Grace, abort, and current-round-only refunds.
+- Cure path where the late member pays in Grace.
 - Record contract/token IDs and transaction hashes.
 
 ## 12. Phase Plan
+
+Phases 0-11 describe the **sponsor-based generation** and are kept as historical record. Phase 12 is the current work item.
+
+### PHASE 12 - Sponsorless Realignment (open)
+
+Status: planned. Trigger: `docs/plan.md` revision of 19 Eylül 2026 removed the sponsor model; the frontend client already matches it.
+
+Scope:
+
+- Remove `sponsor` from `Pool` and `create_pool`; delete `fund_guarantee`, `top_up`, `repay_advance`, `claim_sponsor_remainder`, `get_sponsor_advance`, `get_sponsor_remainder_claimed`, and their storage keys, events, errors, and types (`GuaranteeBalance`, `RoundTopUp`, `SponsorAdvance`, `SponsorRemainderClaimed`, guarantee/required-guarantee fields).
+- `approve_terms` and `start_pool`: approvals come from members only; no guarantee gate.
+- `cancel_unstarted_pool`: no sponsor refund; nothing is locked in `Filling`, so it only marks the pool cancelled.
+- Round readiness: all `N` members must have `paid` themselves; delete the recipient-self-pay-plus-old-advance special case and every advance check in `execute_round`.
+- Refund model: `RefundLiability` and `PoolAssignedBalance` cover the current unfinished round only; `execute_round` clears the round's liabilities and assigned balance atomically; drop cumulative contribution totals and cross-round solvency checks. `get_member_status.refundable` returns the caller's current-round deposit.
+- Keep the 17-method API from section 6 and every field the frontend's `mapPool`/`mapRound`/`mapMember` reads (`frontend/src/services/pool.ts`, `frontend/src/types/pool.ts`), minus the removed sponsor fields.
+- Rename and rewrite sponsor-based tests and snapshots; add the plan demo scenario from section 11.
+- Update `scripts/demo_testnet.sh` (no guarantee, no sponsor identity, no remainder claim) and `scripts/README.md`; keep `scripts/deploy_testnet.sh` unchanged.
+- Bump the API/schema version to 9; build the canonical WASM; redeploy to Testnet as a new instance (the v8 instance stays as a historical artifact); publish the new contract ID and `VITE_ROTATING_POOL_CONTRACT_ID`.
+
+Definition of Done:
+
+- `stellar contract info interface` on the built WASM lists exactly the section 6 methods (plus the four read helpers); no `sponsor`, `guarantee`, `advance`, or `top_up` symbol remains outside the historical docs.
+- Parameter and field names match the frontend client, verified by reading `frontend/src/services/pool.ts` against the Rust signatures and by `stellar contract bindings typescript` output.
+- The plan demo scenario passes as a unit test and runs live on Testnet: round 1 pays the demo seller, round 2 stops after a missing payment, only round-2 deposits are refunded.
+- Cure path runs live: the late member pays in Grace and the round proceeds.
+- `docs/IMPLEMENTATION_LOG.md` records the new contract ID, WASM hash, and key transaction hashes.
+- Frontend untouched.
+
+> **Historical (sponsor-based generation).** Phases 0-11 below describe the contract that Phase 12 replaces. They are kept unchanged as record; do not treat their sponsor requirements as current.
 
 ### PHASE 0 - Discovery, Skills, Architecture Plan
 
@@ -497,18 +453,18 @@ Definition of Done:
 
 ## Documentation Conflicts / Open Questions
 
-- Earlier requirements and Phase 1 placeholders used one-contribution member collateral. `docs/plan.md` explicitly rejects that model; member collateral is removed in Phase 2.
-- Earlier payout design paid the recipient member directly. `docs/plan.md` requires an approved seller and off-chain document verification; direct member payout is removed.
-- Earlier lifecycle omitted Grace and Paused. They are now required before abort/recovery handling.
-- `docs/plan.md` did not specify an exact verifier quorum. Phase 4 fixes the technical MVP policy at 2 to 10 independent addresses with a configurable `2..=N` quorum, immutable after start. The real-world verifier organizations, legal authority, and liability remain external product/legal decisions.
+- **2026-09-19, sponsorless decision:** `docs/plan.md` removed the sponsor model (no sponsor, guarantee, advance, or remainder; refunds limited to the current unfinished round). The v8 contract and Phases 1-11 reflect the earlier sponsor-based plan. Phase 12 resolves this.
+- Earlier requirements used one-contribution member collateral; `docs/plan.md` rejects it. Earlier payout design paid the recipient member directly; `docs/plan.md` requires an approved demo seller and off-chain document verification.
 - The real Anchor provider, settlement asset, and TRY support remain unknown.
-- `docs/plan.md` leaves one-contract-versus-per-pool deployment open. The current MVP continues with one bounded multi-pool contract because the repository and original architecture already use `pool_id`; all accounting must remain strictly isolated.
-- Sponsor identity, legal status, loss bearer, and off-chain debt creditor require legal/product decisions outside the contract.
-- **2026-09-19, post-Phase 10, resolved by Phase 11:** `docs/plan.md` was substantially revised (commit `aa0bc42`, "docs: close pool lifecycle and payout logic gaps") after Phases 1-10 of this contract were already implemented, tested, deployed, and demoed against the *prior* version of the plan. Separately, a teammate's frontend commit (`5060119`) was written against an *assumed* API for that revised plan, without a matching contract yet exising. Phase 11 rewrote the contract (schema/API version 8) to close every gap between the deployed contract and both the current `docs/plan.md` and the frontend's already-written client (`frontend/src/services/pool.ts`) — see Phase 11 for the full mapping. This entry is kept as a historical record of the divergence that Phase 11 fixed.
+- One-contract-versus-per-pool deployment stays open. The MVP continues with one bounded multi-pool contract; all accounting must remain strictly isolated by `pool_id`.
+- Who recovers a defaulting early recipient's remaining obligation, and under which contract, is a legal/product question outside the contract (`docs/plan.md` section 8).
+- Historical: the earlier post-Phase 10 divergence between the contract and a revised `docs/plan.md` was resolved by Phase 11; the new divergence is resolved by Phase 12.
 
 ## Frontend Team Action Required
 
-- Display sponsor guarantee, member contributions, refund liabilities, seller, verifier status, and pool-assigned balance as separate values.
-- Never present a member join as locking collateral.
+- Display member contributions, the current round's refund entitlement, seller, verifier status, and pool-assigned balance as separate values. Do not show any sponsor or guarantee value.
+- Never present a member join as locking collateral, and never present the demo as guaranteeing delivery or recovery of earlier rounds.
+- Keep the open economic risk visible (early recipient default, earlier-round contributions not refundable).
 - Never label a Testnet seller/document approval as real title, deed, registration, mortgage, or lien verification.
 - Use contract/RPC state as financial truth and Anchor/backend status only for fiat-flow status.
+- After Phase 12 publishes the new contract ID, set `VITE_ROTATING_POOL_CONTRACT_ID` and re-verify parameter names against the generated bindings.
