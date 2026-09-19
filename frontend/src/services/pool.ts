@@ -2,6 +2,7 @@ import { contract } from '@stellar/stellar-sdk'
 import { config, poolContractId, requireTestnetDemo } from '@/lib/stellar'
 import type {
   MemberStatus,
+  OrderMode,
   PoolInfo,
   PoolStatus,
   RoundInfo,
@@ -13,11 +14,22 @@ import type {
  * RotatingPool kontratı için istemci katmanı. Tüm çağrılar gerçek Soroban RPC'ye gider,
  * sahte veri yoktur.
  *
- * NOT: Kontrat henüz deploy edilmedi. Fonksiyon adları docs/plan.md bölüm 5'ten alındı;
- * parametre ve alan adları (snake_case) VARSAYIMDIR. Kontrat yazılınca
- * `stellar contract bindings typescript` çıktısıyla doğrulanacak; uyuşmazlık varsa
- * yalnızca bu dosya (ve types/pool.ts) değişir.
+ * NOT: Yayındaki kontrat hâlâ eski sponsorlu sürüm (API v8). Fonksiyon adları
+ * docs/plan.md bölüm 5'ten, kura ve büyük grup alanları docs/CONTRACT_HANDOFF.md'den
+ * alındı; parametre ve alan adları (snake_case) VARSAYIMDIR. Sponsorsuz + kura kontratı (v9)
+ * yayınlanınca `stellar contract bindings typescript` çıktısıyla doğrulanacak; uyuşmazlık
+ * varsa yalnızca bu dosya (ve types/pool.ts) değişir.
  */
+
+export class LegacyContractError extends Error {
+  constructor() {
+    super(
+      'Yapılandırılan kontrat eski sponsorlu sürüm (API v8). Arayüz sponsorsuz modele göre yazıldı; ' +
+        'kontrat yeniden yayınlanıp VITE_ROTATING_POOL_CONTRACT_ID güncellenene kadar zincir işlemi yapılamaz.',
+    )
+    this.name = 'LegacyContractError'
+  }
+}
 
 export class ContractNotConfiguredError extends Error {
   constructor() {
@@ -38,6 +50,8 @@ interface PoolMethods {
       token: string
       contribution_amount: bigint
       member_limit: number
+      /** Yalnızca kura destekleyen kontratta vardır: 'Fixed' = sabit sıra, 'Draw' = kura (`{ tag, values }`). */
+      order_mode?: { tag: OrderMode; values: void }
       round_duration: number
       grace_duration: number
       purchase_duration: number
@@ -71,6 +85,8 @@ interface PoolMethods {
     { pool_id: number; round: number; verifier: string; proposal_version: number },
     null
   >
+  /** Kura modunda tüm katkılar tamamlanınca herkes çağırabilir; alıcıyı teslim almamışlar arasından seçer. */
+  draw_recipient: Method<{ pool_id: number; caller: string }, string>
   execute_round: Method<{ pool_id: number }, null>
   mark_overdue: Method<{ pool_id: number }, null>
   abort_pool: Method<{ pool_id: number }, null>
@@ -123,20 +139,55 @@ export class ContractInterfaceError extends Error {
   }
 }
 
-async function getClient(signer?: Signer): Promise<PoolClient> {
+/** Kontratın sunduğu yetenekler (zincirdeki arayüzden okunur, sabit varsayım değildir). */
+export interface ContractCapabilities {
+  /** Eski sponsorlu (v8) kontrat: fund_guarantee gibi metotlar var. Arayüz bununla çalışmaz. */
+  legacySponsor: boolean
+  /** Kura (`draw_recipient`) destekleniyor mu? */
+  supportsDraw: boolean
+}
+
+async function buildClient(signer?: Signer): Promise<PoolClient> {
   requireTestnetDemo()
   if (!poolContractId) throw new ContractNotConfiguredError()
-  const client = await contract.Client.from({
+  return (await contract.Client.from({
     contractId: poolContractId,
     rpcUrl: config.rpcUrl,
     networkPassphrase: config.passphrase,
     publicKey: signer?.address,
     signTransaction: signer?.signTransaction,
-  })
-  const methods = client as unknown as Record<string, unknown>
-  const missing = EXPECTED_METHODS.filter((m) => typeof methods[m] !== 'function')
+  })) as PoolClient
+}
+
+const hasMethod = (client: unknown, name: string) =>
+  typeof (client as Record<string, unknown>)[name] === 'function'
+
+function capabilitiesOf(client: unknown): ContractCapabilities {
+  return {
+    legacySponsor: hasMethod(client, 'fund_guarantee') || hasMethod(client, 'top_up'),
+    supportsDraw: hasMethod(client, 'draw_recipient'),
+  }
+}
+
+async function getClient(signer?: Signer): Promise<PoolClient> {
+  const client = await buildClient(signer)
+  const missing = EXPECTED_METHODS.filter((m) => !hasMethod(client, m))
   if (missing.length > 0) throw new ContractInterfaceError(missing)
-  return client as PoolClient
+  if (capabilitiesOf(client).legacySponsor) throw new LegacyContractError()
+  return client
+}
+
+let capabilitiesCache: Promise<ContractCapabilities> | null = null
+
+/** Formu kontratın gerçek yeteneklerine göre açıp kapatmak için; sonuç oturum boyunca önbelleğe alınır. */
+export function getContractCapabilities(): Promise<ContractCapabilities> {
+  capabilitiesCache ??= buildClient()
+    .then(capabilitiesOf)
+    .catch((e) => {
+      capabilitiesCache = null
+      throw e
+    })
+  return capabilitiesCache
 }
 
 interface SentTx {
@@ -156,7 +207,7 @@ async function send(tx: contract.AssembledTransaction<unknown>): Promise<TxResul
 // --- Kontrattan dönen değerleri arayüz tiplerine çevirir ---------------------------------
 
 const POOL_STATUSES: PoolStatus[] = ['Filling', 'Active', 'Completed', 'Aborted']
-const ROUND_PHASES: RoundPhase[] = ['Collecting', 'Grace', 'AwaitingPurchase', 'Settled']
+const ROUND_PHASES: RoundPhase[] = ['Collecting', 'Grace', 'AwaitingDraw', 'AwaitingPurchase', 'Settled']
 
 const toNumber = (v: unknown) => Number(v ?? 0)
 const toBigInt = (v: unknown) => BigInt((v ?? 0) as bigint | number | string)
@@ -172,6 +223,19 @@ function toHexOrNull(v: unknown): string | null {
     return Array.from(v, (b) => b.toString(16).padStart(2, '0')).join('')
   }
   return null
+}
+
+/**
+ * Rust `Result` döndüren kontrat fonksiyonlarında SDK sonucu `Ok { value }` olarak sarmalar
+ * (canlı Testnet kontratıyla doğrulandı). Hata varsa fırlatır, yoksa düz değeri döndürür.
+ */
+function unwrap(raw: unknown): unknown {
+  const r = raw as { isErr?: () => boolean; unwrap?: () => unknown; unwrapErr?: () => { message?: string } } | null
+  if (r && typeof r.isErr === 'function' && typeof r.unwrap === 'function') {
+    if (r.isErr()) throw new Error(r.unwrapErr?.().message ?? 'Kontrat hata döndürdü.')
+    return r.unwrap()
+  }
+  return raw
 }
 
 function record(raw: unknown, what: string): Record<string, unknown> {
@@ -190,6 +254,7 @@ function mapPool(id: number, raw: unknown): PoolInfo {
     contributionAmount: toBigInt(r.contribution_amount),
     memberLimit: toNumber(r.member_limit),
     members: toStringList(r.members),
+    orderMode: toTag(r.order_mode) === 'Draw' ? 'Draw' : 'Fixed',
     recipientOrder: toStringList(r.recipient_order),
     verifiers: toStringList(r.verifiers),
     approvalThreshold: toNumber(r.approval_threshold),
@@ -212,7 +277,7 @@ function mapRound(raw: unknown): RoundInfo {
   return {
     round: toNumber(r.round),
     phase,
-    recipient: String(r.recipient),
+    recipient: toOptionalString(r.recipient),
     startedAt: toNumber(r.started_at),
     collectDeadline: toNumber(r.collect_deadline),
     graceDeadline: toNumber(r.grace_deadline),
@@ -240,19 +305,19 @@ function mapMember(address: string, raw: unknown): MemberStatus {
 export async function getPool(poolId: number): Promise<PoolInfo> {
   const c = await getClient()
   const tx = await c.get_pool({ pool_id: poolId })
-  return mapPool(poolId, tx.result)
+  return mapPool(poolId, unwrap(tx.result))
 }
 
 export async function getRound(poolId: number, round: number): Promise<RoundInfo> {
   const c = await getClient()
   const tx = await c.get_round({ pool_id: poolId, round })
-  return mapRound(tx.result)
+  return mapRound(unwrap(tx.result))
 }
 
 export async function getMemberStatus(poolId: number, member: string): Promise<MemberStatus> {
   const c = await getClient()
   const status = await c.get_member_status({ pool_id: poolId, member })
-  return mapMember(member, status.result)
+  return mapMember(member, unwrap(status.result))
 }
 
 // --- Yazma (cüzdan imzası gerekir) -------------------------------------------------------
@@ -263,6 +328,7 @@ export async function createPool(
     token: string
     contributionAmount: bigint
     memberLimit: number
+    orderMode: OrderMode
     roundDuration: number
     graceDuration: number
     purchaseDuration: number
@@ -272,11 +338,17 @@ export async function createPool(
   },
 ): Promise<TxResult & { poolId: number | null }> {
   const c = await getClient(signer)
+  // Kura yoksa `order_mode` hiç gönderilmez; "Kura" seçili havuz sessizce sıralı kurulmasın diye reddedilir.
+  const supportsDraw = capabilitiesOf(c).supportsDraw
+  if (params.orderMode === 'Draw' && !supportsDraw) {
+    throw new Error('Yapılandırılan kontrat henüz kura desteklemiyor; sabit sıra seç.')
+  }
   const tx = await c.create_pool({
     creator: signer.address,
     token: params.token,
     contribution_amount: params.contributionAmount,
     member_limit: params.memberLimit,
+    ...(supportsDraw ? { order_mode: { tag: params.orderMode, values: undefined } } : {}),
     round_duration: params.roundDuration,
     grace_duration: params.graceDuration,
     purchase_duration: params.purchaseDuration,
@@ -284,7 +356,8 @@ export async function createPool(
     demo_seller: params.demoSeller,
   })
   const sent = (await tx.signAndSend()) as SentTx
-  return { hash: hashOf(sent), poolId: sent.result === undefined ? null : Number(sent.result) }
+  const id = sent.result === undefined ? Number.NaN : Number(unwrap(sent.result))
+  return { hash: hashOf(sent), poolId: Number.isInteger(id) ? id : null }
 }
 
 export async function joinPool(signer: Signer, poolId: number) {
@@ -292,7 +365,10 @@ export async function joinPool(signer: Signer, poolId: number) {
   return send(await c.join_pool({ pool_id: poolId, member: signer.address }))
 }
 
-/** Kurucu sırayı ve doğrulayıcıları önerir. Her değişiklik önceki tüm onayları geçersiz kılar. */
+/**
+ * Kurucu sırayı ve doğrulayıcıları önerir. Her değişiklik önceki tüm onayları geçersiz kılar.
+ * Kura modunda sıra boş gönderilir; yalnızca doğrulayıcılar önerilir.
+ */
 export async function proposeTerms(
   signer: Signer,
   poolId: number,
@@ -382,6 +458,16 @@ export async function approvePurchase(
       proposal_version: proposalVersion,
     }),
   )
+}
+
+/**
+ * Kura modunda, tüm katkılar tamamlandıktan sonra alıcıyı henüz teslim almamış üyeler arasından
+ * seçer. Herkes çağırabilir. Dönen değer kazanan adrestir. Rastgelelik hackathon düzeyindedir
+ * (docs/CONTRACT_HANDOFF.md).
+ */
+export async function drawRecipient(signer: Signer, poolId: number) {
+  const c = await getClient(signer)
+  return send(await c.draw_recipient({ pool_id: poolId, caller: signer.address }))
 }
 
 /** Koşullar tamamsa yalnızca o turun tutarını kayıtlı satıcıya gönderir. Herkes çağırabilir. */

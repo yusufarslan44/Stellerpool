@@ -4,6 +4,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import AppIcon from '@/components/AppIcon.vue'
 import CoinSpinner from '@/components/CoinSpinner.vue'
+import DrawStage from '@/components/DrawStage.vue'
 import Illo from '@/components/Illo.vue'
 import Scene3D from '@/components/Scene3D.vue'
 import { useNow } from '@/composables/useNow'
@@ -20,6 +21,7 @@ import {
   claimRefund,
   curePayment,
   deposit,
+  drawRecipient,
   executeRound,
   getMemberStatus,
   getPool,
@@ -32,6 +34,7 @@ import {
 } from '@/services/pool'
 import type { Signer } from '@/services/pool'
 import { useWalletStore } from '@/stores/wallet'
+import { MAX_VERIFIERS, MIN_VERIFIERS } from '@/types/pool'
 import type { MemberStatus, PoolInfo, RoundInfo, TxResult } from '@/types/pool'
 
 const route = useRoute()
@@ -106,7 +109,8 @@ const me = computed(() => wallet.address)
 const isMember = computed(() => !!me.value && !!pool.value?.members.includes(me.value))
 const isCreator = computed(() => !!me.value && pool.value?.creator === me.value)
 const isVerifier = computed(() => !!me.value && !!pool.value?.verifiers.includes(me.value))
-const isRecipient = computed(() => !!me.value && round.value?.recipient === me.value)
+const isDraw = computed(() => pool.value?.orderMode === 'Draw')
+const isRecipient = computed(() => !!me.value && !!round.value?.recipient && round.value.recipient === me.value)
 const isFull = computed(() => !!pool.value && pool.value.members.length >= pool.value.memberLimit)
 
 // --- Tur durumu --------------------------------------------------------------------------
@@ -119,6 +123,7 @@ const roundDeadline = computed(() => {
   switch (round.value.phase) {
     case 'Collecting': return round.value.collectDeadline
     case 'Grace': return round.value.graceDeadline
+    case 'AwaitingDraw':
     case 'AwaitingPurchase': return round.value.purchaseDeadline
     default: return 0
   }
@@ -126,13 +131,20 @@ const roundDeadline = computed(() => {
 const remaining = computed(() => (roundDeadline.value ? roundDeadline.value - now.value : 0))
 const deadlinePassed = computed(() => round.value?.phase === 'Collecting' && now.value >= round.value.collectDeadline)
 const myFunded = computed(() => !!me.value && isFunded(me.value))
-const recipientPaid = computed(() => !!round.value && paid.value.has(round.value.recipient))
+const recipientPaid = computed(() => !!round.value?.recipient && paid.value.has(round.value.recipient))
 const myOwnPaid = computed(() => !!me.value && paid.value.has(me.value))
 /** Bütün üyeler kendi katkısını yatırmadan tahsisat açılmaz. */
 const recipientBlock = computed<string | null>(() => {
   if (!pool.value || pool.value.status !== 'Active' || !round.value) return null
   const phase = round.value.phase
   if (phase === 'Settled') return null
+  if (!round.value.recipient) {
+    // Kura modu: alıcı henüz belli değil; herkesin katkısı tamamlanmadan kura çekilmez.
+    if (!allFunded.value && (phase === 'Grace' || deadlinePassed.value)) {
+      return 'Eksik katkı var. Ek süre sonunda tur durur ve kura çekilmez; yalnızca bu turda yatırılmış katkılar iade edilebilir.'
+    }
+    return null
+  }
   if (!recipientPaid.value && (phase === 'Grace' || deadlinePassed.value)) {
     return 'Sıradaki üye kendi katkısını yatırmadı. Ek süre sonunda tur durur; yalnızca bu turda yatırılmış katkılar iade edilebilir.'
   }
@@ -154,16 +166,27 @@ const canAbort = computed(
   () =>
     pool.value?.status === 'Active' && !!round.value &&
     ((round.value.phase === 'Grace' && round.value.graceDeadline > 0 && now.value >= round.value.graceDeadline) ||
-      (round.value.phase === 'AwaitingPurchase' && round.value.purchaseDeadline > 0 && now.value >= round.value.purchaseDeadline)),
+      ((round.value.phase === 'AwaitingPurchase' || round.value.phase === 'AwaitingDraw') && round.value.purchaseDeadline > 0 && now.value >= round.value.purchaseDeadline)),
 )
 
 const memberByAddress = computed(() => new Map(members.value.map((m) => [m.address, m])))
+
+// --- Kura ------------------------------------------------------------------------------------
+const excludedFromDraw = computed(() => (pool.value?.members ?? []).filter((m) => memberByAddress.value.get(m)?.received))
+const drawCandidates = computed(() => (pool.value?.members ?? []).filter((m) => !memberByAddress.value.get(m)?.received))
+const drawReady = computed(
+  () => isDraw.value && round.value?.phase === 'AwaitingDraw' && allFunded.value && remaining.value > 0,
+)
+const showDrawStage = computed(
+  () => isDraw.value && pool.value?.status === 'Active' && !!round.value &&
+    (round.value.phase === 'AwaitingDraw' || !!round.value.recipient),
+)
 const totalRefundable = computed(() => members.value.reduce((sum, m) => sum + m.refundable, 0n))
 const myRefundable = computed(() => (me.value ? (memberByAddress.value.get(me.value)?.refundable ?? 0n) : 0n))
 
 const proposedVerifiers = computed(() => verifiersInput.value.split(/[\s,;]+/).map((v) => v.trim()).filter(Boolean))
 const verifiersValid = computed(() => {
-  if (!pool.value || proposedVerifiers.value.length < 3) return false
+  if (!pool.value || proposedVerifiers.value.length < MIN_VERIFIERS || proposedVerifiers.value.length > MAX_VERIFIERS) return false
   const excluded = new Set([pool.value.creator, ...pool.value.members])
   return new Set(proposedVerifiers.value).size === proposedVerifiers.value.length &&
     proposedVerifiers.value.every((v) => StrKey.isValidEd25519PublicKey(v) && !excluded.has(v))
@@ -197,6 +220,7 @@ const statusLabel = computed(() => {
     case 'Filling':
       return { text: 'Üyeler bekleniyor', cls: 'bg-stone-100 text-stone-700' }
     case 'Active':
+      if (round.value?.phase === 'AwaitingDraw') return { text: 'Kura bekleniyor', cls: 'bg-gold-100 text-amber-900' }
       return round.value?.phase === 'Grace'
         ? { text: 'Ek sürede', cls: 'bg-gold-100 text-amber-900' }
         : { text: 'Devam ediyor', cls: 'bg-brand-100 text-brand-800' }
@@ -263,10 +287,19 @@ async function copyLink() {
   setTimeout(() => (copied.value = false), 2000)
 }
 
-const listedMembers = computed(() =>
-  pool.value?.status === 'Filling' && isCreator.value
+const listedMembers = computed(() => {
+  if (isDraw.value) return pool.value?.members ?? []
+  return pool.value?.status === 'Filling' && isCreator.value
     ? order.value
-    : (pool.value?.recipientOrder.length ? pool.value.recipientOrder : (pool.value?.members ?? [])),
+    : (pool.value?.recipientOrder.length ? pool.value.recipientOrder : (pool.value?.members ?? []))
+})
+/** Büyük gruplarda liste varsayılan olarak kısaltılır. */
+const COMPACT_LIST = 12
+const showAllMembers = ref(false)
+const visibleMembers = computed(() =>
+  showAllMembers.value || listedMembers.value.length <= COMPACT_LIST
+    ? listedMembers.value
+    : listedMembers.value.slice(0, COMPACT_LIST),
 )
 
 // --- Adım adım rehber ----------------------------------------------------------------------
@@ -288,7 +321,7 @@ const setupSteps = computed<GuideStep[]>(() => {
     { key: 'join', title: 'Üyeler katılır', who: 'Üyeler', detail: `${p.members.length} / ${p.memberLimit} üye`, done: isFull.value },
     {
       key: 'terms',
-      title: 'Sıra ve doğrulayıcılar önerilir',
+      title: isDraw.value ? 'Doğrulayıcılar önerilir' : 'Sıra ve doğrulayıcılar önerilir',
       who: 'Kurucu',
       detail: p.termsVersion ? `Koşul sürümü ${p.termsVersion}` : 'Henüz önerilmedi',
       done: isFull.value && p.termsVersion > 0,
@@ -309,6 +342,19 @@ const roundSteps = computed<GuideStep[]>(() => {
   const r = round.value
   if (!p || !r) return []
   const settled = r.phase === 'Settled'
+  const draw: GuideStep[] = isDraw.value
+    ? [
+        {
+          key: 'draw',
+          title: 'Kura çekilir',
+          who: 'Herkes çağırabilir',
+          detail: r.recipient
+            ? `Kazanan: ${shortAddress(r.recipient, 6)}${r.recipient === me.value ? ' (sen)' : ''}`
+            : `${drawCandidates.value.length} üye kurada`,
+          done: settled || !!r.recipient,
+        },
+      ]
+    : []
   return [
     {
       key: 'collect',
@@ -317,10 +363,11 @@ const roundSteps = computed<GuideStep[]>(() => {
       detail: `${fundedCount.value} / ${p.members.length} tamam`,
       done: settled || allFunded.value,
     },
+    ...draw,
     {
       key: 'propose',
       title: 'Satıcı ve alım belgesi önerilir',
-      who: 'Sıradaki üye',
+      who: isDraw.value ? 'Kura kazananı' : 'Sıradaki üye',
       detail: r.seller ? 'Öneri kaydedildi' : 'Bekleniyor',
       done: settled || !!r.seller,
     },
@@ -351,6 +398,7 @@ const stepMine = computed<Record<string, boolean | undefined>>(() => {
     terms: isCreator.value && isFull.value && !setupExpired.value,
     approve: canApproveTerms.value && !setupExpired.value,
     start: isFull.value && termsReady.value && !setupExpired.value,
+    draw: drawReady.value && isMember.value,
     collect:
       isMember.value && (r?.phase === 'Collecting' || r?.phase === 'Grace') && !myFunded.value,
     propose:
@@ -405,6 +453,7 @@ const STEP_ILLO = {
   approve: 'check',
   start: 'rocket',
   collect: 'moneybag',
+  draw: 'dice',
   propose: 'receipt',
   verify: 'magnifier',
   pay: 'store',
@@ -426,13 +475,17 @@ const roleChips = computed(() => {
   return chips
 })
 
-/** 3B sahnede altın görünen para sayısı: katılan / bu tur ödeyen üye sayısı. */
+/** 3B sahne en fazla 12 para gösterir; büyük gruplarda para sayısı ve dolu oranı ölçeklenir. */
+const SCENE_MAX = 12
+const sceneCoins = computed(() => Math.min(SCENE_MAX, pool.value?.memberLimit ?? 4))
+/** 3B sahnede altın görünen para sayısı: katılan / bu tur ödeyen üye sayısı (ölçekli). */
 const sceneFilled = computed(() => {
   const p = pool.value
   if (!p) return -1
   if (p.status === 'Completed') return -1
   if (p.status === 'Aborted') return 0
-  return p.status === 'Filling' ? p.members.length : fundedCount.value
+  const count = p.status === 'Filling' ? p.members.length : fundedCount.value
+  return p.memberLimit <= SCENE_MAX ? count : Math.round((count / p.memberLimit) * sceneCoins.value)
 })
 const progressPercent = computed(() => {
   const p = pool.value
@@ -442,7 +495,9 @@ const progressPercent = computed(() => {
   return Math.min(100, Math.round(((p.currentRound - (round.value?.phase === 'Settled' ? 0 : 1)) / p.memberLimit) * 100))
 })
 const countdownLabel = computed(() =>
-  round.value?.phase === 'Grace' ? 'Ek süre' : round.value?.phase === 'AwaitingPurchase' ? 'Alım onayı süresi' : 'Katkı süresi',
+  round.value?.phase === 'Grace' ? 'Ek süre'
+    : round.value?.phase === 'AwaitingDraw' ? 'Kura ve alım süresi'
+    : round.value?.phase === 'AwaitingPurchase' ? 'Alım onayı süresi' : 'Katkı süresi',
 )
 
 </script>
@@ -491,6 +546,7 @@ const countdownLabel = computed(() =>
           <div>
             <div class="flex flex-wrap items-center gap-2">
               <span class="badge" :class="statusLabel.cls">{{ statusLabel.text }}</span>
+              <span class="badge bg-gold-100 text-amber-900">{{ isDraw ? 'Kura' : 'Sabit sıra' }}</span>
               <span v-for="c in roleChips" :key="c" class="badge bg-ink text-cream">Sen: {{ c }}</span>
             </div>
             <h1 class="mt-3 text-4xl font-extrabold sm:text-5xl">Havuz #{{ pool.id }}</h1>
@@ -498,7 +554,10 @@ const countdownLabel = computed(() =>
               {{ pool.members.length }} / {{ pool.memberLimit }} üye · her tur
               <strong>{{ formatStroops(pool.contributionAmount) }} {{ token }}</strong>
             </p>
-            <p class="mt-1 text-sm text-stone-600">Her tur herkes kendi katkısını yatırır. Ödeme eksikse tahsisat yapılmaz.</p>
+            <p class="mt-1 text-sm text-stone-600">
+              Her tur herkes kendi katkısını yatırır. Ödeme eksikse tahsisat yapılmaz.
+              {{ isDraw ? 'Alıcı, tüm katkılar gelince kura ile belirlenir.' : '' }}
+            </p>
             <div class="mt-5 flex flex-wrap gap-2">
               <button type="button" class="btn-secondary !min-h-10" @click="copyLink">
                 <AppIcon :name="copied ? 'check' : 'copy'" class="!size-4" />
@@ -517,7 +576,7 @@ const countdownLabel = computed(() =>
           </div>
           <div class="relative h-44 sm:h-56">
             <Scene3D
-              :coins="pool.memberLimit"
+              :coins="sceneCoins"
               :filled="sceneFilled"
               :label="`${pool.memberLimit} üyeli havuz; ${sceneFilled < 0 ? 'hepsi' : sceneFilled} para altın`"
             />
@@ -609,6 +668,34 @@ const countdownLabel = computed(() =>
                 <span class="font-semibold text-stone-700">{{ s.who }}</span> · {{ s.detail }}
               </p>
 
+              <div
+                v-if="s.key === 'collect' && pool.status === 'Active' && pool.members.length > COMPACT_LIST"
+                class="mt-2 max-w-md"
+              >
+                <div
+                  class="h-2 overflow-hidden rounded-full bg-stone-200"
+                  role="progressbar"
+                  :aria-valuenow="fundedCount"
+                  aria-valuemin="0"
+                  :aria-valuemax="pool.members.length"
+                  aria-label="Bu turda ödeyen üyeler"
+                >
+                  <div class="h-full rounded-full bg-brand-500 transition-[width] duration-500" :style="{ width: `${(fundedCount / pool.members.length) * 100}%` }" />
+                </div>
+                <p class="mt-1 text-xs text-stone-600">{{ fundedCount }} / {{ pool.members.length }} üye ödedi</p>
+              </div>
+
+              <!-- Kura sahnesi (izleyenler de görür) -->
+              <div v-if="s.key === 'draw' && showDrawStage" class="mt-3 rounded-2xl bg-sand/60 p-4">
+                <DrawStage
+                  :candidates="drawCandidates"
+                  :excluded="excludedFromDraw"
+                  :winner="round?.recipient ?? null"
+                  :spinning="actionBusy === 'draw'"
+                  :me="me"
+                />
+              </div>
+
               <!-- Adıma özel işlemler -->
               <div v-if="wallet.isConnected" class="mt-3 space-y-3 empty:hidden">
                 <!-- KURULUM -->
@@ -629,19 +716,19 @@ const countdownLabel = computed(() =>
 
                   <div v-if="s.key === 'terms' && isCreator && isFull && !setupExpired" class="space-y-2 rounded-2xl bg-sand/60 p-4">
                     <p class="text-sm text-stone-700">
-                      Sırayı aşağıdaki “Üyeler ve sıra” listesinden ↑ ↓ ile düzenle, sonra doğrulayıcıları yaz.
+                      {{ isDraw ? 'Bu havuzda sıra yok: alıcı kura ile belirlenir. Doğrulayıcıları yaz.' : 'Sırayı aşağıdaki “Üyeler ve sıra” listesinden ↑ ↓ ile düzenle, sonra doğrulayıcıları yaz.' }}
                     </p>
                     <label class="label" for="term-verifiers">Demo doğrulayıcıları (her satıra bir adres)</label>
                     <textarea id="term-verifiers" v-model="verifiersInput" class="input min-h-24 font-mono" placeholder="G…&#10;G…&#10;G…" />
-                    <p class="text-xs text-stone-600">En az üç farklı adres; kurucu veya üye olamaz. Yeni öneri önceki onayları sıfırlar.</p>
+                    <p class="text-xs text-stone-600">{{ MIN_VERIFIERS }}–{{ MAX_VERIFIERS }} farklı adres; kurucu veya üye olamaz. Yeni öneri önceki onayları sıfırlar.</p>
                     <p v-if="proposedVerifiers.length && !verifiersValid" class="text-xs text-rose-700">Doğrulayıcı adreslerini kontrol et.</p>
                     <button
                       type="button"
                       class="btn-primary"
                       :disabled="actionBusy !== null || !verifiersValid"
-                      @click="run('terms', (sg) => proposeTerms(sg, pool!.id, order, proposedVerifiers))"
+                      @click="run('terms', (sg) => proposeTerms(sg, pool!.id, isDraw ? [] : order, proposedVerifiers))"
                     >
-                      {{ actionBusy === 'terms' ? 'Cüzdanı onayla…' : 'Sıra ve doğrulayıcıları öner' }}
+                      {{ actionBusy === 'terms' ? 'Cüzdanı onayla…' : isDraw ? 'Doğrulayıcıları öner' : 'Sıra ve doğrulayıcıları öner' }}
                     </button>
                   </div>
 
@@ -700,6 +787,22 @@ const countdownLabel = computed(() =>
                     </div>
                     <p v-if="deadlinePassed && !allFunded" class="text-xs text-stone-600">
                       Bu işlemi havuzdaki herkes çağırabilir, bir yöneticiye gerek yok.
+                    </p>
+                  </template>
+
+                  <template v-else-if="s.key === 'draw'">
+                    <button
+                      v-if="drawReady"
+                      type="button"
+                      class="btn-primary btn-lg"
+                      :disabled="actionBusy !== null"
+                      @click="run('draw', (sg) => drawRecipient(sg, pool!.id))"
+                    >
+                      {{ actionBusy === 'draw' ? 'Cüzdanı onayla…' : 'Kurayı çek' }}
+                    </button>
+                    <p v-if="drawReady" class="text-xs text-stone-600">Bu işlemi havuzdaki herkes çağırabilir, bir yöneticiye gerek yok.</p>
+                    <p v-else-if="!round.recipient" class="text-sm text-stone-600">
+                      Tüm katkılar gelince kura çekilebilir. Kazanan, kuraya girenler arasından çıkar.
                     </p>
                   </template>
 
@@ -836,8 +939,9 @@ const countdownLabel = computed(() =>
         <dl class="grid gap-3 sm:grid-cols-3">
           <div class="rounded-2xl bg-sand/60 p-3.5">
             <dt class="text-xs text-stone-600">Bu turun alıcısı</dt>
-            <dd class="mt-0.5 font-mono text-sm font-semibold" :title="round.recipient">
-              {{ shortAddress(round.recipient, 6) }}
+            <dd class="mt-0.5 font-mono text-sm font-semibold" :title="round.recipient ?? ''">
+              <template v-if="round.recipient">{{ shortAddress(round.recipient, 6) }}</template>
+              <span v-else class="font-sans">Kura bekleniyor</span>
               <span v-if="isRecipient" class="badge bg-brand-100 text-brand-800">Sen</span>
             </dd>
           </div>
@@ -874,10 +978,13 @@ const countdownLabel = computed(() =>
 
       <!-- ÜYELER -->
       <section class="card" aria-labelledby="uyeler">
-        <h2 id="uyeler" class="text-xl font-extrabold">Üyeler ve sıra</h2>
+        <h2 id="uyeler" class="text-xl font-extrabold">{{ isDraw ? 'Üyeler' : 'Üyeler ve sıra' }}</h2>
+        <p v-if="isDraw && pool.status === 'Active'" class="mt-1 text-sm text-stone-600">
+          Teslim aldı: <strong>{{ excludedFromDraw.length }}</strong> · Kurada: <strong>{{ drawCandidates.length }}</strong>
+        </p>
         <ul class="mt-3 space-y-2">
           <li
-            v-for="(addr, idx) in listedMembers"
+            v-for="(addr, idx) in visibleMembers"
             :key="addr"
             class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-stone-200/80 bg-white p-3 transition-colors duration-200"
             :class="round && addr === round.recipient && pool.status === 'Active' ? '!border-brand-300 bg-brand-50/60' : ''"
@@ -889,19 +996,32 @@ const countdownLabel = computed(() =>
               <span v-if="addr === pool.creator" class="badge bg-stone-100 text-stone-700">Kurucu</span>
               <span v-if="round && addr === round.recipient && pool.status === 'Active'" class="badge bg-sage-100 text-sage-800">Bu turun alıcısı</span>
               <span v-if="memberByAddress.get(addr)?.received" class="badge bg-stone-100 text-stone-700">Payını aldı</span>
+              <span
+                v-else-if="isDraw && pool.status === 'Active'"
+                class="badge bg-gold-100 text-amber-900"
+              >Kurada</span>
             </div>
             <div class="flex flex-wrap items-center gap-3">
               <span class="text-xs text-stone-600">Bu turdaki iade: {{ formatStroops(memberByAddress.get(addr)?.refundable ?? 0n) }} {{ token }}</span>
               <span class="badge" :class="toneClass[memberState(addr).tone]">{{ memberState(addr).label }}</span>
-              <span v-if="pool.status === 'Filling' && isCreator" class="flex gap-1">
+              <span v-if="pool.status === 'Filling' && isCreator && !isDraw" class="flex gap-1">
                 <button type="button" class="btn-secondary !min-h-9 !min-w-9 !px-2 !py-1" :disabled="idx === 0" :aria-label="`${shortAddress(addr)} adresini yukarı taşı`" @click="move(idx, -1)">↑</button>
                 <button type="button" class="btn-secondary !min-h-9 !min-w-9 !px-2 !py-1" :disabled="idx === order.length - 1" :aria-label="`${shortAddress(addr)} adresini aşağı taşı`" @click="move(idx, 1)">↓</button>
               </span>
             </div>
           </li>
         </ul>
+        <button
+          v-if="listedMembers.length > COMPACT_LIST"
+          type="button"
+          class="btn-secondary mt-3 !min-h-10"
+          :aria-expanded="showAllMembers"
+          @click="showAllMembers = !showAllMembers"
+        >
+          {{ showAllMembers ? 'Listeyi kısalt' : `Tümünü göster (${listedMembers.length})` }}
+        </button>
         <p v-if="!listedMembers.length" class="mt-3 text-sm text-stone-600">Henüz katılan üye yok. İlk üye olarak katılabilirsin.</p>
-        <p v-if="pool.status === 'Filling' && isCreator" class="mt-3 text-xs text-stone-600">
+        <p v-if="pool.status === 'Filling' && isCreator && !isDraw" class="mt-3 text-xs text-stone-600">
           Sırayı düzenledikten sonra koşul sürümünü öner. Tüm üyeler aynı sürümü onaylayınca havuz başlatılabilir.
         </p>
       </section>
@@ -917,6 +1037,7 @@ const countdownLabel = computed(() =>
           <div><dt class="font-semibold">Doğrulayıcı</dt><dd class="text-stone-600">Alım belgesini kontrol edip onaylayan kişi. Yeterli onay olmadan tutar çıkmaz.</dd></div>
           <div><dt class="font-semibold">Ek süre</dt><dd class="text-stone-600">Katkı süresi dolduktan sonra geciken üyeye tanınan son şans.</dd></div>
           <div><dt class="font-semibold">İade hakkı</dt><dd class="text-stone-600">Henüz satıcıya ödenmemiş turda bizzat yatırdığın katkı.</dd></div>
+          <div v-if="isDraw"><dt class="font-semibold">Kura</dt><dd class="text-stone-600">Tüm katkılar gelince, henüz teslim almamış üyeler arasından alıcıyı kontrat seçer. Rastgelelik hackathon düzeyindedir.</dd></div>
           <div><dt class="font-semibold">Koşul sürümü</dt><dd class="text-stone-600">Sıra ve doğrulayıcıların onaylanan hali. Değişirse herkes yeniden onaylar.</dd></div>
         </dl>
       </details>

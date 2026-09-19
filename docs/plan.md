@@ -2,7 +2,7 @@
 
 **Amaç:** Tanıdık kişilerin altın günü gibi sabit sıralı katkılarını görünür kurallarla koordine eden Stellar prototipi. Hedef Soroban kontratında kurucunun ortak parayı serbestçe çekme yetkisi olmayacak; katkı, sıra ve ödeme koşulları üyelerce onaylanacak. Bu teknik sınır, erken tahsisat alan üyenin gelecek katkılarını garanti etmez.
 
-**Aşama (19 Eylül 2026):** Lisans başvurusu veya gerçek müşteri fonu yok. Mainnet sitesi salt okunur tanıtımdır; cüzdan imzası, fon ve havuz işlemi yoktur. Testnet havuz kontratı henüz yazılıp yayınlanmadı. Anchor yalnızca etiketli simülasyon; gerçek TRY veya kullanılabilir bakiye yaratmaz. [Yayın kapsamı](mainnet-showcase.md) ve [hukuki sınır](altin-gunu-legal-boundary.md) ayrı kaydedildi. Hackathon DOC'unun gerçek TL giriş/çıkış ölçütü karşılanmıyor.
+**Aşama (19 Eylül 2026, akşam):** Lisans başvurusu veya gerçek müşteri fonu yok. Mainnet sitesi salt okunur tanıtımdır; cüzdan imzası, fon ve havuz işlemi yoktur. Testnet'te sponsorsuz havuz kontratı (API v9) yayında: `CCAKOEC34WVBKQ427KT5PI5GMPPKSGBHCWBI7FO4GNG247KKDUH67AZH` ([kanıt](../README.md#kontrat-ve-dağıtım-kanıtı-testnet)). Kura modu ve 30 üye hedeftir, kontratta henüz yoktur ([görev listesi](CONTRACT_HANDOFF.md)). Anchor: gerçek SEP-1/10/24 istemcisi SDF test anchor'ı ile doğrulandı; test varlığı üretir, gerçek TRY veya kullanılabilir TL bakiyesi yaratmaz. [Yayın kapsamı](mainnet-showcase.md) ve [hukuki sınır](altin-gunu-legal-boundary.md) ayrı kaydedildi. Hackathon DOC'unun gerçek TL giriş/çıkış ölçütü karşılanmıyor.
 
 ## 1. Eminevim ve Fuzul ile karşılaştırma
 
@@ -18,13 +18,15 @@ Her iki şirketin açıklamasında katkılar bir araya getirilir; çekilişli ve
 
 ## 2. Sponsorsuz ürün kararı
 
-1. Kapalı ve sabit üyeli grup; demo için 2–12 üye, kişi başına her tur aynı `C` katkısı ve `N` tur. Her üye bir kez sıradaki alıcıdır. Kura ve değişken tutar MVP dışında.
+1. Kapalı ve sabit üyeli grup; yayındaki kontratta 2–12 üye (hedef 30), kişi başına her tur aynı `C` katkısı ve `N` tur. Her üye bir kez alıcıdır. Alıcı **sabit sıra** (yayında) ya da **kura** (hedef, API v10) ile belirlenir. Kura, tüm katkılar tamamlanınca henüz teslim almamış üyeler arasından çekilir; kazanan zaten payını ödemiştir. Zincir üstü rastgelelik hackathon düzeyindedir. Değişken tutar MVP dışında.
 2. Kurucu yalnızca önerir. Katkı, sıra, süreler, satıcı ve doğrulayıcı koşulları üyelerin aynı sürümü onaylamasıyla geçerli olur. Kurucu tek başına değiştiremez veya fon çekemez.
 3. Ayrı sponsor, sponsor güvencesi, başkası adına avans ve platformun teslimat garantisi yoktur. Fon eksiği yeni kullanıcıların katkısıyla kapatılmış varsayılmaz.
 4. Her turda **bütün üyeler kendi katkılarını** yatırmadan tahsisat açılmaz. Son tarih geçince ek süre başlar; eksik üye bu sürede ödeyebilir. Hâlâ eksikse herkes havuzu sonlandırabilir.
 5. Duran turda yalnız bu turda birikmiş ve henüz satıcıya ödenmemiş katkılar sahiplerine iade edilir. Daha önce tamamlanıp satıcıya ödenen turların katkısı geri çağrılamaz. Tahsisat almış üyelerin sonraki ödeme yükümlülüğü gerçek dünyada ancak ayrı sözleşme ve yetkili süreçlerle takip edilebilir; demo bunu garanti etmez.
 6. Demo tahsisatı yalnız önceden belirlenmiş test satıcısına, alıcının önerisi ve insan doğrulayıcı eşiği sonrasında yapılır. Alım için ayrı son tarih vardır; öneri/onay yetişmezse mevcut tur katkıları iade edilir.
 7. Ortak fon lending, staking veya likidite havuzuna gönderilmez. DeFi niteliği programlanabilir fon akışı ve doğrulanabilir kurallardır. AI denetçisi planlanan yardımcı rapordur; fon tutmaz veya tahsisat açmaz.
+
+**Kura ve büyük grup riski azaltmaz:** Erken kura kazanan sonraki katkıyı bırakırsa diğerlerinin önceki tur ödemeleri yine geri alınamaz. Grup büyüdükçe bir turda satıcıya giden tutar ve açığın büyüklüğü de artar. Kura + halka açık büyük grup + ev/araç vaadi, [hukuki sınır belgesinde](altin-gunu-legal-boundary.md) 6361 kapsamına yaklaşan unsurlar olarak işaretlidir; yalnızca Testnet ve gerçek para/teslimat olmadan.
 
 **Açık ekonomik risk:** Dört üye her tur 10 birim yatırırsa ilk turda 40 birim A'nın satıcısına çıkar. İkinci tur başlamadan B, C ve D'nin önceki 10'ar birimi kontratta değildir. A sonraki ödemeyi bırakırsa ikinci tur durabilir; B, C ve D'nin ilk tur ödemeleri otomatik iade edilemez. Üye sayısını büyütmek bu açığı yok etmez. Tam iade veya belirli tarihte teslimat sözü bu modelin dışında ayrı mali/hukuki kaynak ve yükümlülük gerektirir.
 
@@ -107,6 +109,7 @@ Zaman aşımı kendiliğinden zincir işlemi başlatmaz; süre dolunca herkes il
 4. Gerçek ev/araç finansmanı istenirse hangi lisanslı şirket sözleşme ve fon sorumlusu olacak?
 5. Havuz başına ayrı kontrat mı, tek kontratta ayrık muhasebe mi kullanılacak?
 6. Token/TL kuru ve satın alma gücü riski kullanıcıya nasıl anlatılacak?
+7. Kura için yeterli rastgelelik (commit-reveal veya harici kaynak) nasıl sağlanacak? Hackathon sürümü `env.prng()` kullanır.
 
 ## Kaynaklar
 

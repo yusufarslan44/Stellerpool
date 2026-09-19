@@ -5,19 +5,23 @@ import AppIcon from '@/components/AppIcon.vue'
 import Illo from '@/components/Illo.vue'
 import Scene3D from '@/components/Scene3D.vue'
 import { formatStroops, parseAmount, toPlainAmount } from '@/lib/format'
-import { contributionFor, GOALS } from '@/lib/goals'
+import { contributionFor, goalMembers, GOALS } from '@/lib/goals'
 import type { Goal } from '@/lib/goals'
 import { poolAsset, poolContractId } from '@/lib/stellar'
+import { MAX_MEMBERS, MIN_MEMBERS } from '@/types/pool'
+import type { OrderMode } from '@/types/pool'
 
 const token = poolAsset.getCode()
 const goal = ref('demo')
 const pot = ref('40')
 const members = ref(4)
+const mode = ref<OrderMode>('Fixed')
 
 function pick(g: Goal) {
   goal.value = g.id
   pot.value = g.pot
-  members.value = g.members
+  members.value = goalMembers(g)
+  mode.value = g.mode
 }
 
 const potStroops = computed(() => {
@@ -43,6 +47,8 @@ const createLink = computed(() => ({
   query: {
     amount: contribution.value === null ? '' : toPlainAmount(contribution.value),
     members: String(members.value),
+    mode: mode.value,
+    goal: goal.value,
   },
 }))
 </script>
@@ -97,11 +103,11 @@ const createLink = computed(() => ({
               v-model.number="members"
               class="h-11 w-full cursor-pointer accent-brand-600"
               type="range"
-              min="2"
-              max="12"
+              :min="MIN_MEMBERS"
+              :max="MAX_MEMBERS"
               step="1"
             />
-            <div class="flex justify-between text-xs text-stone-500" aria-hidden="true"><span>2</span><span>12</span></div>
+            <div class="flex justify-between text-xs text-stone-500" aria-hidden="true"><span>{{ MIN_MEMBERS }}</span><span>{{ MAX_MEMBERS }}</span></div>
           </div>
         </div>
 
@@ -121,8 +127,10 @@ const createLink = computed(() => ({
             </dd>
           </div>
           <div class="rounded-2xl bg-sage-50 p-3.5 ring-1 ring-sage-100">
-            <dt class="text-xs text-sage-800">Ödeme kuralı</dt>
-            <dd class="mt-0.5 text-sm font-bold text-sage-900">Tüm katkılar gelince</dd>
+            <dt class="text-xs text-sage-800">Alıcı nasıl belirlenir?</dt>
+            <dd class="mt-0.5 text-sm font-bold text-sage-900">
+              {{ mode === 'Draw' ? 'Kura, tüm katkılar gelince' : 'Onaylanan sabit sıra' }}
+            </dd>
           </div>
         </dl>
         <p v-else class="rounded-2xl bg-gold-100 p-3 text-sm text-amber-950" role="status">Geçerli bir tutar gir.</p>

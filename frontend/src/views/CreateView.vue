@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { StrKey } from '@stellar/stellar-sdk'
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import AppIcon from '@/components/AppIcon.vue'
 import CoinSpinner from '@/components/CoinSpinner.vue'
@@ -9,11 +9,14 @@ import Scene3D from '@/components/Scene3D.vue'
 import StepIndicator from '@/components/StepIndicator.vue'
 import { errorMessage, isUserRejection } from '@/lib/errors'
 import { formatStroops, parseAmount, toPlainAmount } from '@/lib/format'
-import { contributionFor, GOALS } from '@/lib/goals'
+import { contributionFor, goalMembers, GOALS } from '@/lib/goals'
 import type { Goal } from '@/lib/goals'
 import { explorerTx, poolAsset, poolContractId, poolTokenContractId } from '@/lib/stellar'
-import { createPool } from '@/services/pool'
+import { createPool, getContractCapabilities } from '@/services/pool'
+import type { ContractCapabilities } from '@/services/pool'
 import { useWalletStore } from '@/stores/wallet'
+import { MAX_MEMBERS, MIN_MEMBERS } from '@/types/pool'
+import type { OrderMode } from '@/types/pool'
 
 const wallet = useWalletStore()
 const router = useRouter()
@@ -41,15 +44,35 @@ const STEPS = [{ label: 'Plan' }, { label: 'Süreler' }, { label: 'Kişiler' }, 
 const route = useRoute()
 const queryAmount = typeof route.query.amount === 'string' ? route.query.amount : ''
 const queryMembers = Number.parseInt(String(route.query.members ?? ''), 10)
+const queryMode: OrderMode = route.query.mode === 'Draw' ? 'Draw' : 'Fixed'
 
 const step = ref(0)
 const dir = ref<'next' | 'prev'>('next')
 
-const goal = ref<string>('demo')
+const queryGoal = typeof route.query.goal === 'string' ? route.query.goal : ''
+// Hesaplayıcıdan özel bir plan geldiyse ("Demo" çipi yanlış seçili görünmesin) hiçbir amaç seçili olmaz.
+const goal = ref<string>(GOALS.some((g) => g.id === queryGoal) ? queryGoal : queryAmount ? '' : 'demo')
 const amount = ref(queryAmount || '10')
 const memberLimit = ref(
-  Number.isInteger(queryMembers) && queryMembers >= 2 && queryMembers <= 12 ? queryMembers : 4,
+  Number.isInteger(queryMembers) && queryMembers >= MIN_MEMBERS && queryMembers <= MAX_MEMBERS ? queryMembers : 4,
 )
+const orderMode = ref<OrderMode>(queryMode)
+
+// Kontratın gerçek yetenekleri zincirden okunur; kura yoksa seçenek kapatılır.
+const caps = ref<ContractCapabilities | null>(null)
+const drawUnavailable = computed(() => caps.value !== null && !caps.value.supportsDraw)
+const legacyContract = computed(() => caps.value?.legacySponsor === true)
+onMounted(() => {
+  if (!poolContractId) return
+  getContractCapabilities()
+    .then((c) => {
+      caps.value = c
+      if (!c.supportsDraw && orderMode.value === 'Draw') orderMode.value = 'Fixed'
+    })
+    .catch(() => {
+      /* okunamazsa form açık kalır; gönderimde gerçek hata gösterilir */
+    })
+})
 const preset = ref<string>('demo')
 const custom = ref(false)
 const duration = ref(3 * 60)
@@ -63,9 +86,10 @@ const txHash = ref<string | null>(null)
 
 function pickGoal(g: Goal) {
   goal.value = g.id
-  memberLimit.value = g.members
+  memberLimit.value = goalMembers(g)
+  orderMode.value = g.mode === 'Draw' && drawUnavailable.value ? 'Fixed' : g.mode
   try {
-    const c = contributionFor(parseAmount(g.pot), g.members)
+    const c = contributionFor(parseAmount(g.pot), goalMembers(g))
     if (c !== null) amount.value = toPlainAmount(c)
   } catch {
     /* örnek tutar geçerli; yine de form bozulmasın */
@@ -82,7 +106,7 @@ function pickPreset(p: (typeof PRESETS)[number]) {
 }
 
 function stepMembers(delta: number) {
-  memberLimit.value = Math.min(12, Math.max(2, (Number(memberLimit.value) || 4) + delta))
+  memberLimit.value = Math.min(MAX_MEMBERS, Math.max(MIN_MEMBERS, (Number(memberLimit.value) || 4) + delta))
 }
 
 const contribution = computed(() => {
@@ -94,7 +118,7 @@ const contribution = computed(() => {
   }
 })
 const membersOk = computed(
-  () => Number.isInteger(memberLimit.value) && memberLimit.value >= 2 && memberLimit.value <= 12,
+  () => Number.isInteger(memberLimit.value) && memberLimit.value >= MIN_MEMBERS && memberLimit.value <= MAX_MEMBERS,
 )
 const pot = computed(() =>
   contribution.value === null || !membersOk.value ? null : contribution.value * BigInt(memberLimit.value),
@@ -126,7 +150,7 @@ const stepHint = computed(() => {
   if (stepValid.value) return null
   switch (step.value) {
     case 0:
-      return contribution.value === null ? 'Devam etmek için geçerli bir tutar gir.' : 'Üye sayısı 2 ile 12 arasında olmalı.'
+      return contribution.value === null ? 'Devam etmek için geçerli bir tutar gir.' : `Üye sayısı ${MIN_MEMBERS} ile ${MAX_MEMBERS} arasında olmalı.`
     case 2:
       return 'Satıcı için geçerli ve kurucudan farklı bir Stellar adresi gerekli.'
     default:
@@ -160,6 +184,7 @@ async function submit() {
         token: poolTokenContractId,
         contributionAmount: contribution.value,
         memberLimit: memberLimit.value,
+        orderMode: orderMode.value,
         roundDuration: duration.value,
         graceDuration: graceDuration.value,
         purchaseDuration: purchaseDuration.value,
@@ -201,6 +226,18 @@ async function submit() {
       </span>
     </p>
 
+    <p
+      v-if="legacyContract"
+      role="alert"
+      class="flex items-start gap-3 rounded-2xl border border-gold-300/60 bg-gold-100/70 p-4 text-sm text-amber-950"
+    >
+      <Illo name="warning" :size="28" />
+      <span>
+        Yapılandırılan kontrat eski sponsorlu sürüm. Arayüz sponsorsuz modele göre yazıldığı için havuz
+        oluşturma şimdilik kapalı; kontrat yeniden yayınlanınca açılacak.
+      </span>
+    </p>
+
     <div class="grid gap-5 lg:grid-cols-[1.5fr_1fr]">
       <!-- SİHİRBAZ -->
       <form class="card space-y-6 !p-5 sm:!p-7" @submit.prevent="step === STEPS.length - 1 ? submit() : next()">
@@ -214,7 +251,8 @@ async function submit() {
                 <div>
                   <h2 class="text-2xl font-extrabold">Ne için biriktiriyorsunuz?</h2>
                   <p class="mt-1 text-sm text-stone-600">
-                    Bir başlangıç seç, tutarı sonra değiştirebilirsin. Seçim yalnızca örnek değerleri doldurur.
+                    Bir başlangıç seç, tutarı sonra değiştirebilirsin. Seçim yalnızca örnek değerleri doldurur;
+                    gerçek ev veya araç teslimi yoktur.
                   </p>
                 </div>
                 <div class="flex flex-wrap gap-2.5" role="group" aria-label="Amaç">
@@ -234,7 +272,7 @@ async function submit() {
                     <span class="grid size-10 place-items-center rounded-full bg-white/80"><Illo :name="g.icon" :size="28" /></span>
                     <span class="leading-tight">
                       <span class="block font-display text-sm font-bold">{{ g.label }}</span>
-                      <span class="block text-xs text-stone-600">{{ g.members }} kişi</span>
+                      <span class="block text-xs text-stone-600">{{ goalMembers(g) }} kişi · {{ g.mode === 'Draw' && !drawUnavailable ? 'kura' : 'sıralı' }}</span>
                     </span>
                   </button>
                 </div>
@@ -261,7 +299,7 @@ async function submit() {
                       <button
                         type="button"
                         class="btn-secondary !size-11 !p-0 text-xl"
-                        :disabled="memberLimit <= 2"
+                        :disabled="memberLimit <= MIN_MEMBERS"
                         aria-label="Bir kişi azalt"
                         @click="stepMembers(-1)"
                       >
@@ -271,8 +309,8 @@ async function submit() {
                         v-model.number="memberLimit"
                         class="input !w-20 text-center text-xl font-bold"
                         type="number"
-                        min="2"
-                        max="12"
+                        :min="MIN_MEMBERS"
+                        :max="MAX_MEMBERS"
                         step="1"
                         aria-label="Üye sayısı"
                         required
@@ -280,7 +318,7 @@ async function submit() {
                       <button
                         type="button"
                         class="btn-secondary !size-11 !p-0 text-xl"
-                        :disabled="memberLimit >= 12"
+                        :disabled="memberLimit >= MAX_MEMBERS"
                         aria-label="Bir kişi artır"
                         @click="stepMembers(1)"
                       >
@@ -289,6 +327,55 @@ async function submit() {
                     </div>
                     <p class="mt-1 text-xs text-stone-600">Kişi sayısı kadar tur olur; herkes bir kez alır.</p>
                   </div>
+                </div>
+
+                <p v-if="memberLimit > 12" role="note" class="flex items-start gap-2 rounded-2xl bg-gold-100/80 p-3 text-sm text-amber-950">
+                  <Illo name="warning" :size="22" />
+                  <span>
+                    Büyük grupta bir turda satıcıya giden tutar da büyür. Erken teslim alan sonraki katkıyı bırakırsa
+                    bekleyenlerin önceki tur ödemeleri geri alınamaz; grup büyüdükçe bu açık küçülmez.
+                  </span>
+                </p>
+
+                <div>
+                  <p id="mode-label" class="label">Sıra kimde? Alıcı nasıl belirlensin?</p>
+                  <div class="grid gap-3 sm:grid-cols-2" role="radiogroup" aria-labelledby="mode-label">
+                    <button
+                      type="button"
+                      role="radio"
+                      class="choice"
+                      :class="orderMode === 'Fixed' ? '!border-brand-600 bg-brand-50' : ''"
+                      :aria-checked="orderMode === 'Fixed'"
+                      @click="orderMode = 'Fixed'"
+                    >
+                      <span class="grid size-12 shrink-0 place-items-center rounded-xl bg-brand-50"><Illo name="memo" :size="34" /></span>
+                      <span>
+                        <span class="block font-display font-bold">Sabit sıra</span>
+                        <span class="block text-xs text-stone-600">Üyeler sırayı birlikte onaylar (altın günü gibi).</span>
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      role="radio"
+                      class="choice disabled:cursor-not-allowed disabled:opacity-55"
+                      :class="orderMode === 'Draw' ? '!border-brand-600 bg-brand-50' : ''"
+                      :aria-checked="orderMode === 'Draw'"
+                      :disabled="drawUnavailable"
+                      @click="orderMode = 'Draw'"
+                    >
+                      <span class="grid size-12 shrink-0 place-items-center rounded-xl bg-brand-50"><Illo name="dice" :size="34" /></span>
+                      <span>
+                        <span class="block font-display font-bold">Kura</span>
+                        <span class="block text-xs text-stone-600">
+                          {{ drawUnavailable ? 'Yayındaki kontrat henüz kura desteklemiyor.' : 'Her tur, henüz almamış üyeler arasından çekilir.' }}
+                        </span>
+                      </span>
+                    </button>
+                  </div>
+                  <p v-if="orderMode === 'Draw'" class="mt-2 text-xs leading-relaxed text-stone-600">
+                    Kura, tüm üyeler kendi katkısını yatırdıktan sonra çekilir; kazanan zaten payını ödemiş olur.
+                    Zincir üstü rastgelelik hackathon düzeyindedir, yüksek tutarlı gerçek kullanım için yetmez.
+                  </p>
                 </div>
               </template>
 
@@ -393,7 +480,7 @@ async function submit() {
                     Satıcı geçerli bir adres olmalı; kurucu adresiyle aynı olamaz.
                   </p>
                   <p class="text-xs text-stone-500">
-                    Sıra ve doğrulayıcılar, üyeler katıldıktan sonra ayrı bir adımda önerilip onaylanır.
+                    {{ orderMode === 'Draw' ? 'Doğrulayıcılar' : 'Sıra ve doğrulayıcılar' }}, üyeler katıldıktan sonra ayrı bir adımda önerilip onaylanır.
                   </p>
                 </div>
               </template>
@@ -414,6 +501,13 @@ async function submit() {
                     </dd>
                   </div>
                   <div class="flex items-center justify-between gap-3 p-3.5 text-sm">
+                    <dt class="text-stone-600">Alıcı</dt>
+                    <dd class="text-right font-semibold">
+                      {{ orderMode === 'Draw' ? 'Kura (tüm katkılar gelince)' : 'Sabit sıra (üyeler onaylar)' }}
+                      <button type="button" class="ml-2 font-medium text-brand-700 underline" @click="go(0)">değiştir</button>
+                    </dd>
+                  </div>
+                  <div class="flex items-center justify-between gap-3 p-3.5 text-sm">
                     <dt class="text-stone-600">Süreler</dt>
                     <dd class="text-right font-semibold">
                       katkı {{ durationLabel(duration) }} · ek {{ durationLabel(graceDuration) }}
@@ -430,8 +524,10 @@ async function submit() {
 
                 <p class="flex items-start gap-2 rounded-2xl bg-sand/70 p-3.5 text-sm text-stone-700">
                   <Illo name="bulb" :size="24" />
-                  Havuz oluşunca üyeler katılır. Sıra ve doğrulayıcılar herkesin onayıyla belirlenir.
+                  Havuz oluşunca üyeler katılır.
+                  {{ orderMode === 'Draw' ? 'Doğrulayıcılar' : 'Sıra ve doğrulayıcılar' }} herkesin onayıyla belirlenir.
                   Katkı eksikse tur durur; geçmişte tamamlanmış turların ödemesi geri alınamaz.
+                  Bu bir Testnet simülasyonudur, gerçek para veya ev/araç teslimi yoktur.
                 </p>
               </template>
             </div>
@@ -467,7 +563,7 @@ async function submit() {
             >
               Önce cüzdan bağla
             </button>
-            <button v-else type="submit" class="btn-primary btn-lg" :disabled="busy || !stepValid || !poolContractId">
+            <button v-else type="submit" class="btn-primary btn-lg" :disabled="busy || !stepValid || !poolContractId || legacyContract">
               <CoinSpinner v-if="busy" :size="22" />
               {{ busy ? 'Cüzdanı onayla…' : 'Havuzu oluştur' }}
             </button>
@@ -484,12 +580,16 @@ async function submit() {
               :label="`${memberLimit} üyeli havuzu temsil eden ${memberLimit} altın para`"
             />
           </div>
-          <dl class="grid grid-cols-3 gap-2 p-4 text-center lg:grid-cols-1 lg:text-left">
+          <dl class="grid grid-cols-2 gap-2 p-4 text-center sm:grid-cols-4 lg:grid-cols-1 lg:text-left">
             <div class="rounded-2xl bg-white/80 p-3">
               <dt class="text-xs text-stone-600">Tur tutarı</dt>
               <dd class="font-display text-lg font-extrabold tabular-nums">
                 {{ pot !== null ? formatStroops(pot) : '—' }}
               </dd>
+            </div>
+            <div class="rounded-2xl bg-white/80 p-3">
+              <dt class="text-xs text-stone-600">Alıcı</dt>
+              <dd class="text-sm font-semibold">{{ orderMode === 'Draw' ? 'Kura ile' : 'Sabit sıra' }}</dd>
             </div>
             <div class="rounded-2xl bg-white/80 p-3">
               <dt class="text-xs text-stone-600">Risk sınırı</dt>

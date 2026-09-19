@@ -72,6 +72,8 @@ const ILLO = {
   mehmet: 'man',
   zeynep: 'woman-with-headscarf',
   can: 'man-beard',
+  dice: 'game-die',
+  trophy: 'trophy',
 }
 
 function pick(set, map, label) {

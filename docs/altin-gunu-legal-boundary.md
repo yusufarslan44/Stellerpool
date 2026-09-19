@@ -16,6 +16,19 @@
 
 Bu unsurlardan **hiçbiri tek başına** “bu proje kesin yasa dışı” sonucunu vermez. Özellikle mevcut Testnet prototipi gerçek müşteri fonu toplamaz. Risk, bunların gerçek parayla ve halka sunulan sürekli bir işletme olarak birleşmesindedir. Mevcut planda organizasyon ücreti tanımlanmış değildir; bu, ticari hizmetin niteliğinin otomatik olarak serbest olduğu anlamına da gelmez.
 
+## Kura ve büyük grup eki (19 Eylül 2026, akşam)
+
+Ürün yönü Fuzul Ev/Oto mantığına yaklaştırıldı: sıra yerine **kura** ve **30 üyeye kadar** grup (yalnızca Testnet, gerçek para ve teslimat yok). Bu iki unsur yukarıdaki riskleri artırır:
+
+| Unsur | Ek soru |
+|---|---|
+| Çekilişle alıcı belirlenmesi | Ödeme yapanlar arasında şansa bağlı tahsisat, tasarruf finansmanındaki çekiliş mekanizmasına ve şans oyunları mevzuatına yaklaşabilir. Hangi çerçeveye girdiği hukukçuyla değerlendirilmelidir. |
+| Daha büyük ve daha az tanıdık grup | "Tanıdık, kapalı arkadaş grubu" niteliği zayıflar; platformun grubu kurup işletmesi finansman organizatörü rolüne yaklaşır. |
+| Rastgelelik | Zincir üstü PRNG hackathon düzeyindedir; gerçek fonla adil çekiliş iddiası taşımaz. |
+| Ekonomik açık | Büyük grupta tur tutarı ve erken teslim alanın temerrüdünden doğan açık büyür; kontrat bunu kapatmaz. |
+
+Bu nedenle arayüz ve belgeler kura/büyük grubu **Testnet simülasyonu** olarak etiketler, ev/araç teslimi veya garantisi vaat etmez. Gerçek para akışı için önce lisanslı yapı ve hukuki değerlendirme gerekir.
+
 ## Altın günü özünü koruyan daha dar ürün
 
 - Tanıdık kişilerin kendi oluşturduğu, davetli ve sabit üyeli bir grup; herkese açık eşleştirme veya platform tarafından teslimat vaadi yok.

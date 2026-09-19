@@ -5,14 +5,41 @@
  * zamanlar unix saniyesidir.
  */
 
+/** Üye sayısı sınırları (kontrat API v9 hedefi: docs/CONTRACT_HANDOFF.md). */
+export const MIN_MEMBERS = 2
+/** Arayüzün desteklediği en büyük grup; kontratın da bu sınıra yükseltilmesi gerekir. */
+export const UI_MAX_MEMBERS = 30
+/** Yayındaki kontratın (API v9) kabul ettiği üst sınır. */
+const CONTRACT_MAX_MEMBERS = 12
+const configuredMax = Number.parseInt(String(import.meta.env.VITE_MAX_MEMBERS ?? ''), 10)
+/**
+ * Formun izin verdiği üst sınır. Varsayılan, yayındaki kontratın kabul ettiği 12'dir; kontrat 30'a
+ * yükseltilince `VITE_MAX_MEMBERS=30` ile açılır (docs/CONTRACT_HANDOFF.md). Aksi halde 13–30 üyeli
+ * bir havuz zincirde reddedilirdi.
+ */
+export const MAX_MEMBERS =
+  Number.isInteger(configuredMax) && configuredMax >= MIN_MEMBERS && configuredMax <= UI_MAX_MEMBERS
+    ? configuredMax
+    : CONTRACT_MAX_MEMBERS
+/** Kontratın doğrulayıcı sınırları (API v9). */
+export const MIN_VERIFIERS = 2
+export const MAX_VERIFIERS = 10
+
 /** Havuz: Filling → Active → Completed / Aborted. */
 export type PoolStatus = 'Filling' | 'Active' | 'Completed' | 'Aborted'
 
 /**
- * Tur: Collecting → AwaitingPurchase → Settled. Ödeme gecikirse
- * Collecting → Grace → AwaitingPurchase.
+ * Alıcı nasıl belirlenir: `Fixed` = üyelerin onayladığı sabit sıra,
+ * `Draw` = her tur, henüz teslim almamış üyeler arasından kura.
  */
-export type RoundPhase = 'Collecting' | 'Grace' | 'AwaitingPurchase' | 'Settled'
+export type OrderMode = 'Fixed' | 'Draw'
+
+/**
+ * Tur: Collecting → AwaitingPurchase → Settled. Ödeme gecikirse
+ * Collecting → Grace → AwaitingPurchase. Kura modunda tüm katkılar tamamlanınca
+ * önce AwaitingDraw gelir; kura çekilince AwaitingPurchase'a geçer.
+ */
+export type RoundPhase = 'Collecting' | 'Grace' | 'AwaitingDraw' | 'AwaitingPurchase' | 'Settled'
 
 export interface PoolInfo {
   id: number
@@ -22,7 +49,9 @@ export interface PoolInfo {
   contributionAmount: bigint
   memberLimit: number
   members: string[]
-  /** Önerilen veya başlatılınca kilitlenen tahsisat sırası. */
+  /** Sıralı mı, kura mı. Eski (v8) kontratta alan yoksa 'Fixed' sayılır. */
+  orderMode: OrderMode
+  /** Önerilen veya başlatılınca kilitlenen tahsisat sırası. Kura modunda boştur. */
   recipientOrder: string[]
   /** Önerilen doğrulayıcılar (creator ve üyelerden farklı adresler). */
   verifiers: string[]
@@ -48,7 +77,8 @@ export interface PoolInfo {
 export interface RoundInfo {
   round: number
   phase: RoundPhase
-  recipient: string
+  /** Bu turun alıcısı. Kura modunda kura çekilene kadar null. */
+  recipient: string | null
   startedAt: number
   /** Katkı son tarihi; geçince herkes turu Grace yapabilir. */
   collectDeadline: number

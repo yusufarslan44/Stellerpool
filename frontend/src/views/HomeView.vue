@@ -135,7 +135,7 @@ const ROLES: { icon: IlloName; title: string; text: string; tone: string }[] = [
   {
     icon: 'seedling',
     title: 'Kurucu',
-    text: 'Havuzu açar, sıra ve doğrulayıcıları önerir. Parayı çekme yetkisi yoktur.',
+    text: 'Havuzu açar, sıra (ya da kura) ve doğrulayıcıları önerir. Parayı çekme yetkisi yoktur.',
     tone: 'bg-brand-100 text-brand-800',
   },
   {
@@ -147,7 +147,7 @@ const ROLES: { icon: IlloName; title: string; text: string; tone: string }[] = [
   {
     icon: 'handshake',
     title: 'Üye',
-    text: 'Katılır, her tur katkısını öder. Sırası gelince satıcıyı ve alım belgesini önerir.',
+    text: 'Katılır, her tur katkısını öder. Sırası gelince ya da kurada seçilince satıcıyı ve alım belgesini önerir.',
     tone: 'bg-sage-100 text-sage-800',
   },
   {
@@ -164,7 +164,11 @@ const TRUST: { icon: IlloName; title: string; text: string }[] = [
     title: 'Para sözleşmede',
     text: 'Planlanan Testnet akışında katkılar Soroban kontratına gider; kurucuya serbest çekim yetkisi verilmez.',
   },
-  { icon: 'pin', title: 'Sabit sıra', text: 'Havuz başlayınca üyeler ve sıra değişmez.' },
+  {
+    icon: 'pin',
+    title: 'Sıra ya da kura',
+    text: 'Havuz başlayınca üyeler değişmez. Alıcı, onaylanan sıradan ya da tüm katkılar gelince çekilen kuradan çıkar.',
+  },
   {
     icon: 'shield',
     title: 'Açık risk sınırı',
@@ -180,7 +184,19 @@ const FAQ = [
   },
   {
     q: 'Sıram sonradan değiştirilebilir mi?',
-    a: 'Hedef kurala göre havuz başladıktan sonra üyeler ve sıra kilitlenecek. Bu kuralın kontrat ve testlerle doğrulanması gerekiyor.',
+    a: 'Hedef kurala göre havuz başladıktan sonra üyeler ve (sabit sıra modunda) sıra kilitlenecek. Bu kuralın kontrat ve testlerle doğrulanması gerekiyor.',
+  },
+  {
+    q: 'Kura nasıl çalışıyor?',
+    a: 'Kura modunda önceden sıra yoktur. Her tur herkes kendi katkısını yatırır; hepsi tamamlanınca herkesin çağırabileceği bir işlemle, henüz teslim almamış üyeler arasından alıcıyı kontrat seçer. Kazanan zaten payını ödemiştir. Zincir üstü rastgelelik hackathon düzeyindedir, yüksek tutarlı gerçek kullanım için yetmez. Kontratın kura desteği henüz yayınlanmadı.',
+  },
+  {
+    q: 'Fuzul Ev veya Eminevim ile aynı mı?',
+    a: 'Hayır. Onlar lisanslı tasarruf finansman şirketleridir: ayrılmış fon havuzu, sözleşme, ipotek/rehin ve şirket taahhüdüyle çalışırlar. Stellerpool bir Testnet prototipidir. Ortak yanı grup katkısı, sıra ya da kura ve ödeme aksayınca durmadır; katkılar tur bazında kontratta kilitli kalır ve kurallar herkese görünür. Farkı ise ipotek, şirket garantisi, gerçek ev/araç teslimi ve tahsilat olmamasıdır.',
+  },
+  {
+    q: 'Kaç kişilik grup kurulabilir?',
+    a: 'Yayındaki Testnet kontratı şu an 2 ile 12 üyeyi destekliyor; hedef 30 üye. Büyük grupta bir turda satıcıya giden tutar da büyür; erken teslim alan sonraki katkıyı bırakırsa açık da büyür. Grubu büyütmek bu riski ortadan kaldırmaz.',
   },
   {
     q: 'Biri ödemeyi bırakırsa ne olur?',
@@ -235,7 +251,7 @@ const FAQ = [
             </span>
           </h1>
           <p class="mt-5 max-w-xl text-lg leading-relaxed text-stone-700">
-            Ev, araç ya da ortak bir hedef için arkadaşlarınla birikim yap. Hedef: paran bir kişinin
+            Ev, araç ya da ortak bir hedef için sırayla ya da kurayla birikim yap. Hedef: paran bir kişinin
             cebinde değil, herkesin görebildiği kuralların içinde dursun.
           </p>
 
@@ -269,7 +285,7 @@ const FAQ = [
         <div class="relative mx-auto h-[340px] w-full max-w-xl sm:h-[420px] lg:h-[480px]">
           <Scene3D :coins="4" label="Ortada büyük bir havuz parası, çevresinde dönen dört üye parası" />
           <div class="float glass absolute top-6 left-0 flex items-center gap-2 rounded-2xl px-3.5 py-2 text-xs font-semibold text-ink sm:left-2">
-            <Illo name="lock" :size="22" /> Hedef: sıra kilitli
+            <Illo name="lock" :size="22" /> Hedef: kurallar kilitli
           </div>
           <div class="float glass absolute right-0 bottom-10 flex items-center gap-2 rounded-2xl px-3.5 py-2 text-xs font-semibold text-ink [animation-delay:-2.4s] sm:right-2">
             <Illo name="shield" :size="22" /> Hedef: para sözleşmede

@@ -222,7 +222,7 @@ Integration/Testnet tests:
 
 ## 12. Phase Plan
 
-Phases 0-11 describe the **sponsor-based generation** and are kept as historical record. Phase 12 is the current work item.
+Phases 0-11 describe the **sponsor-based generation** and are kept as historical record. Phase 12 is complete; Phase 13 (draw mode and 30 members) is the open work item.
 
 ### PHASE 12 - Sponsorless Realignment
 
@@ -250,6 +250,22 @@ Definition of Done:
 - Cure path runs live: the late member pays in Grace and the round proceeds.
 - `docs/IMPLEMENTATION_LOG.md` records the new contract ID, WASM hash, and key transaction hashes.
 - Frontend untouched.
+
+### PHASE 13 - Draw Mode and 30 Members (open)
+
+Status: open. Trigger: product direction of 19 Eylül 2026 (evening) toward the Fuzul Ev/Oto model: a **draw** (kura) instead of a fixed order, and **larger groups**. The frontend is ready (`OrderMode`, `AwaitingDraw`, `draw_recipient`, `VITE_MAX_MEMBERS`) and keeps both features off until the contract supports them; it detects support from the on-chain interface.
+
+Full specification, acceptance criteria and test list: **`docs/CONTRACT_HANDOFF.md`**. Summary:
+
+- Add `OrderMode { Fixed, Draw }` to `Pool`/`create_pool`; add `RoundPhase::AwaitingDraw`; make `RoundState.recipient` an `Option<Address>`.
+- New `draw_recipient(pool_id, caller) -> Address`: callable by anyone once every member has paid; picks among members with `received == false` using `env.prng()` (hackathon-grade randomness; commit-reveal is out of scope and must be documented as a limitation); emits `RecipientDrawn`; the phase moves to `AwaitingPurchase`.
+- `purchase_deadline` also applies to `AwaitingDraw`; expiry allows `abort_pool` and current-round refunds.
+- Raise `MAX_MEMBERS` 12 → 30 and remove the per-member loops in `execute_round` and `start_pool` (derive the refund entitlement from the per-round deposit flag, use a paid counter and `terms_approvals.len()`).
+- Bump API/schema version to 10, redeploy as a new instance, publish the ID.
+
+Definition of Done: `cargo test` covers Fixed and Draw (including a 30-member full flow); Testnet resource simulation for a 30-member pool stays under the read/write-entry and CPU limits and is recorded in `docs/IMPLEMENTATION_LOG.md`; the frontend generated-bindings comparison shows no parameter/field mismatch.
+
+Risk that stays open by design: the early-recipient default. Draw and larger groups do not reduce it (`docs/plan.md` section 2).
 
 > **Historical (sponsor-based generation).** Phases 0-11 below describe the contract that Phase 12 replaces. They are kept unchanged as record; do not treat their sponsor requirements as current.
 
@@ -469,4 +485,5 @@ Definition of Done:
 - Keep the open economic risk visible (early recipient default, earlier-round contributions not refundable).
 - Never label a Testnet seller/document approval as real title, deed, registration, mortgage, or lien verification.
 - Use contract/RPC state as financial truth and Anchor/backend status only for fiat-flow status.
-- After Phase 12 publishes the new contract ID, set `VITE_ROTATING_POOL_CONTRACT_ID` and re-verify parameter names against the generated bindings.
+- Done (19 Eylül 2026 evening): `VITE_ROTATING_POOL_CONTRACT_ID` was set to the Phase 12 instance and the read path (`getPool`/`getRound`/`getMemberStatus`) was verified against live Testnet data; this exposed that the SDK wraps `Result` returns in `Ok { value }`, now unwrapped in `services/pool.ts`.
+- After Phase 13 publishes the new contract ID, set `VITE_ROTATING_POOL_CONTRACT_ID` and `VITE_MAX_MEMBERS=30`, and re-verify parameter names against the generated bindings.
