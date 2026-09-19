@@ -67,11 +67,14 @@ const autoplay = ref(true)
 const reduced = ref(false)
 const visible = ref(false)
 const pageVisible = ref(true)
-const hovering = ref(false)
 const focused = ref(false)
 const current = computed(() => steps[active.value]!)
-const playing = computed(() => autoplay.value && visible.value && pageVisible.value && !reduced.value && !hovering.value && !focused.value)
-const duration = 16000
+// Fare üstünde durmaz (kaydırırken imleç bölümün üstünde kalınca anlatım hiç ilerlemiyordu);
+// yalnızca klavye odağında, sekme/bölüm görünmezken ve duraklatılınca durur.
+const playing = computed(() => autoplay.value && visible.value && pageVisible.value && !reduced.value && !focused.value)
+// Her adım 5 sn; elle seçilen adım ilk 2,5 sn ek bekler (progress negatif başlar).
+const duration = 5000
+const HOLD = -0.5
 let raf = 0
 let last = 0
 let observer: IntersectionObserver | undefined
@@ -79,14 +82,13 @@ let motion: MediaQueryList | undefined
 
 function choose(index: number) {
   active.value = (index + steps.length) % steps.length
-  progress.value = 0
-  autoplay.value = false
+  // Elle seçim anlatımı kapatmaz; adım biraz daha bekler, sonra otomatik devam eder.
+  progress.value = HOLD
 }
 function togglePlay() {
   autoplay.value = !autoplay.value
-  // An explicit play action resumes immediately while keeping keyboard focus.
+  // Açık bir oynat eylemi klavye odağında bile hemen sürdürür.
   focused.value = false
-  hovering.value = false
 }
 function tick(now: number) {
   progress.value += Math.min(now - last, 100) / duration
@@ -97,13 +99,17 @@ function tick(now: number) {
   }
   raf = requestAnimationFrame(tick)
 }
-watch(playing, (play) => {
-  cancelAnimationFrame(raf)
-  if (play) {
-    last = performance.now()
-    raf = requestAnimationFrame(tick)
-  }
-})
+watch(
+  playing,
+  (play) => {
+    cancelAnimationFrame(raf)
+    if (play) {
+      last = performance.now()
+      raf = requestAnimationFrame(tick)
+    }
+  },
+  { immediate: true },
+)
 function updateVisibility() { pageVisible.value = !document.hidden }
 function updateMotion() {
   reduced.value = motion?.matches ?? false
@@ -118,7 +124,7 @@ onMounted(() => {
   updateVisibility()
   motion.addEventListener('change', updateMotion)
   document.addEventListener('visibilitychange', updateVisibility)
-  observer = new IntersectionObserver(([entry]) => { visible.value = !!entry?.isIntersecting }, { threshold: 0.15 })
+  observer = new IntersectionObserver(([entry]) => { visible.value = !!entry?.isIntersecting }, { threshold: 0.1 })
   if (section.value) observer.observe(section.value)
 })
 onBeforeUnmount(() => {
@@ -137,7 +143,7 @@ onBeforeUnmount(() => {
       <p class="mt-4 text-stone-600">Ortak bir hedeften ilk ödemeye. Her adımda kimin ne yaptığını keşfet.</p>
     </header>
 
-    <div v-reveal class="how-layout" @pointerenter="hovering = $event.pointerType === 'mouse'" @pointerleave="hovering = false" @focusin="focused = true" @focusout="leaveFocus">
+    <div v-reveal class="how-layout" @focusin="focused = ($event.target as HTMLElement).matches(':focus-visible')" @focusout="leaveFocus">
       <div class="how-steps">
         <div class="how-list-heading"><span>Birlikte, adım adım</span><span>01 — 05</span></div>
         <ol class="how-list" aria-label="Havuzun işleyiş adımları">
@@ -150,7 +156,7 @@ onBeforeUnmount(() => {
                 <span class="how-step-short">{{ step.short }}</span>
               </span>
               <span class="how-step-icon"><AppIcon :name="step.icon" /></span>
-              <span v-if="active === index" class="how-step-progress" :style="{ transform: `scaleX(${progress})` }" />
+              <span v-if="active === index" class="how-step-progress" :style="{ transform: `scaleX(${Math.max(0, progress)})` }" />
             </button>
           </li>
         </ol>
@@ -201,10 +207,10 @@ onBeforeUnmount(() => {
 .how-list { display: grid; gap: 12px; position: relative; }
 .how-list::before { content: ''; position: absolute; left: 39px; top: 28px; bottom: 28px; width: 1px; background: #d6dece; }
 .how-list li { position: relative; }
-.how-step { position: relative; display: flex; width: 100%; align-items: center; gap: 16px; min-height: 103px; padding: 17px; border: 1px solid #e7e7da; border-radius: 21px; text-align: left; background: #fffcf4df; cursor: pointer; overflow: hidden; transition: transform .35s, background .35s, border-color .35s, box-shadow .35s; }
+.how-step { position: relative; display: flex; width: 100%; align-items: center; gap: 16px; min-height: 103px; padding: 17px; border: 1px solid #e7e7da; border-radius: 21px; text-align: left; background: #fffcf4df; cursor: pointer; overflow: hidden; transition: transform .2s, background .2s, border-color .2s, box-shadow .2s; }
 .how-step:hover { transform: translateX(4px); background: #fff; border-color: #b4cfbb; }
 .is-active .how-step { background: #fff; border-color: #79b99a; box-shadow: 0 10px 30px -14px #0a523a38, inset 0 0 0 1px #79b99a24; transform: translateX(7px); }
-.how-step-number { display: grid; place-items: center; width: 43px; height: 47px; flex-shrink: 0; border-radius: 14px; color: #807d67; background: linear-gradient(145deg, #f0f1e7, #e7eadd); border: 1px solid #fff; font: 650 18px var(--font-display); box-shadow: 0 3px 0 #dfe2d4; transition: background .3s, color .3s, box-shadow .3s; }
+.how-step-number { display: grid; place-items: center; width: 43px; height: 47px; flex-shrink: 0; border-radius: 14px; color: #807d67; background: linear-gradient(145deg, #f0f1e7, #e7eadd); border: 1px solid #fff; font: 650 18px var(--font-display); box-shadow: 0 3px 0 #dfe2d4; transition: background .18s, color .18s, box-shadow .18s; }
 .is-active .how-step-number { background: linear-gradient(145deg, #24906b, #0b5a3e); color: #fff; box-shadow: 0 4px 0 #083d2e, 0 7px 14px #0a523a20; }
 .is-past .how-step-number { color: #0f6748; background: #e4f0e3; }
 .how-step-content { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
@@ -255,7 +261,7 @@ onBeforeUnmount(() => {
 .how-footer > span { display: flex; align-items: center; gap: 6px; }
 .how-footer :deep(svg) { width: 15px; height: 15px; color: #5c805c; }
 .how-footer > i { width: 3px; height: 3px; border-radius: 50%; background: #b8bea5; }
-.how-copy-enter-active, .how-copy-leave-active, .how-note-enter-active, .how-note-leave-active { transition: opacity .2s, transform .25s; }
+.how-copy-enter-active, .how-copy-leave-active, .how-note-enter-active, .how-note-leave-active { transition: opacity .12s, transform .16s; }
 .how-copy-enter-from, .how-note-enter-from { opacity: 0; transform: translateY(10px); }
 .how-copy-leave-to, .how-note-leave-to { opacity: 0; transform: translateY(-7px); }
 @media (max-width: 1023px) {

@@ -108,7 +108,7 @@ function flyCoin(from: HTMLElement | null, to: HTMLElement | null, delay = 0) {
       { transform: `translate(${(x0 + x1) / 2}px, ${Math.min(y0, y1) - 46}px) scale(1.15)`, opacity: 1, offset: 0.5 },
       { transform: `translate(${x1}px, ${y1}px) scale(0.7)`, opacity: 0.9 },
     ],
-    { duration: 800, delay, easing: 'cubic-bezier(0.3, 0.7, 0.3, 1)', fill: 'both' },
+    { duration: 550, delay, easing: 'cubic-bezier(0.3, 0.7, 0.3, 1)', fill: 'both' },
   )
   anim.onfinish = () => coin.remove()
 }
@@ -132,7 +132,7 @@ function afterFunding() {
   later(() => {
     phase.value = phase.value === 'r2grace' ? 'r2ok' : 'purchase'
     locked.value = false
-  }, 1100)
+  }, 750)
 }
 
 function delayCan() {
@@ -190,7 +190,7 @@ function approve(v: string) {
     later(() => {
       phase.value = 'pay'
       locked.value = false
-    }, 700)
+    }, 450)
   }
 }
 
@@ -202,7 +202,7 @@ function send() {
     sent.value = true
     phase.value = 'done'
     locked.value = false
-  }, 1100)
+  }, 800)
 }
 
 function reset() {
@@ -552,6 +552,6 @@ function statusOf(id: string): { label: string; cls: string } {
 .jar-fill {
   transform-box: fill-box;
   transform-origin: bottom;
-  transition: transform 0.9s var(--ease-out-soft);
+  transition: transform 0.5s var(--ease-out-soft);
 }
 </style>

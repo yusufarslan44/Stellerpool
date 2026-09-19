@@ -207,7 +207,7 @@
 }
 
 @utility pop {
-  animation: pop-in 0.45s var(--ease-out-soft) both;
+  animation: pop-in 0.3s var(--ease-out-soft) both;
 }
 
 @keyframes coin-fall {
@@ -289,9 +289,9 @@
     opacity: 0;
     transform: translateY(22px);
     transition:
-      opacity 0.7s var(--ease-out-soft),
-      transform 0.7s var(--ease-out-soft);
-    transition-delay: calc(var(--d, 0) * 80ms);
+      opacity 0.45s var(--ease-out-soft),
+      transform 0.45s var(--ease-out-soft);
+    transition-delay: calc(var(--d, 0) * 50ms);
   }
   [data-reveal].is-in {
     opacity: 1;
@@ -328,8 +328,8 @@
 .step-prev-enter-active,
 .step-prev-leave-active {
   transition:
-    opacity 0.28s ease,
-    transform 0.32s var(--ease-out-soft);
+    opacity 0.18s ease,
+    transform 0.22s var(--ease-out-soft);
 }
 .step-next-enter-from,
 .step-prev-leave-to {
