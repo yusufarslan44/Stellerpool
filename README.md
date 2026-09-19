@@ -15,32 +15,33 @@ Proje geliştirme aşamasında. Ön yüz çalışması sürüyor; Soroban kontra
 Ortak tasarruf grubunda iki risk var: organizatörün toplanan fonu amacı dışında kullanması ve erken tahsisat alan üyenin sonraki katkıları ödememesi. Kontrat ilk risk için fon hareketini sınırlar. İkinci risk ekonomik güvence gerektirir: eski plandaki bir taksitlik üye teminatı yeterli değildir.
 
 - Havuz başlamadan ayrı bir **sponsor güvencesi** kontrata yatırılır. Dört üye ve tur başına 10 birimlik örnekte gerekli başlangıç güvencesi 40 birimdir.
-- Katkılar, sponsor güvencesi ve her üyenin iade hakkı ayrı muhasebeleştirilir. Organizatörün serbest çekim yetkisi yoktur.
-- Üyeler ve tahsisat sırası başladıktan sonra kilitlenir.
-- Tur katkıları tam ve satıcı/alım onayı hazırsa, kontrat gerekli iade bakiyesi kaldığını kontrol edip tutarı doğrudan satıcı cüzdanına yollar.
-- Katkı eksikse tur durur, üye bilgilendirilir ve önceden belirlenen ek süre başlar. Henüz teslimat almayanın tahsisatı ertelenebilir; teslimat almış üyenin borcu devam eder. Üye veya sponsor açığı karşılamazsa ek süre sonunda güvenli iptal ve iade akışı işletilir.
+- Üye katkıları, sponsorun başlangıç güvencesi, sponsor avansları ve her üyenin iade hakkı ayrı muhasebeleştirilir. Organizatörün serbest çekim yetkisi yoktur.
+- Üyeler ve sponsor aynı sıra/koşul sürümünü onaylamadan havuz başlamaz. Kuruluş süresi dolarsa sponsor fonunu geri alabilir; koşullar tamamsa herkes havuzu başlatabilir.
+- Tur katkıları tam, sıradaki üyenin kendi katkısı ve eski avansları kapalı, satıcı/alım onayı geçerli ve satıcı varlığı alabilir durumda ise kontrat iade bakiyesi kaldığını kontrol edip tutarı doğrudan satıcı cüzdanına yollar.
+- Katkı eksikse ek süre başlar. Sıradaki üye adına sponsor katkısı tahsisatı açamaz. Başka üyenin açığını sponsor yeni fonla kapatabilir; bu avans o üyenin iade hakkı sayılmaz. Ek süre sonunda koşullar sağlanmazsa iptal ve iade tetiklenebilir.
+- Alım için ayrıca son tarih vardır. Satıcı veya doğrulayıcı onayı gelmezse fonlar süresiz kilitlenmez; iptal ve iade yolu açılır.
 - TL giriş veya çıkışı için anchor gerekir; hangi sağlayıcının kullanılacağı henüz netleşmedi.
 
 Bu tasarım gerçek mülkiyet devrini, gelecekteki taksit tahsilatını veya TL token'ının değerini tek başına garanti etmez. Gerçek para ve ev/araç işlemleri için lisanslı ortak, hukuki inceleme, kimlik/satıcı doğrulaması ve bağımsız kontrat denetimi gerekir.
 
-Fuzul'ün kamuya açık açıklamalarında teslimat öncesi taksit dondurma ve teslimat erteleme ile teslimat sonrası ev/araç üzerinde ipotek veya rehin bulunuyor. Gerçek üründe bu hukuki güvence ve borç takibi, kontratın dışındaki yetkili ortak tarafından yürütülmelidir. Sponsor güvencesi, tahsilat sürerken bekleyen üyelerin parasını korumak içindir; borçlunun borcunu otomatik silmez. Ayrıntılar ve kaynaklar [planda](docs/plan.md).
+Fuzul'ün kamuya açık açıklamalarında teslimat öncesi taksit dondurma ve teslimat erteleme ile teslimat sonrası ev/araç üzerinde ipotek veya rehin bulunuyor. Gerçek üründe mülkiyet devri, ödeme, hukuki güvence ve borç takibi kontrat dışındaki yetkili ortakla eşleştirilmelidir. Sponsor güvencesi, tahsilat sürerken bekleyen üyelerin parasını korumak içindir; borçlunun borcunu otomatik silmez. Ayrıntılar ve kaynaklar [planda](docs/plan.md).
 
 ## Örnek akış
 
 ~~~mermaid
 flowchart TD
-  A[Havuz ve sıra belirlenir] --> B[Sponsor güvencesi kontrata kilitlenir]
-  B --> C[Üyeler katılır ve tur katkısını öder]
-  C --> D{Üye katkıları veya sponsor tamamlamasıyla tur tutarı hazır mı?}
-  D -->|Evet| E[Satıcı ve alım kaydı doğrulanır]
-  E --> F{Ödeme sonrası iade hakkı karşılanıyor mu?}
-  F -->|Evet| G[Tahsisat satıcıya ödenir]
-  G --> H[Sonraki tur]
-  D -->|Süre doldu| I[Tur durur, bildirim ve ek süre başlar]
-  F -->|Hayır| I
-  I --> K{Ek sürede üye veya sponsor açığı tamamlar mı?}
-  K -->|Evet| D
-  K -->|Hayır| J[Havuz iptal edilir, hak sahiplerine iade]
+  A[Havuz kurulur, sponsor fonu kilitlenir] --> B[Üyeler ve sponsor sıra ile koşulları onaylar]
+  B --> C{Kuruluş süresinde hazır mı?}
+  C -->|Hayır| J[İptal ve iade]
+  C -->|Evet| D[Herkes havuzu başlatabilir]
+  D --> E[Tur katkıları toplanır]
+  E --> F{Katkılar tam ve sıradaki üye borçsuz mu?}
+  F -->|Evet| G[Satıcı ve alım onayı için sınırlı süre]
+  G --> H{Onay, satıcı ve iade bakiyesi uygun mu?}
+  H -->|Evet| I[Tahsisat satıcıya ödenir]
+  I --> E
+  F -->|Ek süre sonunda hayır| J
+  H -->|Alım süresi sonunda hayır| J
 ~~~
 
 ## Teknoloji ve klasörler
@@ -58,8 +59,9 @@ Stellar Testnet, Stellar SDK, RPC ve uygun bir Stellar varlığı kullanılacak.
 ## Teslim durumu
 
 - [ ] Sponsor güvencesi, tahsisat ve iade değişmezleri test edilmiş Soroban kontratı
+- [ ] Kuruluş ve alım zaman aşımı, koşul onayları, sponsor avansı ve borçlu alıcı engeli testleri
 - [ ] Testnet contract ID ve yeniden üretilebilir kurulum
-- [ ] Cüzdanlı arayüz ve satıcıya demo ödeme
+- [ ] Kontrat durumlarıyla uyumlu cüzdanlı arayüz ve satıcıya demo ödeme
 - [ ] Eksik ödeme → durdurma → iptal/iade demosu
 - [ ] Kabul edilen TL anchor giriş veya çıkış akışı
 - [ ] Gerçek ve simüle parçaları ayıran demo/sunum dokümanı
