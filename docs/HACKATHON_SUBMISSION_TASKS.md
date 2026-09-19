@@ -16,19 +16,21 @@ düşün: önce P0'ın en üstündeki maddeler, geri kalanı pitch'te "sıradaki
 anlatılır — jüri kriteri 5 (Traction & Continuity) zaten "credible roadmap" arıyor,
 her şeyin bitmiş olmasını değil.
 
-## 0. Durum özeti (neden bu görevler)
+## 0. Durum özeti (güncellendi — bkz. Phase 13/14, `docs/IMPLEMENTATION_LOG.md`)
 
 - **Kontrat**: v10 (kura modu + 30 üye) Testnet'te yayında, 27 test yeşil, canlı
-  senaryo kanıtlı. Bu taraf en sağlam kısım — bkz. madde 3.
-- **En büyük boşluk — Ecosystem Fit / Anchor**: gerçek bir TRY anchor'ı yok, yalnızca
-  SDF'in test anchor'ı (test varlığı üretir). El kitabı bunun **en ağırlıklı alt
-  kriter** olduğunu açıkça yazıyor. Anchor ayrıca ana havuz akışına hiç bağlı değil
-  (ayrı bir vitrin bileşeni) — "Core Feature" kriteri de bu yüzden karşılanmıyor.
-- **User Experience değerlendirilemiyor**: yayınlanmış bir demo URL'i yok, cüzdanla
-  uçtan uca hiç denenmemiş.
-- **Presentation**: resmi sunum şablonu henüz doldurulmamış.
-- **README**: kontrat ID'si eski (v9), kura/30-üye satırı artık yanlış (v10'da
-  destekleniyor ama README hâlâ "desteklenmiyor" diyor).
+  senaryo kanıtlı. ✅ Tamam.
+- **Backend/Anchor**: kendi SEP-1/10/24 servisimiz yazıldı, gerçek `TRYT` varlığı
+  ihraç edildi, uçtan uca (iki ayrı gerçek Testnet işlemiyle) doğrulandı. ✅ Kod tamam,
+  ⚠️ şu an yalnızca geçici bir tünelde çalışıyor — kalıcı sunucu deploy'u (madde 2)
+  bekleniyor.
+- **Frontend**: v10'a bağlandı, anchor'ı havuz akışına gömdü (ayrı vitrin değil artık),
+  **canlı demo URL'i yayında**: `https://stellerpool.arslanyusuf.com`. ✅ Büyük ölçüde
+  tamam — kalan: bu sitenin anchor ortam değişkenlerini kalıcı backend'e çevirmek ve
+  gerçek cüzdanla uçtan uca denemek (madde 3).
+- **README**: kontrat ID'si v10, demo URL'i ekli. ✅ Tamam.
+- **Hâlâ eksik**: kalıcı (sunucuda) anchor deploy'u, frontend'in ona bağlanması, gerçek
+  cüzdan testi, resmi sunum şablonu. Aşağıdaki maddeler bunlara odaklanıyor.
 
 ## 1. Kontrat ekibi — kalan iş azalan öncelikte
 
@@ -107,34 +109,29 @@ Ayrıntılı kanıt ve kararlar: `docs/IMPLEMENTATION_LOG.md` "Phase 14".
 
 ## 3. Frontend ekibi
 
+**Durum:** Yusuf paralelde bu bölümün büyük kısmını bitirdi — kontrat v10'a bağlandı,
+README güncellendi, **canlı bir demo URL'i yayında** (`https://stellerpool.arslanyusuf.com`),
+ve anchor artık `PoolView.vue`'daki katkı adımının içinde ("Bakiyen yetmiyor mu? Anchor
+ile yükle"), ayrı bir vitrin olmaktan çıktı. `frontend/src/lib/anchor.ts`'e eklenen
+`supportsPoolAsset(code, issuer)` kontrolü, backend'in `stellar.toml`'undaki
+`[[CURRENCIES]]` alanıyla (kod + ihraççı eşleşmesi) doğrulandı — **backend ile frontend
+tarafı birbiriyle uyumlu**, kalan tek şey ikisini gerçek (kalıcı) bir adresle birbirine
+bağlamak.
+
 **P0**
-- [ ] **Anchor'ı ana akışa bağla**: en azından "bakiye yükle" / "TRY ile katıl" gibi
-  belirgin bir adım olarak `CreateView.vue` veya `PoolView.vue`'ya ekle — şu an
-  `AnchorDemo.vue` yalnızca `HomeView`/`ShowcaseView`'de, havuz akışıyla hiç teması
-  yok. Tam otomasyon şart değil; en azından kullanıcı "önce TRY yatır, sonra havuza
-  katıl" akışını gözle takip edebilmeli.
-- [ ] **Backend artık hazır** (`backend/`, bkz. madde 2 — kurulum ve https tünel adımları
-  `backend/README.md`'de). `cloudflared`/`ngrok` ile bir https tünel aç, backend'in
-  `PUBLIC_BASE_URL`'ini o adrese ayarlayıp yeniden başlat, `frontend/.env`'de
-  `VITE_ANCHOR_HOME_DOMAIN`'i o adresin host'una çevir, gerçek bir cüzdanla SEP-10 +
-  SEP-24 interactive deposit'i dene.
+- [x] Anchor'ı ana akışa bağla — tamamlandı (`e052ee9`, `PoolView.vue`).
+- [x] Frontend'i public bir URL'e deploy et — tamamlandı (`https://stellerpool.arslanyusuf.com`).
+- [x] README güncelle (kontrat ID v10, demo URL) — tamamlandı (`f878df5`, `1ce10b5`).
+- [ ] **Canlı sitenin ortam değişkenlerini kalıcı anchor'a çevir**: `backend/DEPLOY.md`
+  tamamlanınca (madde 2), `stellerpool.arslanyusuf.com`'un deploy ortamında
+  `VITE_ANCHOR_HOME_DOMAIN=anchor.<domain>`, `VITE_POOL_ASSET_CODE=TRYT`,
+  `VITE_POOL_ASSET_ISSUER=GAOPTL4Q34VQWE5PWWVYEX7QQLOSO2DVYUVURCHHXTZFKASS66YL7YJ3` ayarla
+  ve yeniden deploy et. **Şu an site ya boş `VITE_ANCHOR_HOME_DOMAIN` (SDF test anchor'ı)
+  ya da hiç ayarlanmamış anchor değişkenleriyle çalışıyor olabilir — kontrol edilmeli.**
 - [ ] **Gerçek cüzdanla (Freighter) uçtan uca tam döngü**: havuz oluştur → üye
   katıl → şartları öner/onayla → başlat → öde → (kura modundaysa) kura çek →
-  execute_round → tamamlandı. Ekran görüntüsü veya kısa video al (pitch/README için
-  kanıt).
-- [ ] **Frontend'i public bir URL'e deploy et** (Vercel/Netlify vb.), build'de
-  güncel `.env` değerlerini kullan (özellikle yeni v10 kontrat ID'si ve
-  `VITE_MAX_MEMBERS=30` — bunlar zaten `frontend/.env`'de hazır, sadece deploy
-  ortamına taşınmalı).
-- [ ] **README güncelle** (kontrat ekibi buna dokunmuyor, bu görev frontend/dokümantasyon
-  tarafında):
-  - Kontrat ID'sini v9'dan v10'a (`CC7W3SKQHBLZ2JPTGSK42H6IAJQ22A4PUK6CSN2T4PUJRY4LQ445GYMB`)
-    güncelle, WASM hash ve tx linklerini `docs/IMPLEMENTATION_LOG.md` "Phase 13"
-    bölümünden al.
-  - "Kura modu ve 30 üye: 🟡 kontrat henüz desteklemiyor" satırını "✅ Testnet'te"
-    yap.
-  - Demo URL'i ekle (yukarıdaki deploy adımı bitince).
-  - Backend/anchor domaini gerçek servise geçtiyse o satırı da güncelle.
+  execute_round → tamamlandı, ve ayrıca yukarıdaki anchor bağlantısı gerçek bir cüzdanla
+  denenmeli. Ekran görüntüsü veya kısa video al (pitch/README için kanıt).
 - [ ] **Resmi Stellar sunum şablonunu kopyala ve doldur** (kopyasını al, orijinali
   düzenleme). Zorunlu teslim maddesi, henüz yapılmadı.
 
@@ -152,8 +149,10 @@ Ayrıntılı kanıt ve kararlar: `docs/IMPLEMENTATION_LOG.md` "Phase 14".
 ## 4. Teslim portalı kontrol listesi (herkes, son adım)
 
 - [ ] Takım adı + tüm üyelerin isim/iletişim bilgisi
-- [ ] GitHub repo linki (zaten açık: `github.com/yusufarslan44/Stellerpool`)
-- [ ] Canlı demo URL'i (madde 3, P0)
+- [x] GitHub repo linki: `github.com/yusufarslan44/Stellerpool`
+- [x] Canlı demo URL'i: `https://stellerpool.arslanyusuf.com`
 - [ ] Sunum linki, "Anyone with the link can view" olarak paylaşım ayarı açık
 - [ ] Track seçimi: **Genesis**
-- [ ] Submission formunda kontrat ID'lerinin güncel (v10) olduğundan emin ol
+- [x] Kontrat ID'si güncel (v10): `CC7W3SKQHBLZ2JPTGSK42H6IAJQ22A4PUK6CSN2T4PUJRY4LQ445GYMB`
+- [ ] Demo sitesinin anchor bağlantısı kalıcı backend'e çevrildikten sonra siteyi son
+  kez elle dene (madde 2 ve 3 bitince)
