@@ -8,14 +8,14 @@ mod types;
 pub use error::ContractError;
 pub use events::*;
 pub use types::{
-    AbortReason, MemberState, MemberStatusView, Pool, PoolStatus, RoundPhase, RoundState,
+    AbortReason, MemberState, MemberStatusView, OrderMode, Pool, PoolStatus, RoundPhase, RoundState,
 };
 
 use soroban_sdk::{contract, contractimpl, token, Address, BytesN, Env, Vec};
 
-pub const CONTRACT_VERSION: u32 = 9;
+pub const CONTRACT_VERSION: u32 = 10;
 pub const MIN_MEMBERS: u32 = 2;
-pub const MAX_MEMBERS: u32 = 12;
+pub const MAX_MEMBERS: u32 = 30;
 pub const MIN_VERIFIERS: u32 = 2;
 pub const MAX_VERIFIERS: u32 = 10;
 
@@ -30,6 +30,7 @@ impl RotatingPoolContract {
         token: Address,
         contribution_amount: i128,
         member_limit: u32,
+        order_mode: OrderMode,
         round_duration: u64,
         grace_duration: u64,
         purchase_duration: u64,
@@ -61,6 +62,7 @@ impl RotatingPoolContract {
             token: token.clone(),
             contribution_amount,
             member_limit,
+            order_mode,
             members: Vec::new(&env),
             recipient_order: Vec::new(&env),
             verifiers: Vec::new(&env),
@@ -88,6 +90,7 @@ impl RotatingPoolContract {
             token,
             contribution_amount,
             member_limit,
+            order_mode,
             round_duration,
             grace_duration,
             purchase_duration,
@@ -231,27 +234,34 @@ impl RotatingPoolContract {
         if pool.terms_version == 0 {
             return Err(ContractError::TermsNotProposed);
         }
-        if pool.recipient_order.len() != pool.member_limit {
+        if pool.order_mode == OrderMode::Fixed && pool.recipient_order.len() != pool.member_limit {
             return Err(ContractError::InvalidRecipientOrder);
         }
         validate_recipient_order(&pool, &pool.recipient_order)?;
         if !(MIN_VERIFIERS..=MAX_VERIFIERS).contains(&pool.verifiers.len()) {
             return Err(ContractError::InvalidVerifierSet);
         }
-        for member in pool.members.iter() {
-            if !storage::has_terms_approval(&env, pool_id, pool.terms_version, &member) {
-                return Err(ContractError::TermsNotFullyApproved);
-            }
+        // `terms_approvals` only grows through `approve_terms`, which requires the approver to
+        // be an existing member and rejects a repeat approval for the same version, so it is a
+        // duplicate-free subset of `pool.members`. Once its length equals `member_limit` (and
+        // `pool.members.len()` already does, checked above), it must equal the full member set
+        // — no need to re-read a per-member approval flag from storage for every member.
+        if pool.terms_approvals.len() != pool.member_limit {
+            return Err(ContractError::TermsNotFullyApproved);
         }
 
         let started_at = now;
         let collect_deadline = started_at
             .checked_add(pool.round_duration)
             .ok_or(ContractError::ArithmeticOverflow)?;
-        let first_recipient = pool
-            .recipient_order
-            .get(0)
-            .ok_or(ContractError::InvalidRecipientOrder)?;
+        let first_recipient = match pool.order_mode {
+            OrderMode::Fixed => Some(
+                pool.recipient_order
+                    .get(0)
+                    .ok_or(ContractError::InvalidRecipientOrder)?,
+            ),
+            OrderMode::Draw => None,
+        };
         let round = RoundState {
             round: 1,
             phase: RoundPhase::Collecting,
@@ -366,7 +376,11 @@ impl RotatingPoolContract {
         if round.phase != RoundPhase::AwaitingPurchase {
             return Err(ContractError::RoundNotReady);
         }
-        if round.recipient != member {
+        let recipient = round
+            .recipient
+            .clone()
+            .ok_or(ContractError::StorageInvariantViolation)?;
+        if recipient != member {
             return Err(ContractError::CurrentRecipientOnly);
         }
         if seller != pool.demo_seller {
@@ -456,6 +470,65 @@ impl RotatingPoolContract {
         Ok(approval_count)
     }
 
+    /// Draw-mode only. Once every member has paid into the round (`AwaitingDraw`), anyone may
+    /// call this to pick the round's recipient uniformly among members who have not received a
+    /// payout yet. Randomness is hackathon-grade (Soroban's validator-influenced PRNG, see
+    /// `docs/CONTRACT_HANDOFF.md`) — not suitable for real funds.
+    pub fn draw_recipient(
+        env: Env,
+        caller: Address,
+        pool_id: u64,
+    ) -> Result<Address, ContractError> {
+        caller.require_auth();
+        let pool = get_pool_or_error(&env, pool_id)?;
+        if pool.status != PoolStatus::Active {
+            return Err(ContractError::InvalidPoolStatus);
+        }
+        if pool.order_mode != OrderMode::Draw {
+            return Err(ContractError::NotDrawPool);
+        }
+        let round_index = pool.current_round;
+        let mut round = storage::read_round(&env, pool_id, round_index)
+            .ok_or(ContractError::StorageInvariantViolation)?;
+        if round.phase != RoundPhase::AwaitingDraw {
+            return Err(ContractError::RoundNotReady);
+        }
+
+        let mut candidates: Vec<Address> = Vec::new(&env);
+        for member in pool.members.iter() {
+            let state = storage::read_member(&env, pool_id, &member)
+                .ok_or(ContractError::StorageInvariantViolation)?;
+            if !state.received {
+                candidates.push_back(member);
+            }
+        }
+        if candidates.is_empty() {
+            return Err(ContractError::StorageInvariantViolation);
+        }
+        let winner = if candidates.len() == 1 {
+            candidates
+                .get(0)
+                .ok_or(ContractError::StorageInvariantViolation)?
+        } else {
+            let index = env.prng().gen_range::<u64>(0..candidates.len() as u64) as u32;
+            candidates
+                .get(index)
+                .ok_or(ContractError::StorageInvariantViolation)?
+        };
+
+        round.recipient = Some(winner.clone());
+        round.phase = RoundPhase::AwaitingPurchase;
+        storage::write_round(&env, pool_id, &round);
+
+        RecipientDrawn {
+            pool_id,
+            round: round_index,
+            recipient: winner.clone(),
+        }
+        .publish(&env);
+        Ok(winner)
+    }
+
     pub fn execute_round(env: Env, pool_id: u64) -> Result<i128, ContractError> {
         let mut pool = get_pool_or_error(&env, pool_id)?;
         if pool.status != PoolStatus::Active {
@@ -502,21 +575,18 @@ impl RotatingPoolContract {
             return Err(ContractError::PurchaseNotApproved);
         }
 
-        if pool.members.len() != pool.member_limit {
+        // `round.pot == payout_amount` (checked above) already implies exactly `member_limit`
+        // distinct deposits, since every deposit adds exactly `contribution_amount` and a
+        // second deposit from the same member is rejected. `round.paid.len()` (already loaded,
+        // no extra storage reads) confirms this cheaply even at 30 members instead of
+        // re-reading a `has_deposit` flag per member from storage.
+        if pool.members.len() != pool.member_limit || round.paid.len() != pool.member_limit {
             return Err(ContractError::StorageInvariantViolation);
         }
-        let mut recipient_found = false;
-        for member in pool.members.iter() {
-            if !storage::has_deposit(&env, pool_id, round_index, &member) {
-                return Err(ContractError::StorageInvariantViolation);
-            }
-            if member == round.recipient {
-                recipient_found = true;
-            }
-        }
-        if !recipient_found {
-            return Err(ContractError::StorageInvariantViolation);
-        }
+        let recipient = round
+            .recipient
+            .clone()
+            .ok_or(ContractError::StorageInvariantViolation)?;
 
         let assigned_balance = storage::read_pool_assigned_balance(&env, pool_id);
         if assigned_balance < payout_amount {
@@ -531,17 +601,21 @@ impl RotatingPoolContract {
             .checked_add(1)
             .ok_or(ContractError::ArithmeticOverflow)?;
         let next_round = if next_index <= pool.member_limit {
-            let recipient = pool
-                .recipient_order
-                .get(next_index - 1)
-                .ok_or(ContractError::StorageInvariantViolation)?;
+            let next_recipient = match pool.order_mode {
+                OrderMode::Fixed => Some(
+                    pool.recipient_order
+                        .get(next_index - 1)
+                        .ok_or(ContractError::StorageInvariantViolation)?,
+                ),
+                OrderMode::Draw => None,
+            };
             let collect_deadline = completed_at
                 .checked_add(pool.round_duration)
                 .ok_or(ContractError::ArithmeticOverflow)?;
             Some(RoundState {
                 round: next_index,
                 phase: RoundPhase::Collecting,
-                recipient,
+                recipient: next_recipient,
                 started_at: completed_at,
                 collect_deadline,
                 grace_deadline: None,
@@ -557,13 +631,13 @@ impl RotatingPoolContract {
             None
         };
 
-        for member in pool.members.iter() {
-            storage::write_refund_liability(&env, pool_id, &member, 0);
-        }
-        let mut recipient_state = storage::read_member(&env, pool_id, &round.recipient)
+        // Refund entitlement is derived at claim time from `has_deposit(pool, current_round,
+        // member)` rather than stored per member, so settling a round needs no per-member
+        // reset loop here — that is what keeps this O(1) in storage writes at 30 members.
+        let mut recipient_state = storage::read_member(&env, pool_id, &recipient)
             .ok_or(ContractError::StorageInvariantViolation)?;
         recipient_state.received = true;
-        storage::write_member(&env, pool_id, &round.recipient, &recipient_state);
+        storage::write_member(&env, pool_id, &recipient, &recipient_state);
 
         storage::write_pool_assigned_balance(&env, pool_id, assigned_after);
         round.phase = RoundPhase::Settled;
@@ -586,7 +660,7 @@ impl RotatingPoolContract {
         RoundPaid {
             pool_id,
             round: round_index,
-            recipient: round.recipient.clone(),
+            recipient,
             seller,
             amount: payout_amount,
         }
@@ -655,7 +729,7 @@ impl RotatingPoolContract {
                 }
                 AbortReason::SafetyRecovery
             }
-            RoundPhase::AwaitingPurchase => {
+            RoundPhase::AwaitingDraw | RoundPhase::AwaitingPurchase => {
                 let purchase_deadline = round
                     .purchase_deadline
                     .ok_or(ContractError::StorageInvariantViolation)?;
@@ -691,7 +765,16 @@ impl RotatingPoolContract {
         if storage::has_refund_claimed(&env, pool_id, &member) {
             return Err(ContractError::RefundAlreadyClaimed);
         }
-        let entitlement = storage::read_refund_liability(&env, pool_id, &member);
+        // Refund liability is not stored per member; it is derived from whether `member` paid
+        // into the pool's current (unfinished, since the pool is Aborted) round. A settled
+        // round already cleared its `RoundPhase` to `Settled` and advanced `current_round`, so
+        // only the round active at abort time is ever refundable — matching the accepted risk
+        // that an earlier round's payout cannot be recovered once it has settled.
+        let entitlement = if storage::has_deposit(&env, pool_id, pool.current_round, &member) {
+            pool.contribution_amount
+        } else {
+            0
+        };
         if entitlement <= 0 {
             return Err(ContractError::RefundNotClaimable);
         }
@@ -704,7 +787,6 @@ impl RotatingPoolContract {
             .ok_or(ContractError::ArithmeticOverflow)?;
 
         storage::write_refund_claimed(&env, pool_id, &member);
-        storage::write_refund_liability(&env, pool_id, &member, 0);
         storage::write_pool_assigned_balance(&env, pool_id, assigned_after);
 
         token::TokenClient::new(&env, &pool.token).transfer(
@@ -749,8 +831,14 @@ impl RotatingPoolContract {
         pool_id: u64,
         member: Address,
     ) -> Result<MemberStatusView, ContractError> {
-        ensure_pool_exists(&env, pool_id)?;
-        let refundable = storage::read_refund_liability(&env, pool_id, &member);
+        let pool = get_pool_or_error(&env, pool_id)?;
+        let refundable = if storage::has_refund_claimed(&env, pool_id, &member) {
+            0
+        } else if storage::has_deposit(&env, pool_id, pool.current_round, &member) {
+            pool.contribution_amount
+        } else {
+            0
+        };
         let received = storage::read_member(&env, pool_id, &member)
             .map(|state| state.received)
             .unwrap_or(false);
@@ -823,17 +911,29 @@ fn apply_member_payment(
         let purchase_deadline = now
             .checked_add(pool.purchase_duration)
             .ok_or(ContractError::ArithmeticOverflow)?;
-        round.phase = RoundPhase::AwaitingPurchase;
         round.purchase_deadline = Some(purchase_deadline);
-        RoundAwaitingPurchase {
-            pool_id,
-            round: round_index,
-            purchase_deadline,
+        match pool.order_mode {
+            OrderMode::Fixed => {
+                round.phase = RoundPhase::AwaitingPurchase;
+                RoundAwaitingPurchase {
+                    pool_id,
+                    round: round_index,
+                    purchase_deadline,
+                }
+                .publish(env);
+            }
+            OrderMode::Draw => {
+                round.phase = RoundPhase::AwaitingDraw;
+                RoundAwaitingDraw {
+                    pool_id,
+                    round: round_index,
+                    purchase_deadline,
+                }
+                .publish(env);
+            }
         }
-        .publish(env);
     }
     storage::write_round(env, pool_id, &round);
-    storage::write_refund_liability(env, pool_id, member, amount);
     storage::write_pool_assigned_balance(env, pool_id, assigned_balance);
 
     token::TokenClient::new(env, &pool.token).transfer(
@@ -880,7 +980,15 @@ fn validate_pool_parameters(
     Ok(())
 }
 
+/// `Fixed` requires a full, duplicate-free permutation of the current members. `Draw` requires
+/// an empty order — the recipient is resolved per round by `draw_recipient` instead.
 fn validate_recipient_order(pool: &Pool, order: &Vec<Address>) -> Result<(), ContractError> {
+    if pool.order_mode == OrderMode::Draw {
+        if order.len() != 0 {
+            return Err(ContractError::InvalidRecipientOrder);
+        }
+        return Ok(());
+    }
     if order.len() != pool.members.len() {
         return Err(ContractError::InvalidRecipientOrder);
     }

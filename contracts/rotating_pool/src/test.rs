@@ -1,11 +1,13 @@
+extern crate std;
+
 use soroban_sdk::{
     testutils::{Address as _, Ledger as _},
     token, Address, BytesN, Env, Vec,
 };
 
 use crate::{
-    storage, ContractError, PoolStatus, RotatingPoolContract, RotatingPoolContractClient,
-    RoundPhase, CONTRACT_VERSION,
+    storage, ContractError, OrderMode, PoolStatus, RotatingPoolContract,
+    RotatingPoolContractClient, RoundPhase, CONTRACT_VERSION, MAX_MEMBERS,
 };
 
 const NOW: u64 = 1_700_000_000;
@@ -35,18 +37,90 @@ fn create_pool(
     contribution_amount: i128,
     member_limit: u32,
 ) -> u64 {
+    create_pool_with_mode(
+        env,
+        contract_id,
+        creator,
+        token,
+        demo_seller,
+        contribution_amount,
+        member_limit,
+        OrderMode::Fixed,
+    )
+}
+
+fn create_pool_with_mode(
+    env: &Env,
+    contract_id: &Address,
+    creator: &Address,
+    token: &Address,
+    demo_seller: &Address,
+    contribution_amount: i128,
+    member_limit: u32,
+    order_mode: OrderMode,
+) -> u64 {
     let setup_deadline = env.ledger().timestamp() + SETUP_WINDOW;
     RotatingPoolContractClient::new(env, contract_id).create_pool(
         creator,
         token,
         &contribution_amount,
         &member_limit,
+        &order_mode,
         &ROUND_DURATION,
         &GRACE_DURATION,
         &PURCHASE_DURATION,
         &setup_deadline,
         demo_seller,
     )
+}
+
+/// Joins `member_count` members, funds each with enough for several rounds, proposes terms
+/// (empty recipient order for `Draw`, join order for `Fixed`) with two verifiers, has every
+/// member approve, and starts the pool.
+fn prepare_active_pool_n(
+    env: &Env,
+    contract_id: &Address,
+    creator: &Address,
+    token_address: &Address,
+    demo_seller: &Address,
+    member_count: u32,
+    order_mode: OrderMode,
+) -> (u64, Vec<Address>, Vec<Address>) {
+    let pool_id = create_pool_with_mode(
+        env,
+        contract_id,
+        creator,
+        token_address,
+        demo_seller,
+        10,
+        member_count,
+        order_mode,
+    );
+    let members = join_members(env, contract_id, pool_id, member_count);
+    let token_admin = token::StellarAssetClient::new(env, token_address);
+    for member in members.iter() {
+        token_admin.mint(&member, &(10 * (member_count as i128) * 4));
+    }
+    let client = RotatingPoolContractClient::new(env, contract_id);
+    let verifiers = Vec::from_array(env, [Address::generate(env), Address::generate(env)]);
+    let recipient_order = match order_mode {
+        OrderMode::Fixed => members.clone(),
+        OrderMode::Draw => Vec::new(env),
+    };
+    let version = client.propose_terms(creator, &pool_id, &recipient_order, &verifiers);
+    for member in members.iter() {
+        client.approve_terms(&member, &pool_id, &version);
+    }
+    client.start_pool(&pool_id);
+    (pool_id, members, verifiers)
+}
+
+/// Every member in `members` (in order) deposits into the pool's current round.
+fn deposit_all(env: &Env, contract_id: &Address, pool_id: u64, members: &Vec<Address>) {
+    let client = RotatingPoolContractClient::new(env, contract_id);
+    for member in members.iter() {
+        client.deposit(&member, &pool_id);
+    }
 }
 
 fn join_members(env: &Env, contract_id: &Address, pool_id: u64, count: u32) -> Vec<Address> {
@@ -200,6 +274,7 @@ fn create_pool_stores_fields_and_validates_parameters() {
             &token_address,
             &0,
             &4,
+            &OrderMode::Fixed,
             &ROUND_DURATION,
             &GRACE_DURATION,
             &PURCHASE_DURATION,
@@ -213,7 +288,8 @@ fn create_pool_stores_fields_and_validates_parameters() {
             &creator,
             &token_address,
             &10,
-            &13,
+            &(MAX_MEMBERS + 1),
+            &OrderMode::Fixed,
             &ROUND_DURATION,
             &GRACE_DURATION,
             &PURCHASE_DURATION,
@@ -228,6 +304,7 @@ fn create_pool_stores_fields_and_validates_parameters() {
             &token_address,
             &10,
             &4,
+            &OrderMode::Fixed,
             &ROUND_DURATION,
             &GRACE_DURATION,
             &PURCHASE_DURATION,
@@ -242,6 +319,7 @@ fn create_pool_stores_fields_and_validates_parameters() {
             &token_address,
             &10,
             &4,
+            &OrderMode::Fixed,
             &ROUND_DURATION,
             &GRACE_DURATION,
             &PURCHASE_DURATION,
@@ -393,7 +471,7 @@ fn start_pool_requires_full_membership_and_all_member_approvals() {
     assert_eq!(pool.started_at, Some(NOW));
     assert_eq!(pool.current_round, 1);
     let round = client.get_round(&pool_id, &1);
-    assert_eq!(round.recipient, members.get(0).unwrap());
+    assert_eq!(round.recipient, Some(members.get(0).unwrap()));
     assert_eq!(round.phase, RoundPhase::Collecting);
     assert_eq!(round.collect_deadline, NOW + ROUND_DURATION);
     assert_eq!(round.pot, 0);
@@ -658,7 +736,10 @@ fn approved_rounds_pay_the_demo_seller_and_complete_the_pool() {
         0
     );
     assert_eq!(client.get_pool(&pool_id).current_round, 2);
-    assert_eq!(client.get_round(&pool_id, &2).recipient, second_member);
+    assert_eq!(
+        client.get_round(&pool_id, &2).recipient,
+        Some(second_member.clone())
+    );
 
     client.deposit(&first_member, &pool_id);
     client.deposit(&second_member, &pool_id);
@@ -982,6 +1063,7 @@ fn claim_functions_require_stored_role_auth() {
         &token_address,
         &10,
         &2,
+        &OrderMode::Fixed,
         &ROUND_DURATION,
         &GRACE_DURATION,
         &PURCHASE_DURATION,
@@ -1100,4 +1182,461 @@ fn verifier_policy_excludes_participants_and_enforces_bounds() {
         client.try_join_pool(&verifiers.get(0).unwrap(), &pool_id),
         Err(Ok(ContractError::VerifierCannotBeParticipant))
     );
+}
+
+// --- Draw mode (API v10, docs/CONTRACT_HANDOFF.md) ---------------------------------------
+
+fn vec_contains(list: &Vec<Address>, candidate: &Address) -> bool {
+    for item in list.iter() {
+        if item == *candidate {
+            return true;
+        }
+    }
+    false
+}
+
+/// Runs a Draw-mode pool to completion: each round, every member deposits, an outsider (not a
+/// member, not a verifier) draws the recipient, the recipient's purchase is proposed and
+/// approved by every verifier, and the round is executed. Returns the winners in round order.
+fn run_draw_pool_to_completion(
+    env: &Env,
+    contract_id: &Address,
+    pool_id: u64,
+    members: &Vec<Address>,
+    verifiers: &Vec<Address>,
+    demo_seller: &Address,
+    token_address: &Address,
+) -> Vec<Address> {
+    let client = RotatingPoolContractClient::new(env, contract_id);
+    let outsider = Address::generate(env);
+    let mut winners: Vec<Address> = Vec::new(env);
+    for round_index in 0..members.len() {
+        let round_number = round_index + 1;
+        deposit_all(env, contract_id, pool_id, members);
+        assert_eq!(
+            client.get_round(&pool_id, &round_number).phase,
+            RoundPhase::AwaitingDraw
+        );
+        assert_eq!(client.get_round(&pool_id, &round_number).recipient, None);
+
+        let winner = client.draw_recipient(&outsider, &pool_id);
+        assert!(!vec_contains(&winners, &winner));
+        assert_eq!(
+            client.get_round(&pool_id, &round_number).phase,
+            RoundPhase::AwaitingPurchase
+        );
+        assert_eq!(
+            client.get_round(&pool_id, &round_number).recipient,
+            Some(winner.clone())
+        );
+
+        propose_and_approve_current_purchase(
+            env,
+            contract_id,
+            pool_id,
+            &winner,
+            demo_seller,
+            token_address,
+            verifiers,
+            (round_number % 256) as u8,
+        );
+        client.execute_round(&pool_id);
+        assert!(client.get_member_status(&pool_id, &winner).received);
+        winners.push_back(winner);
+    }
+    winners
+}
+
+#[test]
+fn draw_mode_full_flow_excludes_repeat_winners_with_four_members() {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.ledger().set_timestamp(NOW);
+    let creator = Address::generate(&env);
+    let demo_seller = Address::generate(&env);
+    let token_address = register_token(&env, &creator, 100);
+    let token_client = token::TokenClient::new(&env, &token_address);
+    let contract_id = register_contract(&env);
+    let (pool_id, members, verifiers) = prepare_active_pool_n(
+        &env,
+        &contract_id,
+        &creator,
+        &token_address,
+        &demo_seller,
+        4,
+        OrderMode::Draw,
+    );
+    assert_eq!(
+        client_order_mode(&env, &contract_id, pool_id),
+        OrderMode::Draw
+    );
+
+    let winners = run_draw_pool_to_completion(
+        &env,
+        &contract_id,
+        pool_id,
+        &members,
+        &verifiers,
+        &demo_seller,
+        &token_address,
+    );
+
+    assert_eq!(winners.len(), members.len());
+    for member in members.iter() {
+        assert!(vec_contains(&winners, &member));
+    }
+    let client = RotatingPoolContractClient::new(&env, &contract_id);
+    assert_eq!(client.get_pool(&pool_id).status, PoolStatus::Completed);
+    assert_eq!(token_client.balance(&demo_seller), 40 * 4);
+}
+
+#[test]
+fn draw_mode_full_flow_excludes_repeat_winners_with_thirty_members() {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.ledger().set_timestamp(NOW);
+    let creator = Address::generate(&env);
+    let demo_seller = Address::generate(&env);
+    let token_address = register_token(&env, &creator, 100);
+    let token_client = token::TokenClient::new(&env, &token_address);
+    let contract_id = register_contract(&env);
+    let (pool_id, members, verifiers) = prepare_active_pool_n(
+        &env,
+        &contract_id,
+        &creator,
+        &token_address,
+        &demo_seller,
+        MAX_MEMBERS,
+        OrderMode::Draw,
+    );
+    assert_eq!(members.len(), MAX_MEMBERS);
+
+    let winners = run_draw_pool_to_completion(
+        &env,
+        &contract_id,
+        pool_id,
+        &members,
+        &verifiers,
+        &demo_seller,
+        &token_address,
+    );
+
+    // Every member wins exactly once (no repeats, full coverage) and the last round is
+    // necessarily deterministic: only one member has not received yet by then.
+    assert_eq!(winners.len(), MAX_MEMBERS);
+    for member in members.iter() {
+        assert!(vec_contains(&winners, &member));
+    }
+    let client = RotatingPoolContractClient::new(&env, &contract_id);
+    assert_eq!(client.get_pool(&pool_id).status, PoolStatus::Completed);
+    assert_eq!(
+        token_client.balance(&demo_seller),
+        10 * (MAX_MEMBERS as i128) * (MAX_MEMBERS as i128)
+    );
+}
+
+fn client_order_mode(env: &Env, contract_id: &Address, pool_id: u64) -> OrderMode {
+    RotatingPoolContractClient::new(env, contract_id)
+        .get_pool(&pool_id)
+        .order_mode
+}
+
+#[test]
+fn draw_recipient_rejected_before_round_fully_funded_and_after_first_draw() {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.ledger().set_timestamp(NOW);
+    let creator = Address::generate(&env);
+    let demo_seller = Address::generate(&env);
+    let token_address = register_token(&env, &creator, 100);
+    let contract_id = register_contract(&env);
+    let (pool_id, members, _) = prepare_active_pool_n(
+        &env,
+        &contract_id,
+        &creator,
+        &token_address,
+        &demo_seller,
+        3,
+        OrderMode::Draw,
+    );
+    let client = RotatingPoolContractClient::new(&env, &contract_id);
+    let outsider = Address::generate(&env);
+
+    // Round not fully funded yet: still Collecting.
+    client.deposit(&members.get(0).unwrap(), &pool_id);
+    assert_eq!(
+        client.try_draw_recipient(&outsider, &pool_id),
+        Err(Ok(ContractError::RoundNotReady))
+    );
+
+    // Fully funded: draw succeeds once, then rejects a second draw in the same round.
+    client.deposit(&members.get(1).unwrap(), &pool_id);
+    client.deposit(&members.get(2).unwrap(), &pool_id);
+    client.draw_recipient(&outsider, &pool_id);
+    assert_eq!(
+        client.try_draw_recipient(&outsider, &pool_id),
+        Err(Ok(ContractError::RoundNotReady))
+    );
+}
+
+#[test]
+fn draw_recipient_rejected_on_fixed_order_pool() {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.ledger().set_timestamp(NOW);
+    let creator = Address::generate(&env);
+    let demo_seller = Address::generate(&env);
+    let token_address = register_token(&env, &creator, 100);
+    let contract_id = register_contract(&env);
+    let (pool_id, _members, _) =
+        prepare_active_pool(&env, &contract_id, &creator, &token_address, &demo_seller);
+    let client = RotatingPoolContractClient::new(&env, &contract_id);
+    let outsider = Address::generate(&env);
+
+    assert_eq!(
+        client.try_draw_recipient(&outsider, &pool_id),
+        Err(Ok(ContractError::NotDrawPool))
+    );
+}
+
+#[test]
+fn propose_terms_recipient_order_must_match_order_mode() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let creator = Address::generate(&env);
+    let demo_seller = Address::generate(&env);
+    let token_address = Address::generate(&env);
+    let contract_id = register_contract(&env);
+    let verifiers = Vec::from_array(&env, [Address::generate(&env), Address::generate(&env)]);
+
+    // Fixed: an empty or duplicated order is rejected.
+    let fixed_pool_id = create_pool_with_mode(
+        &env,
+        &contract_id,
+        &creator,
+        &token_address,
+        &demo_seller,
+        10,
+        2,
+        OrderMode::Fixed,
+    );
+    let fixed_members = join_members(&env, &contract_id, fixed_pool_id, 2);
+    let client = RotatingPoolContractClient::new(&env, &contract_id);
+    assert_eq!(
+        client.try_propose_terms(&creator, &fixed_pool_id, &Vec::new(&env), &verifiers),
+        Err(Ok(ContractError::InvalidRecipientOrder))
+    );
+    let duplicated = Vec::from_array(
+        &env,
+        [fixed_members.get(0).unwrap(), fixed_members.get(0).unwrap()],
+    );
+    assert_eq!(
+        client.try_propose_terms(&creator, &fixed_pool_id, &duplicated, &verifiers),
+        Err(Ok(ContractError::DuplicateRecipient))
+    );
+
+    // Draw: a non-empty order is rejected.
+    let draw_pool_id = create_pool_with_mode(
+        &env,
+        &contract_id,
+        &creator,
+        &token_address,
+        &demo_seller,
+        10,
+        2,
+        OrderMode::Draw,
+    );
+    let draw_members = join_members(&env, &contract_id, draw_pool_id, 2);
+    assert_eq!(
+        client.try_propose_terms(&creator, &draw_pool_id, &draw_members, &verifiers),
+        Err(Ok(ContractError::InvalidRecipientOrder))
+    );
+    // An empty order is accepted for Draw.
+    client.propose_terms(&creator, &draw_pool_id, &Vec::new(&env), &verifiers);
+}
+
+#[test]
+fn draw_mode_awaiting_draw_deadline_aborts_and_refunds_current_round_only() {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.ledger().set_timestamp(NOW);
+    let creator = Address::generate(&env);
+    let demo_seller = Address::generate(&env);
+    let token_address = register_token(&env, &creator, 100);
+    let token_client = token::TokenClient::new(&env, &token_address);
+    let contract_id = register_contract(&env);
+    let (pool_id, members, _) = prepare_active_pool_n(
+        &env,
+        &contract_id,
+        &creator,
+        &token_address,
+        &demo_seller,
+        3,
+        OrderMode::Draw,
+    );
+    let client = RotatingPoolContractClient::new(&env, &contract_id);
+
+    deposit_all(&env, &contract_id, pool_id, &members);
+    let round = client.get_round(&pool_id, &1);
+    assert_eq!(round.phase, RoundPhase::AwaitingDraw);
+    let purchase_deadline = round.purchase_deadline.unwrap();
+
+    assert_eq!(
+        client.try_abort_pool(&pool_id),
+        Err(Ok(ContractError::DeadlineNotReached))
+    );
+    // No one draws before the deadline; abort_pool reclaims this round's deposits instead.
+    env.ledger().set_timestamp(purchase_deadline);
+    client.abort_pool(&pool_id);
+    assert_eq!(client.get_pool(&pool_id).status, PoolStatus::Aborted);
+
+    let contract_balance_before = token_client.balance(&contract_id);
+    for member in members.iter() {
+        assert_eq!(client.get_member_status(&pool_id, &member).refundable, 10);
+        assert_eq!(client.claim_refund(&member, &pool_id), 10);
+        assert_eq!(
+            client.try_claim_refund(&member, &pool_id),
+            Err(Ok(ContractError::RefundAlreadyClaimed))
+        );
+    }
+    assert_eq!(
+        token_client.balance(&contract_id),
+        contract_balance_before - 10 * (members.len() as i128)
+    );
+}
+
+/// The plan's canonical demo scenario (docs/plan.md section 11), for Draw mode: round 1 is
+/// fully paid, a recipient is drawn and settles; in round 2 that same member (who already
+/// received) stops paying, so round 2 never reaches `AwaitingDraw` and only the still-paying
+/// members' round-2 deposits are refundable — round 1's payout is gone for good.
+#[test]
+fn draw_mode_plan_demo_scenario_early_winner_defaults_next_round() {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.ledger().set_timestamp(NOW);
+    let creator = Address::generate(&env);
+    let demo_seller = Address::generate(&env);
+    let token_address = register_token(&env, &creator, 100);
+    let token_client = token::TokenClient::new(&env, &token_address);
+    let contract_id = register_contract(&env);
+    let (pool_id, members, verifiers) = prepare_active_pool_n(
+        &env,
+        &contract_id,
+        &creator,
+        &token_address,
+        &demo_seller,
+        3,
+        OrderMode::Draw,
+    );
+    let client = RotatingPoolContractClient::new(&env, &contract_id);
+    let outsider = Address::generate(&env);
+
+    // Round 1: everyone pays, a recipient is drawn and paid out.
+    deposit_all(&env, &contract_id, pool_id, &members);
+    let winner = client.draw_recipient(&outsider, &pool_id);
+    propose_and_approve_current_purchase(
+        &env,
+        &contract_id,
+        pool_id,
+        &winner,
+        &demo_seller,
+        &token_address,
+        &verifiers,
+        50,
+    );
+    client.execute_round(&pool_id);
+    assert!(client.get_member_status(&pool_id, &winner).received);
+    assert_eq!(client.get_pool(&pool_id).current_round, 2);
+
+    // Round 2: the round-1 winner stops paying; the others still pay, but the round can never
+    // reach AwaitingDraw without every member's deposit.
+    let mut still_paying: Vec<Address> = Vec::new(&env);
+    for member in members.iter() {
+        if member != winner {
+            client.deposit(&member, &pool_id);
+            still_paying.push_back(member);
+        }
+    }
+    assert_eq!(client.get_round(&pool_id, &2).phase, RoundPhase::Collecting);
+
+    let deadline = client.get_round(&pool_id, &2).collect_deadline;
+    let grace_deadline = deadline + GRACE_DURATION;
+    env.ledger().set_timestamp(deadline);
+    client.mark_overdue(&pool_id);
+    env.ledger().set_timestamp(grace_deadline);
+    client.abort_pool(&pool_id);
+    assert_eq!(client.get_pool(&pool_id).status, PoolStatus::Aborted);
+
+    assert_eq!(client.get_member_status(&pool_id, &winner).refundable, 0);
+    assert_eq!(
+        client.try_claim_refund(&winner, &pool_id),
+        Err(Ok(ContractError::RefundNotClaimable))
+    );
+    for member in still_paying.iter() {
+        assert_eq!(client.get_member_status(&pool_id, &member).refundable, 10);
+        assert_eq!(client.claim_refund(&member, &pool_id), 10);
+    }
+    let _ = token_client;
+}
+
+/// `Env::default()` enables invocation metering and enforces `InvocationResourceLimits::mainnet()`
+/// on every top-level contract call by default (soroban-sdk 28), so any call in this test that
+/// exceeded real Mainnet CPU/memory/read/write limits would already panic on its own — every
+/// other test using a 30-member pool (e.g. `draw_mode_full_flow_excludes_repeat_winners_with_thirty_members`)
+/// is implicitly proof of this too. This test additionally captures and prints the concrete
+/// resource numbers for the five operations docs/CONTRACT_HANDOFF.md calls out, for
+/// docs/IMPLEMENTATION_LOG.md. Native (non-Wasm) execution underestimates cost vs. the real Wasm
+/// host, so these are a lower bound, not the authoritative figure — that comes from a live
+/// `stellar contract invoke` simulation against the deployed instance.
+#[test]
+fn thirty_member_round_operations_stay_within_mainnet_resource_limits() {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.ledger().set_timestamp(NOW);
+    let creator = Address::generate(&env);
+    let demo_seller = Address::generate(&env);
+    let token_address = register_token(&env, &creator, 100);
+    let contract_id = register_contract(&env);
+    let (pool_id, members, verifiers) = prepare_active_pool_n(
+        &env,
+        &contract_id,
+        &creator,
+        &token_address,
+        &demo_seller,
+        MAX_MEMBERS,
+        OrderMode::Draw,
+    );
+    let client = RotatingPoolContractClient::new(&env, &contract_id);
+    let outsider = Address::generate(&env);
+
+    for member in members.iter() {
+        client.deposit(&member, &pool_id);
+    }
+    let deposit_resources = env.cost_estimate().resources();
+    std::println!("[30 members] last deposit: {:?}", deposit_resources);
+    assert!(deposit_resources.write_entries <= 200);
+    assert!(deposit_resources.disk_read_entries <= 200);
+
+    let winner = client.draw_recipient(&outsider, &pool_id);
+    let draw_resources = env.cost_estimate().resources();
+    std::println!("[30 members] draw_recipient: {:?}", draw_resources);
+    assert!(draw_resources.write_entries <= 200);
+    assert!(draw_resources.disk_read_entries <= 200);
+
+    propose_and_approve_current_purchase(
+        &env,
+        &contract_id,
+        pool_id,
+        &winner,
+        &demo_seller,
+        &token_address,
+        &verifiers,
+        77,
+    );
+
+    client.execute_round(&pool_id);
+    let execute_resources = env.cost_estimate().resources();
+    std::println!("[30 members] execute_round: {:?}", execute_resources);
+    assert!(execute_resources.write_entries <= 200);
+    assert!(execute_resources.disk_read_entries <= 200);
 }

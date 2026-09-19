@@ -21,7 +21,6 @@ pub enum DataKey {
     Round(u64, u32),
     Deposit(u64, u32, Address),
     PoolAssignedBalance(u64),
-    RefundLiability(u64, Address),
     TermsApproval(u64, u32, Address),
     PurchaseApproval(u64, u32, u32, Address),
     RefundClaimed(u64, Address),
@@ -122,21 +121,6 @@ pub(crate) fn read_pool_assigned_balance(env: &Env, pool_id: u64) -> i128 {
 
 pub(crate) fn write_pool_assigned_balance(env: &Env, pool_id: u64, amount: i128) {
     let key = DataKey::PoolAssignedBalance(pool_id);
-    env.storage().persistent().set(&key, &amount);
-    extend_persistent_ttl(env, &key);
-}
-
-pub(crate) fn read_refund_liability(env: &Env, pool_id: u64, member: &Address) -> i128 {
-    let key = DataKey::RefundLiability(pool_id, member.clone());
-    let value = env.storage().persistent().get(&key).unwrap_or(0);
-    if env.storage().persistent().has(&key) {
-        extend_persistent_ttl(env, &key);
-    }
-    value
-}
-
-pub(crate) fn write_refund_liability(env: &Env, pool_id: u64, member: &Address, amount: i128) {
-    let key = DataKey::RefundLiability(pool_id, member.clone());
     env.storage().persistent().set(&key, &amount);
     extend_persistent_ttl(env, &key);
 }

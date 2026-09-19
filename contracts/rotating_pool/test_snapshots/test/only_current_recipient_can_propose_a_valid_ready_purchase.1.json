@@ -70,6 +70,13 @@
                   "u32": 2
                 },
                 {
+                  "vec": [
+                    {
+                      "symbol": "Fixed"
+                    }
+                  ]
+                },
+                {
                   "u64": "180"
                 },
                 {
@@ -853,6 +860,18 @@
                   },
                   {
                     "key": {
+                      "symbol": "order_mode"
+                    },
+                    "val": {
+                      "vec": [
+                        {
+                          "symbol": "Fixed"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "key": {
                       "symbol": "purchase_duration"
                     },
                     "val": {
@@ -984,66 +1003,6 @@
               "durability": "persistent",
               "val": {
                 "i128": "20"
-              }
-            }
-          },
-          "ext": "v0"
-        },
-        "live_until": 2073600
-      },
-      {
-        "entry": {
-          "last_modified_ledger_seq": 0,
-          "data": {
-            "contract_data": {
-              "ext": "v0",
-              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4",
-              "key": {
-                "vec": [
-                  {
-                    "symbol": "RefundLiability"
-                  },
-                  {
-                    "u64": "1"
-                  },
-                  {
-                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM"
-                  }
-                ]
-              },
-              "durability": "persistent",
-              "val": {
-                "i128": "10"
-              }
-            }
-          },
-          "ext": "v0"
-        },
-        "live_until": 2073600
-      },
-      {
-        "entry": {
-          "last_modified_ledger_seq": 0,
-          "data": {
-            "contract_data": {
-              "ext": "v0",
-              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4",
-              "key": {
-                "vec": [
-                  {
-                    "symbol": "RefundLiability"
-                  },
-                  {
-                    "u64": "1"
-                  },
-                  {
-                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARQG5"
-                  }
-                ]
-              },
-              "durability": "persistent",
-              "val": {
-                "i128": "10"
               }
             }
           },

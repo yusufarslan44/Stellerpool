@@ -70,6 +70,13 @@
                   "u32": 2
                 },
                 {
+                  "vec": [
+                    {
+                      "symbol": "Fixed"
+                    }
+                  ]
+                },
+                {
                   "u64": "180"
                 },
                 {
@@ -292,6 +299,13 @@
                 },
                 {
                   "u32": 2
+                },
+                {
+                  "vec": [
+                    {
+                      "symbol": "Fixed"
+                    }
+                  ]
                 },
                 {
                   "u64": "180"
@@ -1182,6 +1196,18 @@
                   },
                   {
                     "key": {
+                      "symbol": "order_mode"
+                    },
+                    "val": {
+                      "vec": [
+                        {
+                          "symbol": "Fixed"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "key": {
                       "symbol": "purchase_duration"
                     },
                     "val": {
@@ -1402,6 +1428,18 @@
                   },
                   {
                     "key": {
+                      "symbol": "order_mode"
+                    },
+                    "val": {
+                      "vec": [
+                        {
+                          "symbol": "Fixed"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "key": {
                       "symbol": "purchase_duration"
                     },
                     "val": {
@@ -1554,66 +1592,6 @@
                   },
                   {
                     "u64": "2"
-                  }
-                ]
-              },
-              "durability": "persistent",
-              "val": {
-                "i128": "10"
-              }
-            }
-          },
-          "ext": "v0"
-        },
-        "live_until": 2073600
-      },
-      {
-        "entry": {
-          "last_modified_ledger_seq": 0,
-          "data": {
-            "contract_data": {
-              "ext": "v0",
-              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM",
-              "key": {
-                "vec": [
-                  {
-                    "symbol": "RefundLiability"
-                  },
-                  {
-                    "u64": "1"
-                  },
-                  {
-                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4"
-                  }
-                ]
-              },
-              "durability": "persistent",
-              "val": {
-                "i128": "10"
-              }
-            }
-          },
-          "ext": "v0"
-        },
-        "live_until": 2073600
-      },
-      {
-        "entry": {
-          "last_modified_ledger_seq": 0,
-          "data": {
-            "contract_data": {
-              "ext": "v0",
-              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM",
-              "key": {
-                "vec": [
-                  {
-                    "symbol": "RefundLiability"
-                  },
-                  {
-                    "u64": "2"
-                  },
-                  {
-                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAVAX5"
                   }
                 ]
               },

@@ -43,10 +43,12 @@ scripts/demo_testnet.sh --contract <ROTATING_POOL_CONTRACT_ID>
 (Omit `--contract` if `ROTATING_POOL_CONTRACT_ID` is already set, e.g. by
 sourcing `.env` first.)
 
-Runs two full scenarios against an already-deployed contract, self-issuing
+Runs three full scenarios against an already-deployed contract, self-issuing
 a demo settlement asset (`STLP`) so it needs no external testnet-USDC
-faucet. The contract is sponsorless (v9): every member always pays their
-own contribution; there is no sponsor, guarantee, or advance.
+faucet. The contract is sponsorless (v10): every member always pays their
+own contribution; there is no sponsor, guarantee, or advance. v10 adds
+Draw-mode recipient selection (`OrderMode::Fixed | Draw`) and a 30-member
+ceiling — see `docs/CONTRACT_HANDOFF.md`.
 
 - **Pool A — happy path + live cure**: two members join, the creator
   proposes terms (recipient order + verifiers), every member approves that
@@ -62,8 +64,14 @@ own contribution; there is no sponsor, guarantee, or advance.
   is refundable — round 1's amounts are gone for good, matching the
   plan's accepted economic risk (an early recipient defaulting later
   cannot be recovered on-chain).
+- **Pool C — Draw mode**: two members join a Draw-mode pool (empty
+  `recipient_order` at `propose_terms`); once a round is fully funded it
+  enters `AwaitingDraw` and anyone can call `draw_recipient` to pick the
+  round's recipient at random among members who have not received yet.
+  Round 2 is deterministic (only one member is left) — both rounds settle
+  and the pool reaches `Completed`.
 
-Both pools genuinely wait out real deadlines where relevant (Soroban
+All pools genuinely wait out real deadlines where relevant (Soroban
 deadlines are wall-clock, not simulatable) — the whole run takes a few
 minutes. Every ID, event, and transaction hash the script prints is real
 Testnet evidence for `docs/IMPLEMENTATION_LOG.md`.

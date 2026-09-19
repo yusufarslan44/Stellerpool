@@ -1,6 +1,6 @@
 use soroban_sdk::{contractevent, Address, BytesN};
 
-use crate::types::AbortReason;
+use crate::types::{AbortReason, OrderMode};
 
 #[contractevent]
 pub struct PoolCreated {
@@ -11,6 +11,7 @@ pub struct PoolCreated {
     pub token: Address,
     pub contribution_amount: i128,
     pub member_limit: u32,
+    pub order_mode: OrderMode,
     pub round_duration: u64,
     pub grace_duration: u64,
     pub purchase_duration: u64,
@@ -136,6 +137,25 @@ pub struct RoundAwaitingPurchase {
     pub pool_id: u64,
     pub round: u32,
     pub purchase_deadline: u64,
+}
+
+/// Draw-mode only: every member has paid into the round; `purchase_deadline` starts now and
+/// covers both the draw and the purchase steps (see `draw_recipient`).
+#[contractevent]
+pub struct RoundAwaitingDraw {
+    #[topic]
+    pub pool_id: u64,
+    pub round: u32,
+    pub purchase_deadline: u64,
+}
+
+#[contractevent]
+pub struct RecipientDrawn {
+    #[topic]
+    pub pool_id: u64,
+    #[topic]
+    pub round: u32,
+    pub recipient: Address,
 }
 
 #[contractevent]

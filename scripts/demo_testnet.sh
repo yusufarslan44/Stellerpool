@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# Stellerpool — end-to-end Testnet demo for the rotating_pool contract (v9 API:
-# sponsorless, member-only terms approval, current-round-only refunds, per
-# docs/plan.md's 19 Eylül sponsorless revision).
+# Stellerpool — end-to-end Testnet demo for the rotating_pool contract (v10 API:
+# sponsorless, member-only terms approval, current-round-only refunds, plus
+# Draw-mode recipient selection and a 30-member ceiling, per
+# docs/CONTRACT_HANDOFF.md).
 #
-# Runs two scenarios against an already-deployed contract (see
+# Runs three scenarios against an already-deployed contract (see
 # scripts/deploy_testnet.sh):
 #   Pool A — happy path: two members join, the creator proposes terms
 #            (recipient order + verifiers), every member approves that terms
@@ -20,6 +21,13 @@
 #            Grace expiry and abort (SafetyRecovery). Only the still-paying
 #            member's round-2 deposit is refundable; round 1's amounts are
 #            gone for good, matching the plan's accepted economic risk.
+#   Pool C — Draw mode (API v10): two members join a Draw-mode pool (empty
+#            recipient_order at propose_terms), both pay into round 1, and
+#            once the round is fully funded (AwaitingDraw) anyone calls
+#            draw_recipient to pick the round's recipient at random among
+#            members who have not received yet. Round 2 repeats and is
+#            deterministic (the only remaining member wins) — both rounds
+#            settle and the pool reaches Completed.
 #
 # This script issues and funds its own demo settlement asset (STLP) from the
 # deployer identity so the run is fully self-contained and does not depend on
@@ -106,21 +114,28 @@ echo "    Token contract ID: $TOKEN_ID"
 digest() { printf '%02x%.0s' $(seq 1 32) | sed "s/02/0$1/g"; }
 
 create_and_start_pool() {
-  local round_dur="$1" grace_dur="$2" purchase_dur="$3"
+  local round_dur="$1" grace_dur="$2" purchase_dur="$3" order_mode="${4:-Fixed}"
   local setup_deadline pool_id version
   setup_deadline=$(( $(now_ts) + SETUP_WINDOW ))
   pool_id="$(invoke "$CONTRACT_ID" stellerpool-deployer create_pool \
     --creator "$ISSUER" --token "$TOKEN_ID" \
-    --contribution_amount 10000000 --member_limit 2 \
+    --contribution_amount 10000000 --member_limit 2 --order_mode "$order_mode" \
     --round_duration "$round_dur" --grace_duration "$grace_dur" \
     --purchase_duration "$purchase_dur" --setup_deadline "$setup_deadline" \
     --demo_seller "$SELLER1" | tail -n 1)"
   invoke "$CONTRACT_ID" demo-member1 join_pool --member "$MEMBER1" --pool_id "$pool_id" >/dev/null
   invoke "$CONTRACT_ID" demo-member2 join_pool --member "$MEMBER2" --pool_id "$pool_id" >/dev/null
-  version="$(invoke "$CONTRACT_ID" stellerpool-deployer propose_terms \
-    --creator "$ISSUER" --pool_id "$pool_id" \
-    --recipient_order "[\"$MEMBER1\",\"$MEMBER2\"]" \
-    --verifiers "[\"$VERIFIER1\",\"$VERIFIER2\"]" | tail -n 1)"
+  if [[ "$order_mode" == "Draw" ]]; then
+    version="$(invoke "$CONTRACT_ID" stellerpool-deployer propose_terms \
+      --creator "$ISSUER" --pool_id "$pool_id" \
+      --recipient_order "[]" \
+      --verifiers "[\"$VERIFIER1\",\"$VERIFIER2\"]" | tail -n 1)"
+  else
+    version="$(invoke "$CONTRACT_ID" stellerpool-deployer propose_terms \
+      --creator "$ISSUER" --pool_id "$pool_id" \
+      --recipient_order "[\"$MEMBER1\",\"$MEMBER2\"]" \
+      --verifiers "[\"$VERIFIER1\",\"$VERIFIER2\"]" | tail -n 1)"
+  fi
   invoke "$CONTRACT_ID" demo-member1 approve_terms --approver "$MEMBER1" --pool_id "$pool_id" --version "$version" >/dev/null
   invoke "$CONTRACT_ID" demo-member2 approve_terms --approver "$MEMBER2" --pool_id "$pool_id" --version "$version" >/dev/null
   invoke "$CONTRACT_ID" stellerpool-deployer start_pool --pool_id "$pool_id" >/dev/null
@@ -173,6 +188,26 @@ echo "    Pool $POOL_B is Aborted (SafetyRecovery)."
 invoke "$CONTRACT_ID" demo-member2 claim_refund --member "$MEMBER2" --pool_id "$POOL_B" >/dev/null
 echo "    member2 claimed their round-2 deposit. member1's round-1 allocation and round-2"
 echo "    non-payment are both unrecoverable by design — the plan's accepted economic risk."
+
+echo
+echo "==> [Pool C: Draw mode, API v10] create_pool (round=${HAPPY_ROUND_DURATION}s, order_mode=Draw)"
+POOL_C="$(create_and_start_pool "$HAPPY_ROUND_DURATION" "$HAPPY_ROUND_DURATION" "$HAPPY_PURCHASE_DURATION" Draw)"
+echo "    pool_id: $POOL_C"
+invoke "$CONTRACT_ID" demo-member1 deposit --member "$MEMBER1" --pool_id "$POOL_C" >/dev/null
+invoke "$CONTRACT_ID" demo-member2 deposit --member "$MEMBER2" --pool_id "$POOL_C" >/dev/null
+echo "    Both members paid round 1; drawing the recipient (anyone may call draw_recipient)."
+WINNER_1="$(invoke "$CONTRACT_ID" stellerpool-deployer draw_recipient --caller "$ISSUER" --pool_id "$POOL_C" | tail -n 1 | tr -d '"')"
+echo "    Round 1 recipient drawn: $WINNER_1"
+if [[ "$WINNER_1" == "$MEMBER1" ]]; then WINNER_1_SRC="demo-member1"; else WINNER_1_SRC="demo-member2"; fi
+settle_round "$POOL_C" 1 "$WINNER_1_SRC" "$WINNER_1" 4
+echo "    Round 1 paid the demo seller; round 2 open (recipient not yet drawn)."
+invoke "$CONTRACT_ID" demo-member1 deposit --member "$MEMBER1" --pool_id "$POOL_C" >/dev/null
+invoke "$CONTRACT_ID" demo-member2 deposit --member "$MEMBER2" --pool_id "$POOL_C" >/dev/null
+WINNER_2="$(invoke "$CONTRACT_ID" stellerpool-deployer draw_recipient --caller "$ISSUER" --pool_id "$POOL_C" | tail -n 1 | tr -d '"')"
+echo "    Round 2 recipient drawn: $WINNER_2 (deterministic: the only member who has not received yet)"
+if [[ "$WINNER_2" == "$MEMBER1" ]]; then WINNER_2_SRC="demo-member1"; else WINNER_2_SRC="demo-member2"; fi
+settle_round "$POOL_C" 2 "$WINNER_2_SRC" "$WINNER_2" 5
+echo "    Round 2 paid the demo seller; pool $POOL_C is Completed."
 
 echo
 echo "Done. Copy the pool IDs and transaction hashes printed above into"

@@ -1,6 +1,10 @@
 # Kontrat ekibi görev listesi — API v10 (kura + 30 üye)
 
-**Durum (19 Eylül 2026, akşam):** Faz 12 tamamlandı. Testnet'te **sponsorsuz kontrat (API v9)** yayında: `CCAKOEC34WVBKQ427KT5PI5GMPPKSGBHCWBI7FO4GNG247KKDUH67AZH` ([IMPLEMENTATION_LOG.md](IMPLEMENTATION_LOG.md), "Phase 12"). Arayüz bu kontrata karşı doğrulandı: `version() = 9`, `get_pool`/`get_round`/`get_member_status` alanları eşleşiyor, havuz #1 (iptal edilmiş iki üyeli senaryo) arayüzde doğru görünüyor.
+**Durum (19 Eylül 2026, gece):** Faz 13 tamamlandı — bu belgedeki iş uygulandı. Testnet'te **kura + 30 üye destekleyen kontrat (API v10)** yayında: `CC7W3SKQHBLZ2JPTGSK42H6IAJQ22A4PUK6CSN2T4PUJRY4LQ445GYMB` ([IMPLEMENTATION_LOG.md](IMPLEMENTATION_LOG.md), "Phase 13"). `stellar contract info interface` ve `stellar contract bindings typescript` çıktısı `frontend/src/services/pool.ts` / `types/pool.ts` ile alan alan doğrulandı: `create_pool`'a `order_mode` (member_limit'ten sonra), `Pool.order_mode`, `RoundState.recipient: Option<Address>`, `RoundPhase::AwaitingDraw`, `draw_recipient(caller, pool_id) -> Address`. `frontend/.env`'e `VITE_MAX_MEMBERS=30` yazıldı (yerel, gitignore'lu). Aşağıdaki metin görev tanımı olarak olduğu gibi bırakıldı; ne yapıldığının tam dökümü `IMPLEMENTATION_LOG.md`'nin "Phase 13" bölümündedir.
+
+**Not:** `README.md`'nin "Kontrat ve dağıtım kanıtı" bölümü bu kontrat ID'siyle henüz güncellenmedi — bu oturumda README.md'ye dokunulmaması ayrıca istendi; bir sonraki README güncellemesinde eklenmeli.
+
+---
 
 Bu belge **yalnızca yeni işi** tanımlar: Fuzul Ev/Oto mantığına yaklaşmak için **kura modu** ve **12 → 30 üye**. Arayüz ikisine de hazırdır, kontrat gelene kadar kapalı kalır:
 - Kontratta `draw_recipient` yoksa formda "Kura" seçeneği kapanır; `create_pool`'a `order_mode` hiç gönderilmez.

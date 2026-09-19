@@ -55,4 +55,6 @@ pub enum ContractError {
     InvalidPurchaseAmount = 61,
     PurchaseVersionMismatch = 62,
     RoundNotFound = 63,
+    /// `draw_recipient` was called on a `Fixed`-order pool.
+    NotDrawPool = 64,
 }

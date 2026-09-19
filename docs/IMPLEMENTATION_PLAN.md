@@ -2,23 +2,25 @@
 
 Source of truth: `docs/plan.md` (sponsorless model, 19 Eylül 2026 revision). This implementation plan translates that product and economic model into phased contract/backend work. When older repository notes conflict with `docs/plan.md`, this plan follows `docs/plan.md`.
 
-Current status: **Phase 12 is complete.** The contract (schema/API version 9) is sponsorless, redeployed to Testnet, and verified field-for-field against the frontend's already-written client (`frontend/src/services/pool.ts`, `frontend/src/types/pool.ts`). Phases 1-11 below describe the superseded sponsor-based generation (schema/API version 8) and are kept as historical record only.
+Current status: **Phase 13 is complete.** The contract (schema/API version 10) adds Draw-mode recipient selection and a 30-member ceiling on top of the sponsorless model, redeployed to Testnet and verified field-for-field against the frontend's already-written client (`frontend/src/services/pool.ts`, `frontend/src/types/pool.ts`). Phases 1-11 below describe the superseded sponsor-based generation (schema/API version 8) and are kept as historical record only.
 
 ## 1. Current Repository State
 
-Implemented (sponsorless generation, API v9, Phase 12):
+Implemented (Draw mode + 30 members, API v10, Phase 13):
 
 - Protocol 28 Rust workspace with `soroban-sdk 28.0.0`; `rotating_pool` multi-pool contract crate.
 - Typed pool/member/round models, storage keys, errors, events, persistent-storage TTL helpers, read API, SDK test snapshots, canonical WASM build.
-- Terms proposal/approval (members only), verifier quorum, member-only-pays-own-contribution round funding, purchase proposal/approval, demo-seller payout, round advancement, Grace/abort, current-round-only refund, permissionless start/cancel/mark-overdue/execute/abort.
+- `OrderMode { Fixed, Draw }` on `Pool`/`create_pool`; `RoundPhase::AwaitingDraw`; `RoundState.recipient: Option<Address>`; permissionless `draw_recipient(pool_id, caller) -> Address` picking uniformly (via `env.prng()`) among members with `received == false`, emitting `RecipientDrawn`.
+- `MAX_MEMBERS` raised 12 → 30; the `execute_round` per-member refund-liability reset loop and the `start_pool` per-member terms-approval storage loop are both removed (refund entitlement is derived from the current round's deposit flag at claim time; `start_pool` trusts `terms_approvals.len() == member_limit`).
+- Terms proposal/approval (members only), verifier quorum, member-only-pays-own-contribution round funding, purchase proposal/approval, demo-seller payout, round advancement, Grace/abort, current-round-only refund, permissionless start/cancel/mark-overdue/execute/abort — unchanged from Phase 12.
 - No sponsor, guarantee, advance, or top-up concept anywhere in the contract, storage, events, or errors.
-- Redeployed to Testnet as a new contract instance; `scripts/deploy_testnet.sh` (unchanged, never called `create_pool`) and `scripts/demo_testnet.sh` (rewritten for the sponsorless flow) both target it.
+- Redeployed to Testnet as a new contract instance; `scripts/deploy_testnet.sh` (unchanged, never called `create_pool`) and `scripts/demo_testnet.sh` (extended with a Draw-mode Pool C) both target it.
 
 Not implemented yet:
 
-- Backend and Anchor adapter (blocked on a real provider/home domain, unchanged since Phase 0).
+- Backend and Anchor adapter beyond the SDF test anchor already wired into the frontend (blocked on a real provider/home domain for TRY, unchanged since Phase 0).
 
-The frontend is maintained by a separate workstream and was not edited; Phase 12 achieved compatibility entirely from the contract side, verified against `frontend/src/services/pool.ts` and `frontend/src/types/pool.ts`.
+The frontend is maintained by a separate workstream and was not edited; Phase 13 achieved compatibility entirely from the contract side, verified against `frontend/src/services/pool.ts` and `frontend/src/types/pool.ts`.
 
 ## 2. Requirements Extracted From Documentation
 
@@ -222,7 +224,7 @@ Integration/Testnet tests:
 
 ## 12. Phase Plan
 
-Phases 0-11 describe the **sponsor-based generation** and are kept as historical record. Phase 12 is complete; Phase 13 (draw mode and 30 members) is the open work item.
+Phases 0-11 describe the **sponsor-based generation** and are kept as historical record. Phases 12 and 13 are complete.
 
 ### PHASE 12 - Sponsorless Realignment
 
@@ -251,19 +253,24 @@ Definition of Done:
 - `docs/IMPLEMENTATION_LOG.md` records the new contract ID, WASM hash, and key transaction hashes.
 - Frontend untouched.
 
-### PHASE 13 - Draw Mode and 30 Members (open)
+### PHASE 13 - Draw Mode and 30 Members
 
-Status: open. Trigger: product direction of 19 Eylül 2026 (evening) toward the Fuzul Ev/Oto model: a **draw** (kura) instead of a fixed order, and **larger groups**. The frontend is ready (`OrderMode`, `AwaitingDraw`, `draw_recipient`, `VITE_MAX_MEMBERS`) and keeps both features off until the contract supports them; it detects support from the on-chain interface.
+Status: completed on 2026-09-19. Trigger: product direction of 19 Eylül 2026 (evening) toward the Fuzul Ev/Oto model: a **draw** (kura) instead of a fixed order, and **larger groups**. The frontend was already built for it (`OrderMode`, `AwaitingDraw`, `draw_recipient`, `VITE_MAX_MEMBERS`) and detects support from the on-chain interface.
 
-Full specification, acceptance criteria and test list: **`docs/CONTRACT_HANDOFF.md`**. Summary:
+Full specification, acceptance criteria and test list: **`docs/CONTRACT_HANDOFF.md`**. Delivered exactly that scope:
 
-- Add `OrderMode { Fixed, Draw }` to `Pool`/`create_pool`; add `RoundPhase::AwaitingDraw`; make `RoundState.recipient` an `Option<Address>`.
-- New `draw_recipient(pool_id, caller) -> Address`: callable by anyone once every member has paid; picks among members with `received == false` using `env.prng()` (hackathon-grade randomness; commit-reveal is out of scope and must be documented as a limitation); emits `RecipientDrawn`; the phase moves to `AwaitingPurchase`.
-- `purchase_deadline` also applies to `AwaitingDraw`; expiry allows `abort_pool` and current-round refunds.
-- Raise `MAX_MEMBERS` 12 → 30 and remove the per-member loops in `execute_round` and `start_pool` (derive the refund entitlement from the per-round deposit flag, use a paid counter and `terms_approvals.len()`).
-- Bump API/schema version to 10, redeploy as a new instance, publish the ID.
+- Added `OrderMode { Fixed, Draw }` to `Pool`/`create_pool` (new parameter right after `member_limit`, matching the frontend's expected position); added `RoundPhase::AwaitingDraw`; `RoundState.recipient` is now `Option<Address>`.
+- New `draw_recipient(pool_id, caller) -> Address`: callable by anyone (`caller.require_auth()`, no membership/role gate) once every member has paid (`AwaitingDraw`); picks uniformly among members with `received == false` using `env.prng().gen_range` (single candidate is picked deterministically without drawing); emits `RecipientDrawn`; the phase moves to `AwaitingPurchase`. `NotDrawPool` rejects the call on a `Fixed`-order pool.
+- `purchase_deadline` starts the moment a round enters `AwaitingDraw` (not only at `AwaitingPurchase`) and covers the whole draw+purchase window; `abort_pool` now also accepts `AwaitingDraw` (via the same `purchase_deadline`, reason `BlockedSettlement`), so an undrawn, fully-funded round can still be aborted and refunded like an unsettled purchase.
+- Raised `MAX_MEMBERS` 12 → 30. Removed both O(member_limit) storage-read loops the handoff called out: `execute_round` no longer resets a per-member `RefundLiability` entry (that storage key was deleted entirely — refund entitlement is derived at `claim_refund`/`get_member_status` time from `has_deposit(pool, current_round, member) && !refund_claimed`, which is exactly equivalent since only the round active when a pool aborts is ever refundable); `start_pool` no longer re-reads a per-member terms-approval flag and instead trusts `pool.terms_approvals.len() == pool.member_limit` (sound because `approve_terms` only ever appends a member once, per version).
+- Bumped `CONTRACT_VERSION` to 10, redeployed as a new Testnet instance (the v9 instance stays live as a historical artifact), published the new contract ID and `VITE_MAX_MEMBERS=30` into `.env`/`frontend/.env`.
+- Extended `scripts/demo_testnet.sh` with a live Draw-mode Pool C (two rounds, both drawn on-chain) and `create_pool_with_mode`/`create_and_start_pool`'s new `order_mode` argument.
 
-Definition of Done: `cargo test` covers Fixed and Draw (including a 30-member full flow); Testnet resource simulation for a 30-member pool stays under the read/write-entry and CPU limits and is recorded in `docs/IMPLEMENTATION_LOG.md`; the frontend generated-bindings comparison shows no parameter/field mismatch.
+Definition of Done — all met:
+
+- `cargo test -p rotating-pool`: 27/27 passing, including a 4-member and a 30-member Draw full-flow test (no repeat winners, full coverage, last round deterministic), Fixed-vs-Draw `propose_terms` validation, `AwaitingDraw` deadline/abort/refund, and the plan's canonical early-winner-defaults scenario for Draw mode.
+- A dedicated 30-member resource test (`thirty_member_round_operations_stay_within_mainnet_resource_limits`) captures real `InvocationResources` for `deposit`, `draw_recipient`, and `execute_round` at `member_limit = 30`; soroban-sdk 28 also enforces `InvocationResourceLimits::mainnet()` on every invocation in `Env::default()` tests by default, so every 30-member test run is itself a passing resource check. Numbers recorded in `docs/IMPLEMENTATION_LOG.md`.
+- `stellar contract info interface` on the built WASM matches `frontend/src/services/pool.ts` / `types/pool.ts` field-for-field (method names, `create_pool` parameter order including `order_mode`, `Pool.order_mode`, `RoundState.recipient: Option<Address>`, `RoundPhase::AwaitingDraw`, no `fund_guarantee`/`top_up`).
 
 Risk that stays open by design: the early-recipient default. Draw and larger groups do not reduce it (`docs/plan.md` section 2).
 

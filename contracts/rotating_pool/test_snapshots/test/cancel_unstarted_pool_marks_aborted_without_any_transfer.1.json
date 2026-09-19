@@ -70,6 +70,13 @@
                   "u32": 2
                 },
                 {
+                  "vec": [
+                    {
+                      "symbol": "Fixed"
+                    }
+                  ]
+                },
+                {
                   "u64": "180"
                 },
                 {
@@ -358,6 +365,18 @@
                       "vec": [
                         {
                           "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "order_mode"
+                    },
+                    "val": {
+                      "vec": [
+                        {
+                          "symbol": "Fixed"
                         }
                       ]
                     }
