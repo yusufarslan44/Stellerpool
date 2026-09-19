@@ -7,7 +7,7 @@
 
 ## 1. Referans model ve farkımız
 
-Fuzul'ün resmi anlatımında kişiler ödeme güçlerine göre gruplara ayrılıyor; çekilişli ve teslim tarihi baştan belirlenen seçenekler bulunuyor. Teslimat sonrasında taksitler sürüyor. Fuzul, grup dağılmasına karşı organizasyonun arkasında durduğunu ve teslim edilen ev/araç için ipotek veya rehin uyguladığını söylüyor. BDDK, lisanslı tasarruf finansman şirketleri için fon havuzunun şirket hesaplarından ayrılmasını ve başka amaçla kullanılmamasını açıklıyor. Bizim prototipimiz bu kurumsal, hukuki ve bilanço güvencelerinin yerine geçmez.
+Fuzul'ün resmi anlatımında kişiler ödeme güçlerine göre gruplara ayrılıyor; çekilişli ve teslim tarihi baştan belirlenen seçenekler bulunuyor. Teslimat sonrasında taksitler sürüyor. Fuzul, teslimat öncesinde taksit dondurmanın teslimatı da ertelediğini, grup dağılmasına karşı organizasyonun arkasında durduğunu ve teslim edilen ev/araç için ipotek veya rehin uyguladığını söylüyor. BDDK, ödemesini aksatan tasarruf dönemi müşterisinin tahsisatının sözleşmeye göre ertelenebileceğini veya sözleşmesinin feshedilebileceğini açıklıyor. Fuzul'ün kamuya açık SSS'si teslimat **sonrası** tahsilatın tüm adımlarını açıklamıyor. Bizim prototipimiz bu kurumsal, hukuki ve bilanço güvencelerinin yerine geçmez.
 
 | İhtiyaç | Prototipteki karşılık | Açık sınır |
 |---|---|---|
@@ -23,9 +23,19 @@ Fuzul'ün resmi anlatımında kişiler ödeme güçlerine göre gruplara ayrıl�
 2. **Organizatör yalnızca kurulum yapar.** Başladıktan sonra sırayı, satıcıyı tek başına değiştiremez veya kontrat fonunu çekemez. Kontratta tek taraflı upgrade/kaçış kapısı bulunmaz.
 3. **Katılımcıdan girişte bir taksitlik teminat alınmaz.** Eski plan bu teminatı yeterli koruma gibi sunuyordu; dört üyeli örnekte iki taksitlik açık bırakıyordu. Ayrıca tasarruf dönemindeki teminat kuralları hukuken incelenmelidir.
 4. **Sponsor güvencesi ayrı tutulur.** Demo sponsoru Testnet varlığını yatırır. Gerçek üründe sponsorun kim olacağı, fonun niteliği ve düzenleyici statü hukuk ve iş ortaklığı kararıdır.
-5. **Eksik katkı otomatik olarak sponsor parasıyla sessizce kapatılıp tahsisat yapılmaz.** Süre dolunca tur durur. Sponsor açık tutarı ayrıca yatırır ve kontratın iade yeterliliği testi geçerse devam edilir; aksi hâlde havuz iptal ve iade akışına girer.
+5. **Gecikme teslimat öncesi ve sonrası ayrı ele alınır.** Önce bildirim ve sözleşmede belirlenmiş ek süre gelir. Teslimat almamış üyenin kendi tahsisat hakkı ertelenebilir. Teslimat almış üyenin borcu sürer; sponsor açığı ayrıca yatırıp bekleyenleri koruyabilir. Güvenli devam sağlanamazsa ek süre sonunda iptal ve iade devreye girer. Başka üyelerin alacağı sessizce azaltılmaz.
 6. **Tahsisat satıcıya yapılır.** Demo için test satıcısı cüzdanı kullanılır ve gerçek ev/araç satın alındığı söylenmez. Gerçek ürün, satıcı ve mülkiyet doğrulama ortağı gerektirir.
 7. **Getiri stratejisi yok.** Ortak fonu lending, staking veya likidite havuzuna yatırmak MVP güven vaadini geniş risklere açar. DeFi özelliği programlanabilir saklama ve doğrulanabilir kurallardır.
+
+### Ödeme aksadığında izlenecek yol
+
+| Aşama | Fuzul/BDDK kaynaklarında doğrulanabilen | Stellerpool için karar |
+|---|---|---|
+| Teslimat öncesi | Fuzul taksit dondurmanın teslimatı ertelediğini söylüyor; BDDK sözleşmeye göre tahsisatın ötelenebileceğini veya sözleşmenin feshedilebileceğini açıklıyor. | Gecikme bildirimi ve ek süre; ödeme yapılmazsa ilgili üyenin tahsisatı durur. Küçük ve sabit sıralı MVP grubunda başka üyelerin sırası tek taraflı değiştirilmez. Üye değiştirme/yeni sıra gerçek ürünün ayrı tasarımıdır. |
+| Teslimat sonrası | Fuzul teslim edilen ev/araç üzerinde ipotek veya rehin bulunduğunu söylüyor; kamuya açık SSS kesin bir ihtar, yapılandırma veya tahsilat takvimi vermiyor. | Borç kaydı ve bildirim; sözleşme ve lisanslı ortak varsa yapılandırma/tahsilat. Gerçek tahsisattan önce geçerli ipotek/rehin ve mülkiyet doğrulanır. Sponsor, tahsilatı beklerken diğer üyelerin iade hakkını karşılar. |
+| İyileşme olmazsa | Gerçek dünyadaki alacak ve teminat işlemleri sözleşme ve hukuk yoluyla yürütülür. | Testnet'te ek süre sonunda sponsor katkı yapmazsa iptal/iade. Gerçek üründe alacağın takibi ile iptal/iade birbirinden ayrı yürür; kontrat mülke kendiliğinden el koyamaz. |
+
+Bildirim, ek süre ve yeniden yapılandırma sırası **bizim ürün önerimizdir**; Fuzul'ün açıklamadığı iç tahsilat süreci olarak sunulmaz. Teslimat sonrası üyeye süre tanınması, sponsor finansmanı veya başka bir onaylı kaynak olmadan diğer üyelerin alacağını eksiltemez. Sponsorun eksik katkıyı yatırması borcu silmez; gerçek para sürümünde kime borç doğacağı sözleşmeyle belirlenir.
 
 ## 3. Ekonomik güvence hesabı
 
@@ -51,9 +61,10 @@ flowchart TD
   J --> K{Son tur mu?}
   K -->|Hayır| E
   K -->|Evet| L[Sponsor kalanı geri alır]
-  F -->|Süre doldu| M[Tur durur]
-  M --> N{Sponsor açık tutarı tamamlar mı?}
-  N -->|Evet: eksik katkı sponsor adına kaydedilir| F
+  F -->|Süre doldu| M[Tur durur, üye bilgilendirilir]
+  M --> P[Ek süre ve teslimat öncesi/sonrası durumu]
+  P --> N{Üye öder veya sponsor açık tutarı tamamlar mı?}
+  N -->|Evet: ödeme kayda geçer| F
   N -->|Hayır| O[İptal ve hak sahiplerine iade]
   I -->|Hayır| M
 ~~~
@@ -62,7 +73,7 @@ Demo sırasında alım doğrulaması imzalı test verisidir; gerçek satıcı ve
 
 ## 5. Kontrat tasarımı
 
-**Durumlar:** Filling → Active → Paused → Completed / Aborted. Paused durumunda yeni tahsisat yapılamaz. Herkese açık çağrılar zamanı gelmiş işlemleri tetikler; zincirde işlemler kendi kendine çalışmaz.
+**Durumlar:** Filling → Active → Grace → Paused → Completed / Aborted. Grace ve Paused durumlarında yeni tahsisat yapılamaz. Herkese açık çağrılar zamanı gelmiş işlemleri tetikler; zincirde işlemler kendi kendine çalışmaz.
 
 **P0 fonksiyonlar**
 - create_pool: varlık, katkı, üye sayısı, tur süresi ve sponsor adresini belirler.
@@ -73,7 +84,7 @@ Demo sırasında alım doğrulaması imzalı test verisidir; gerçek satıcı ve
 - propose_purchase: sıradaki üye satıcı adresi ve zincir dışı belge özetini kaydeder.
 - approve_purchase: belirlenen doğrulayıcıların imzalarını kontrol eder; creator'ın tek başına onayı yeterli değildir.
 - execute_round: üye katkıları veya kayda geçirilmiş sponsor tamamlamasıyla tur tutarı tam, alım onaylı ve ödeme sonrası iade yeterliliği sağlanıyorsa yalnızca o turun tutarını kayıtlı satıcıya yollar. Herkes çağırabilir.
-- mark_overdue, top_up, abort_pool: süre aşımını işaretler; sponsor eksik üye katkısını ilave fonla tamamlayıp o tur için kayda geçirebilir; aynı katkı sonradan ikinci kez alınmaz. Belirlenmiş bekleme süresi sonunda güvenli devam yoksa herkes iptali tetikleyebilir.
+- mark_overdue, cure_payment, top_up, abort_pool: süre aşımını ve ek süreyi işaretler; üye borcunu tamamlayabilir veya sponsor eksik katkıyı ilave fonla o tur için karşılayabilir. Ödeme yeterliyse durum yeniden Active olur. Aynı katkı ikinci kez tahsil edilmez. Ek süre bittiğinde güvenli devam yoksa herkes iptali tetikleyebilir. Sponsor ödemesi, teslimat almış üyenin zincir dışı borcunu otomatik silmez.
 - claim_refund, claim_sponsor_remainder: iptal veya tamamlanma durumuna göre hak sahibine iade. İki kez talep engellenir.
 - get_pool, get_round, get_member_status, get_refund_claim: okuma.
 
@@ -92,7 +103,7 @@ Demo sırasında alım doğrulaması imzalı test verisidir; gerçek satıcı ve
 
 - **Anchor:** Gerçek TL → Stellar varlığı veya tersi için sağlayıcı ve SEP akışı workshop'ta doğrulanacak. SEP-24 tercih; desteklenmiyorsa SEP-6. Jüri şartının sandbox ile karşılanıp karşılanmadığı organizatöre sorulacak. Sağlayıcı netleşmeden gerçek TL desteği iddia edilmez.
 - **Varlık:** Anchor'ın verdiği token, ihraççı, geri ödeme hakkı, freeze/clawback yetkileri ve kur riski gösterilecek. TL olmayan varlıkta taksit ile TL satın alma gücü aynı şey değildir.
-- **Gerçek ev/araç:** Satıcı kimliği, fatura/sözleşme, tapu/ruhsat, ipotek/rehin ve ihtilaflar zincir dışı doğrulayıcı veya lisanslı ortak gerektirir. Doğrulayıcı yanlış bilgi verirse kontratın doğru ödeme yapması tek başına kaybı önlemez.
+- **Gerçek ev/araç:** Satıcı kimliği, fatura/sözleşme, tapu/ruhsat, teslimat öncesi gerekli ipotek/rehin tescili ve ihtilaflar zincir dışı doğrulayıcı veya lisanslı ortak gerektirir. Doğrulayıcı yanlış bilgi verirse kontratın doğru ödeme yapması tek başına kaybı önlemez. Kontrat, ihtar veya taşınmaz/araç üzerindeki hukuki tahsilatı yürütemez.
 - **Hukuki model:** Tasarruf finansmanı faaliyeti, müşteri fonu, sponsor güvencesi, ipotek/rehin, KYC/AML ve ödeme hizmetleri yetkileri uzmanla ve yetkili kurumlarla netleştirilecek. Testnet demosu faaliyet izni anlamına gelmez. Katılımcıdan tasarruf döneminde nakit teminat alma fikri ayrıca değerlendirilmeden geri getirilmeyecek.
 - **Çekiliş:** MVP'de yok. Gelecekte eklenirse doğrulanabilir rastgelelik, katılım ve iptal kuralları ayrıca tasarlanacak.
 
@@ -102,8 +113,8 @@ Demo sırasında alım doğrulaması imzalı test verisidir; gerçek satıcı ve
 2. Arayüz, havuz bakiyesini, sponsor güvencesini, bekleyen üyelerin iade hakkını, sırayı ve tur son tarihini ayrı gösterir.
 3. Bir TL anchor akışı gerçekten çalışıyorsa en az bir TL giriş veya çıkışı gösterilir; sağlayıcı ve işlem kanıtı belgelenir.
 4. İlk turda herkes öder; doğrulanmış demo satıcısına 40 birim gider. Zincir işlemi ve satıcı adresi gösterilir.
-5. İkinci turda A ödemez; ödeme süresi dolunca tur durur. Sponsor tamamlamazsa iptal tetiklenir, teslimat almamış üyeler katkılarını geri alır ve sponsorun zararı görünür.
-6. Pozitif ikinci senaryoda sponsor açık tutarı ekler; iade yeterliliği korunuyorsa tur tamamlanır.
+5. İkinci turda daha önce tahsisat alan A ödemez; ödeme süresi dolunca tur durur, gecikme ve ek süre gösterilir. A ödemez ve sponsor tamamlamazsa ek süre sonunda iptal tetiklenir; teslimat almamış üyeler katkılarını geri alır ve sponsorun zararı görünür.
+6. Pozitif ikinci senaryoda A ek sürede öder veya sponsor açık tutarı ekler; iade yeterliliği korunuyorsa tur tamamlanır. Sponsor ödemesi A'nın borcunu silmiş gibi gösterilmez.
 7. Testler: normal tur, farklı havuzların ayrılığı, eksik katkı, sahte satıcı/onay, yetersiz güvence, iptal/iade, çift talep ve muhasebe değişmezi.
 8. Testnet contract ID, kurulum adımları, demo URL, gerçek/simüle edilen parçaların sınırları ve sunum hazırlanır.
 
@@ -122,7 +133,7 @@ Demo sırasında alım doğrulaması imzalı test verisidir; gerçek satıcı ve
 
 - Fuzul sistemin işleyişi: https://www.fuzulev.com.tr/nasil-calisir
 - Fuzul SSS (teslimat sonrası taksit, grup güvencesi, ipotek/rehin): https://www.fuzulev.com.tr/merak-edilenler
-- BDDK tasarruf finansman SSS (fon ayrımı ve müşteri hakları): https://www.bddk.org.tr/Sss/Liste/117
+- BDDK tasarruf finansman SSS (gecikme, tahsisat erteleme, fon ayrımı ve müşteri hakları): https://www.bddk.org.tr/Sss/Liste/117
 - BDDK lisanslı şirket listesi: https://www.bddk.org.tr/Kurulus/Liste/89
 - Stellar Asset Contract ve ihraççı yetkileri: https://developers.stellar.org/docs/tokens/stellar-asset-contract
 

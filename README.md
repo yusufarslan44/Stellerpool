@@ -18,10 +18,12 @@ Ortak tasarruf grubunda iki risk var: organizatörün toplanan fonu amacı dış
 - Katkılar, sponsor güvencesi ve her üyenin iade hakkı ayrı muhasebeleştirilir. Organizatörün serbest çekim yetkisi yoktur.
 - Üyeler ve tahsisat sırası başladıktan sonra kilitlenir.
 - Tur katkıları tam ve satıcı/alım onayı hazırsa, kontrat gerekli iade bakiyesi kaldığını kontrol edip tutarı doğrudan satıcı cüzdanına yollar.
-- Katkı eksikse tur durur. Sponsor açığı ayrıca karşılamazsa güvenli iptal ve iade akışı işletilir. Tahsisat almamış üyelerin yatırdığı katkıların iadesi önceliklidir.
+- Katkı eksikse tur durur, üye bilgilendirilir ve önceden belirlenen ek süre başlar. Henüz teslimat almayanın tahsisatı ertelenebilir; teslimat almış üyenin borcu devam eder. Üye veya sponsor açığı karşılamazsa ek süre sonunda güvenli iptal ve iade akışı işletilir.
 - TL giriş veya çıkışı için anchor gerekir; hangi sağlayıcının kullanılacağı henüz netleşmedi.
 
 Bu tasarım gerçek mülkiyet devrini, gelecekteki taksit tahsilatını veya TL token'ının değerini tek başına garanti etmez. Gerçek para ve ev/araç işlemleri için lisanslı ortak, hukuki inceleme, kimlik/satıcı doğrulaması ve bağımsız kontrat denetimi gerekir.
+
+Fuzul'ün kamuya açık açıklamalarında teslimat öncesi taksit dondurma ve teslimat erteleme ile teslimat sonrası ev/araç üzerinde ipotek veya rehin bulunuyor. Gerçek üründe bu hukuki güvence ve borç takibi, kontratın dışındaki yetkili ortak tarafından yürütülmelidir. Sponsor güvencesi, tahsilat sürerken bekleyen üyelerin parasını korumak içindir; borçlunun borcunu otomatik silmez. Ayrıntılar ve kaynaklar [planda](docs/plan.md).
 
 ## Örnek akış
 
@@ -34,9 +36,9 @@ flowchart TD
   E --> F{Ödeme sonrası iade hakkı karşılanıyor mu?}
   F -->|Evet| G[Tahsisat satıcıya ödenir]
   G --> H[Sonraki tur]
-  D -->|Süre doldu| I[Tur durur]
+  D -->|Süre doldu| I[Tur durur, bildirim ve ek süre başlar]
   F -->|Hayır| I
-  I --> K{Sponsor açığı tamamlar mı?}
+  I --> K{Ek sürede üye veya sponsor açığı tamamlar mı?}
   K -->|Evet| D
   K -->|Hayır| J[Havuz iptal edilir, hak sahiplerine iade]
 ~~~
