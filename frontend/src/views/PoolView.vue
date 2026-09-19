@@ -2,6 +2,7 @@
 import { StrKey } from '@stellar/stellar-sdk'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
+import AnchorDemo from '@/components/AnchorDemo.vue'
 import AppIcon from '@/components/AppIcon.vue'
 import CoinSpinner from '@/components/CoinSpinner.vue'
 import DrawStage from '@/components/DrawStage.vue'
@@ -48,6 +49,8 @@ const pool = ref<PoolInfo | null>(null)
 const round = ref<RoundInfo | null>(null)
 const members = ref<MemberStatus[]>([])
 const contractBalance = ref<bigint | null>(null)
+/** Bağlı cüzdanın havuz varlığı bakiyesi; katkıya yetip yetmediğini göstermek için. */
+const myBalance = ref<bigint | null>(null)
 const loading = ref(true)
 const loadError = ref<string | null>(null)
 const actionBusy = ref<string | null>(null)
@@ -96,6 +99,11 @@ async function load(silent = false) {
   }
 }
 
+async function loadMyBalance() {
+  myBalance.value = wallet.address ? await getTokenBalance(wallet.address).catch(() => null) : null
+}
+watch(() => wallet.address, () => void loadMyBalance(), { immediate: true })
+
 let poll: ReturnType<typeof setInterval> | undefined
 onMounted(() => {
   void load()
@@ -131,6 +139,7 @@ const roundDeadline = computed(() => {
 const remaining = computed(() => (roundDeadline.value ? roundDeadline.value - now.value : 0))
 const deadlinePassed = computed(() => round.value?.phase === 'Collecting' && now.value >= round.value.collectDeadline)
 const myFunded = computed(() => !!me.value && isFunded(me.value))
+const lowBalance = computed(() => myBalance.value !== null && !!pool.value && myBalance.value < pool.value.contributionAmount)
 const recipientPaid = computed(() => !!round.value?.recipient && paid.value.has(round.value.recipient))
 const myOwnPaid = computed(() => !!me.value && paid.value.has(me.value))
 /** Bütün üyeler kendi katkısını yatırmadan tahsisat açılmaz. */
@@ -798,6 +807,29 @@ const countdownLabel = computed(() =>
                     <p v-if="deadlinePassed && !allFunded" class="text-xs text-stone-600">
                       Bu işlemi havuzdaki herkes çağırabilir, bir yöneticiye gerek yok.
                     </p>
+
+                    <!-- Anchor ile bakiye yükleme: katkıdan önceki gerçek fiat-kapısı adımı -->
+                    <details
+                      v-if="isMember && !myFunded && (round.phase === 'Collecting' || round.phase === 'Grace')"
+                      class="group rounded-2xl border border-stone-200 bg-white p-4"
+                      :open="lowBalance"
+                    >
+                      <summary class="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 font-display font-bold marker:hidden [&::-webkit-details-marker]:hidden">
+                        <span>
+                          Bakiyen yetmiyor mu? Anchor ile {{ token }} yükle
+                          <span v-if="myBalance !== null" class="ml-1 text-xs font-normal text-stone-600">
+                            (bakiyen {{ formatStroops(myBalance) }} {{ token }})
+                          </span>
+                        </span>
+                        <AppIcon name="chevron" class="text-brand-600 transition-transform duration-300 group-open:rotate-180" />
+                      </summary>
+                      <div class="mt-3">
+                        <AnchorDemo compact @completed="loadMyBalance" />
+                        <p v-if="pool.contributionAmount > 100_000_000n" class="mt-2 text-xs text-stone-600">
+                          Anchor işlem başına sınır koyabilir; katkın büyükse birkaç kez yüklemen gerekebilir.
+                        </p>
+                      </div>
+                    </details>
                   </template>
 
                   <template v-else-if="s.key === 'draw'">

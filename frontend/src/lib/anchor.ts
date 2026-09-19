@@ -35,6 +35,8 @@ export interface AnchorInfo {
   assetCodes: string[]
   /** Anchor TRY veya TRYB varlığı sunuyor mu? Sunmuyorsa arayüz "TRY değil" der. */
   supportsTry: boolean
+  /** stellar.toml [[CURRENCIES]] kayıtlarındaki varlık kodu → ihraççı eşlemesi (native'in ihraççısı yoktur). */
+  issuers: Record<string, string>
 }
 
 export type Signer = (
@@ -121,6 +123,10 @@ export async function resolveAnchor(domain: string = anchorDomain): Promise<Anch
   const deposit = mapSupport(info.deposit)
   const withdraw = mapSupport(info.withdraw)
   const assetCodes = [...new Set([...Object.keys(deposit), ...Object.keys(withdraw)])]
+  const issuers: Record<string, string> = {}
+  for (const c of toml.CURRENCIES ?? []) {
+    if (c.code && c.issuer) issuers[c.code] = c.issuer
+  }
   return {
     domain,
     webAuthEndpoint: WEB_AUTH_ENDPOINT,
@@ -130,7 +136,16 @@ export async function resolveAnchor(domain: string = anchorDomain): Promise<Anch
     withdraw,
     assetCodes,
     supportsTry: assetCodes.some((c) => /^TRY/i.test(c)),
+    issuers,
   }
+}
+
+/**
+ * Anchor, havuzun kullandığı varlığı (kod VE ihraççı aynı) yatırma için sunuyor mu? Yalnızca kod
+ * eşleşmesi yetmez: aynı kodlu başka ihraççının varlığı havuzda geçmez.
+ */
+export function supportsPoolAsset(anchor: AnchorInfo, code: string, issuer: string): boolean {
+  return anchor.deposit[code]?.enabled === true && anchor.issuers[code] === issuer
 }
 
 /**

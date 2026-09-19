@@ -16,7 +16,7 @@ Stellerpool bu koordinasyonu **Soroban akıllı sözleşmesine** taşır. Katkı
 |---|---|
 | Soroban kontratı (sponsorsuz, **API v10**: kura + 30 üye) | ✅ Testnet'te yayında, 27 birim testi, canlı senaryolar koşuldu (sıralı tam akış, temerrüt/iade, **kura**) |
 | Arayüz ↔ kontrat | ✅ Canlı kontrata karşı doğrulandı: üç havuz (sıralı, iptal, kura) okunup çiziliyor; `create_pool` (kura 24/30 üye, sıralı 4 üye) zincire gönderilmeden simüle edildi, 31 üye reddedildi. ⚠️ Cüzdan imzalı yazma akışı (havuz kur, öde, onayla, kura çek) bir cüzdanla uçtan uca henüz denenmedi |
-| Anchor | ✅ Gerçek **SEP-1 / SEP-10 / SEP-24** istemcisi (SDF test anchor'ı ile doğrulandı). ❌ **Türk lirası değil**: test anchor'ı yalnızca test varlığı üretir. Cüzdan imzalı yatırma penceresi bir cüzdanla denenmedi |
+| Anchor | ✅ Gerçek **SEP-1 / SEP-10 / SEP-24** istemcisi (SDF test anchor'ı ile doğrulandı). Havuz sayfasında **katkı adımının içinde**: bakiyesi yetmeyen üye anchor ile havuzun kendi varlığını (USDC, aynı ihraççı) yükler. ❌ **Türk lirası değil**: test anchor'ı yalnızca test varlığı üretir. Cüzdan imzalı yatırma penceresi bir cüzdanla denenmedi |
 | Kura modu ve 30 üye | ✅ Kontratta canlı ([görev listesi](docs/CONTRACT_HANDOFF.md)); arayüzde "Kura" seçilebilir. Rastgelelik hackathon düzeyindedir |
 | Mainnet | Salt okunur tanıtım derlemesi; cüzdan imzası veya fon işlemi yok |
 | Gerçek TL giriş/çıkışı | ❌ **Hackathon'un çekirdek gereksinimi karşılanmıyor**, doğrulanmış bir TRY anchor'ı bulunamadı ([ayrıntı](docs/altin-gunu-legal-boundary.md)) |
@@ -92,7 +92,7 @@ flowchart TD
 
 - **Soroban akıllı kontrat** (Rust): havuz, tur ve iade muhasebesi, doğrulayıcı eşiği.
 - **Stellar Wallets Kit**: cüzdan bağlama ve imza.
-- **Anchor (SEP-1/10/24)**: stellar.toml keşfi, cüzdan imzalı SEP-10 girişi, SEP-24 interaktif yatırma. Test anchor'ı ile doğrulandı; TRY sağlayıcısı henüz yok.
+- **Anchor (SEP-1/10/24)**: stellar.toml keşfi, cüzdan imzalı SEP-10 girişi, SEP-24 interaktif yatırma. Ana sayfada tam anlatım, havuz sayfasında katkıdan önce "bakiye yükle" adımı olarak akışın içinde. Havuz varlığı yalnızca anchor aynı kod ve ihraççıyı sunuyorsa önerilir. Test anchor'ı ile doğrulandı; TRY sağlayıcısı henüz yok.
 - **Stellar Asset Contract (SAC)**: havuz varlığı (Testnet USDC ya da demo varlığı).
 - **Stellar SDK 17 / Soroban RPC / Horizon**: sözleşme istemcisi ve hesap okumaları.
 

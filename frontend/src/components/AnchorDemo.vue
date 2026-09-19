@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { RouterLink } from 'vue-router'
 import AppIcon from '@/components/AppIcon.vue'
 import Illo from '@/components/Illo.vue'
 import {
@@ -9,6 +10,7 @@ import {
   resolveAnchor,
   startInteractive,
   STATUS_LABELS,
+  supportsPoolAsset,
   TERMINAL_STATUSES,
   usingTestAnchor,
 } from '@/lib/anchor'
@@ -23,7 +25,14 @@ import { useWalletStore } from '@/stores/wallet'
  * varlığı üretir, Türk lirası DEĞİLDİR. Mainnet tanıtımı imza kabul etmez, yalnızca anlatım
  * simülasyonu gösterir. Çekme (Stellar → TRY) canlı akışta henüz yoktur.
  */
+const props = defineProps<{
+  /** Havuz sayfası içinde: yalnızca havuz varlığının yatırılması, başlık ve simülasyon olmadan. */
+  compact?: boolean
+}>()
+const emit = defineEmits<{ completed: [] }>()
+
 const live = !mainnetShowcase
+const poolCode = poolAsset.getCode()
 const wallet = useWalletStore()
 
 // --- Canlı akış --------------------------------------------------------------------------
@@ -42,10 +51,18 @@ let poll: ReturnType<typeof setInterval> | undefined
 const depositAssets = computed(() =>
   Object.entries(anchor.value?.deposit ?? {})
     .filter(([, v]) => v.enabled)
+    // Havuz içinde yalnızca havuzun kendi varlığı (kod + ihraççı) sunulur.
+    .filter(([code]) => !props.compact || (anchor.value && supportsPoolAsset(anchor.value, code, poolAsset.getIssuer() ?? '')))
     .map(([code, v]) => ({ code, ...v })),
 )
 const selected = computed(() => depositAssets.value.find((a) => a.code === asset.value) ?? null)
 const finished = computed(() => (tx.value ? TERMINAL_STATUSES.has(tx.value.status) : false))
+watch(
+  () => tx.value?.status,
+  (status) => {
+    if (status === 'completed') emit('completed')
+  },
+)
 
 async function loadAnchor() {
   loadingAnchor.value = true
@@ -158,8 +175,8 @@ function advance() {
 </script>
 
 <template>
-  <section class="card space-y-5" aria-labelledby="anchor-demo-title">
-    <div class="flex flex-wrap items-start justify-between gap-3">
+  <section v-if="!compact || live" :class="compact ? 'space-y-4' : 'card space-y-5'" aria-labelledby="anchor-demo-title">
+    <div v-if="!compact" class="flex flex-wrap items-start justify-between gap-3">
       <div>
         <p class="eyebrow text-brand-700">Anchor · SEP-1 / SEP-10 / SEP-24</p>
         <h2 id="anchor-demo-title" class="mt-1 text-2xl font-extrabold">TRY ile Stellar bağlantısı</h2>
@@ -172,7 +189,14 @@ function advance() {
 
     <!-- CANLI AKIŞ -->
     <template v-if="live">
-      <p class="text-sm leading-relaxed text-stone-600">
+      <p v-if="compact" id="anchor-demo-title" class="text-sm leading-relaxed text-stone-600">
+        Bakiyeni <strong>{{ anchorDomain }}</strong> üzerinden {{ poolCode }} olarak yükle: cüzdanınla giriş imzalarsın, yatırma anchor'ın
+        kendi penceresinde yapılır ve durum burada izlenir.
+        <template v-if="usingTestAnchor || (anchor && !anchor.supportsTry)">
+          <strong>Bu sağlayıcı test varlığı üretir, Türk lirası sunmaz.</strong>
+        </template>
+      </p>
+      <p v-else class="text-sm leading-relaxed text-stone-600">
         Bu bölüm <strong>{{ anchorDomain }}</strong> ile gerçek anchor protokolünü çalıştırır: uç noktalar
         <code class="font-mono">stellar.toml</code>'dan okunur, cüzdanınla giriş imzalarsın, yatırma penceresi anchor'ın
         kendi arayüzünde açılır.
@@ -190,7 +214,11 @@ function advance() {
       </div>
 
       <template v-else-if="anchor">
-        <div class="flex flex-wrap items-center gap-2 text-xs">
+        <p v-if="compact && !depositAssets.length" role="status" class="rounded-2xl bg-gold-100/80 p-3 text-sm text-amber-950">
+          Bu anchor havuzun varlığını ({{ poolCode }}, aynı ihraççı) yatırma için sunmuyor. Bakiye yüklemek için
+          <RouterLink to="/#basla" class="font-semibold underline">kurulum sihirbazını</RouterLink> kullan.
+        </p>
+        <div v-if="!compact || depositAssets.length" class="flex flex-wrap items-center gap-2 text-xs">
           <span class="badge bg-sage-100 text-sage-800"><AppIcon name="check" class="!size-3.5" /> stellar.toml okundu</span>
           <span class="badge bg-stone-100 text-stone-700">Varlıklar: {{ anchor.assetCodes.join(' · ') }}</span>
           <span class="badge" :class="anchor.supportsTry ? 'bg-sage-100 text-sage-800' : 'bg-gold-100 text-amber-900'">
@@ -198,7 +226,7 @@ function advance() {
           </span>
         </div>
 
-        <ol class="space-y-2 text-sm" aria-label="Anchor adımları">
+        <ol v-if="!compact || depositAssets.length" class="space-y-2 text-sm" aria-label="Anchor adımları">
           <li class="flex items-start gap-2.5">
             <span class="mt-0.5 grid size-6 shrink-0 place-items-center rounded-full bg-sage-600 text-xs font-bold text-white">
               <AppIcon name="check" class="!size-3.5" />
@@ -217,9 +245,13 @@ function advance() {
           </li>
         </ol>
 
-        <div v-if="!session" class="space-y-3 rounded-2xl bg-sand/60 p-4">
+        <div v-if="!session && (!compact || depositAssets.length)" class="space-y-3 rounded-2xl bg-sand/60 p-4">
           <div class="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
-            <div>
+            <p v-if="compact && selected" class="text-sm">
+              Yatırılacak: <strong>{{ poolCode }}</strong>
+              <span v-if="selected.minAmount || selected.maxAmount" class="text-stone-600"> · işlem başına {{ selected.minAmount ?? '—' }}–{{ selected.maxAmount ?? '—' }}</span>
+            </p>
+            <div v-else>
               <label class="label" for="anchor-asset">Yatırılacak varlık</label>
               <select id="anchor-asset" v-model="asset" class="input">
                 <option v-for="a in depositAssets" :key="a.code" :value="a.code">
@@ -234,12 +266,12 @@ function advance() {
               {{ busy === 'auth' ? 'Cüzdanı onayla…' : 'Anchor ile başla' }}
             </button>
           </div>
-          <p v-if="asset && asset !== 'native'" class="text-xs text-stone-600">
+          <p v-if="!compact && asset && asset !== 'native'" class="text-xs text-stone-600">
             {{ asset }} alabilmen için hesabında bu varlığa güven (trustline) olmalı. Yukarıdaki kurulum sihirbazının “güven” adımı bunu yapar.
           </p>
         </div>
 
-        <div v-else class="pop space-y-3 rounded-2xl border-2 border-brand-200 bg-brand-50/60 p-4" aria-live="polite">
+        <div v-else-if="session" class="pop space-y-3 rounded-2xl border-2 border-brand-200 bg-brand-50/60 p-4" aria-live="polite">
           <div class="flex items-center gap-2">
             <Illo :name="tx?.status === 'completed' ? 'party' : 'hourglass'" :size="30" />
             <p class="font-display font-bold">{{ tx ? (STATUS_LABELS[tx.status] ?? tx.status) : 'Durum okunuyor…' }}</p>
@@ -275,7 +307,7 @@ function advance() {
     </template>
 
     <!-- ANLATIM SİMÜLASYONU -->
-    <component :is="live ? 'details' : 'div'" class="group space-y-4 rounded-2xl" :class="live ? 'border border-stone-200 p-4' : ''">
+    <component :is="live ? 'details' : 'div'" v-if="!compact" class="group space-y-4 rounded-2xl" :class="live ? 'border border-stone-200 p-4' : ''">
       <summary v-if="live" class="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 font-display font-bold marker:hidden [&::-webkit-details-marker]:hidden">
         Anlatım simülasyonu (bağlantısız)
         <AppIcon name="chevron" class="text-brand-600 transition-transform duration-300 group-open:rotate-180" />
