@@ -32,7 +32,7 @@ Stellerpool bu koordinasyonu **Soroban akıllı sözleşmesine** taşır. Katkı
 - **30 üye kaynak ölçümü** (yerel test, gerçek Wasm ana bilgisayarı için alt sınır): `deposit` ≈ 1,1 M, `draw_recipient` ≈ 1,6 M, `execute_round` ≈ 1,4 M komut (Mainnet sınırı 400 M); okuma/yazma girdileri tek haneli. Gerçek 30 kişilik Testnet koşusu yapılmadı.
 - Demo varlığı: `STLP` (SAC `CAOV35NPIJXHWA7QPXXERRJQ4ZTDUGAEHA7FKB6QIOTIOTI62B35ZNWI`). Arayüz varsayılan olarak Testnet USDC ile çalışır (kontrat varlığı havuz başına verilir).
 - Önceki üç kontrat örneği (iki sponsorlu, bir v9 sponsorsuz) zincirde durur; **teslimde yalnızca yukarıdaki güncel kontrat geçerlidir.** Ayrıntı ve karar gerekçeleri: [IMPLEMENTATION_LOG.md](docs/IMPLEMENTATION_LOG.md) "Phase 12" ve "Phase 13".
-- **Demo URL:** henüz yayınlanmadı (barındırma bekleniyor).
+- **Demo URL:** https://stellerpool.arslanyusuf.com (Testnet, canlı kontrata bağlı; havuz #3 için `/pool/3`). Yalnızca Testnet, gerçek para yok.
 
 ## Havuz kuralı
 
@@ -112,7 +112,7 @@ flowchart TD
 - [x] Mainnet için işlemsiz, canlı ağ bilgisini okuyan tanıtım derlemesi
 - [x] Mimari diyagram ve teknik belgeler
 - [ ] Cüzdan imzalı yazma akışının (havuz kur/öde/onayla/kura çek) uçtan uca denemesi
-- [ ] Herkese açık demo URL'i
+- [x] Herkese açık demo URL'i (https://stellerpool.arslanyusuf.com)
 - [ ] **Gerçek TL anchor giriş/çıkışı ve kullanılabilir bakiye** (hackathon çekirdek gereksinimi, karşılanmıyor)
 - [x] Kura modu ve 30 üye ([görev listesi](docs/CONTRACT_HANDOFF.md) uygulandı)
 - [ ] Sunum (resmi Stellar şablonu)
