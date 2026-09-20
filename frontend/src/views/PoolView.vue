@@ -220,6 +220,24 @@ const refundableOf = (address: string): bigint => {
 const purchaseAmount = computed(() =>
   pool.value ? pool.value.contributionAmount * BigInt(pool.value.memberLimit) + pool.value.downPayment : 0n,
 )
+// Alım öneri formu hazır gelsin: satıcı havuzda kayıtlı tek adrestir, belge için düzenlenebilir bir taslak doldurulur.
+watch(
+  () => [pool.value?.id, pool.value?.demoSeller, round.value?.round, round.value?.phase] as const,
+  () => {
+    const p = pool.value
+    const r = round.value
+    if (!p) return
+    if (!sellerInput.value) sellerInput.value = p.demoSeller
+    if (!docInput.value && r && r.phase === 'AwaitingPurchase') {
+      const date = new Date().toISOString().slice(0, 10)
+      docInput.value =
+        `Demo alım belgesi · Havuz #${p.id} · Tur ${r.round} · Toplam tutar ${formatStroops(purchaseAmount.value)} ${token.value}` +
+        (p.downPayment > 0n ? ` (havuz + ${formatStroops(p.downPayment)} peşinat)` : '') +
+        ` · Satıcı ${shortAddress(p.demoSeller)} · Tarih ${date}`
+    }
+  },
+  { immediate: true },
+)
 const totalRefundable = computed(() => members.value.reduce((sum, m) => sum + refundableOf(m.address), 0n))
 const myRefundable = computed(() => (me.value ? refundableOf(me.value) : 0n))
 
@@ -896,13 +914,17 @@ const countdownLabel = computed(() =>
                     >
                       <div>
                         <label class="label" for="seller">Satıcının Stellar adresi</label>
-                        <input id="seller" v-model="sellerInput" class="input font-mono" type="text" placeholder="G…" autocomplete="off" required />
+                        <input id="seller" v-model="sellerInput" class="input font-mono" type="text" placeholder="G…" autocomplete="off" readonly required />
                         <p v-if="sellerInput && !sellerValid" class="mt-1 text-xs text-rose-700">
                           Havuzda kayıtlı izinli demo satıcısı adresini gir.
+                        </p>
+                        <p v-else class="mt-1 text-xs text-stone-600">
+                          Havuz kurulurken belirlenen izinli satıcı, hazır geldi. Kontrat başka bir adrese ödeme yapmaz.
                         </p>
                       </div>
                       <div>
                         <label class="label" for="doc">Alım belgesi (fatura veya sözleşme özeti)</label>
+                        <p class="mb-1 text-xs text-stone-600">Örnek bir taslak dolduruldu; gerçek belge özetiyle değiştirebilirsin.</p>
                         <textarea id="doc" v-model="docInput" class="input min-h-20" placeholder="Örn. araç/ev, satıcı, toplam bedel, varsa peşinat ve kim ödedi, tarih, belge numarası" required />
                         <p class="mt-1 text-xs text-stone-600">
                           Belgenin kendisi zincire yazılmaz, yalnızca SHA-256 özeti kaydedilir. Doğrulayıcılar belgeyi
