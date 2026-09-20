@@ -160,6 +160,7 @@ function pickPreset(p: (typeof PRESETS)[number]) {
 }
 
 function stepMembers(delta: number) {
+  autoMembers.value = false
   memberLimit.value = Math.min(MAX_MEMBERS, Math.max(MIN_MEMBERS, (Number(memberLimit.value) || 4) + delta))
 }
 
@@ -563,43 +564,53 @@ async function submit() {
                 </p>
 
                 <div>
-                  <button type="button" class="min-h-11 text-sm font-semibold text-brand-700 underline" @click="autoMembers = !autoMembers">
-                    {{ autoMembers ? 'Kişi sayısını elle belirle' : 'Kişi sayısını otomatik belirle' }}
-                  </button>
-                  <div v-if="!autoMembers" class="mt-1">
-                    <p id="members-label" class="label">Kaç kişi? (kişi sayısı = taksit sayısı)</p>
-                    <div class="flex items-center gap-3" role="group" aria-labelledby="members-label">
-                      <button
-                        type="button"
-                        class="btn-secondary !size-11 !p-0 text-xl"
-                        :disabled="memberLimit <= MIN_MEMBERS"
-                        aria-label="Bir kişi azalt"
-                        @click="stepMembers(-1)"
-                      >
-                        −
-                      </button>
-                      <input
-                        v-model.number="memberLimit"
-                        class="input !w-20 text-center text-xl font-bold"
-                        type="number"
-                        :min="MIN_MEMBERS"
-                        :max="MAX_MEMBERS"
-                        step="1"
-                        aria-label="Üye sayısı"
-                        required
-                      />
-                      <button
-                        type="button"
-                        class="btn-secondary !size-11 !p-0 text-xl"
-                        :disabled="memberLimit >= MAX_MEMBERS"
-                        aria-label="Bir kişi artır"
-                        @click="stepMembers(1)"
-                      >
-                        +
-                      </button>
-                    </div>
-                    <p class="mt-1 text-xs text-stone-600">Kişi sayısı kadar tur olur; herkes bir kez alır.</p>
+                  <p id="members-label" class="label">
+                    Kaç kişi? (kişi sayısı = taksit sayısı) — hangi başlangıcı seçersen seç, her zaman
+                    değiştirebilirsin
+                  </p>
+                  <div class="flex flex-wrap items-center gap-3" role="group" aria-labelledby="members-label">
+                    <button
+                      type="button"
+                      class="btn-secondary !size-11 !p-0 text-xl"
+                      :disabled="memberLimit <= MIN_MEMBERS"
+                      aria-label="Bir kişi azalt"
+                      @click="stepMembers(-1)"
+                    >
+                      −
+                    </button>
+                    <input
+                      v-model.number="memberLimit"
+                      class="input !w-20 text-center text-xl font-bold"
+                      type="number"
+                      :min="MIN_MEMBERS"
+                      :max="MAX_MEMBERS"
+                      step="1"
+                      aria-label="Üye sayısı"
+                      required
+                      @input="autoMembers = false"
+                    />
+                    <button
+                      type="button"
+                      class="btn-secondary !size-11 !p-0 text-xl"
+                      :disabled="memberLimit >= MAX_MEMBERS"
+                      aria-label="Bir kişi artır"
+                      @click="stepMembers(1)"
+                    >
+                      +
+                    </button>
+                    <button
+                      v-if="!autoMembers"
+                      type="button"
+                      class="min-h-11 text-sm font-semibold text-brand-700 underline"
+                      @click="autoMembers = true"
+                    >
+                      Otomatik hesaba dön
+                    </button>
                   </div>
+                  <p class="mt-1 text-xs text-stone-600">
+                    Kişi sayısı kadar tur olur; herkes bir kez alır.
+                    {{ autoMembers ? 'Şu an taksitten otomatik hesaplanıyor; yukarıdan değiştirirsen sabitlenir.' : '' }}
+                  </p>
                 </div>
 
                 <div>
@@ -821,7 +832,8 @@ async function submit() {
                   </button>
                 </div>
 
-                <button type="button" class="text-sm font-semibold text-brand-700 underline" @click="custom = !custom">
+                <button type="button" class="btn-secondary min-h-11" @click="custom = !custom">
+                  <AppIcon name="chevron" class="!size-4" :class="custom ? 'rotate-180' : ''" />
                   {{ custom ? 'Ayrıntıyı gizle' : 'Süreleri tek tek ayarla' }}
                 </button>
 
