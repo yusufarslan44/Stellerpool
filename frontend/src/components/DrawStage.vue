@@ -62,9 +62,9 @@ onBeforeUnmount(stop)
 const highlighted = computed(() => (cursor.value >= 0 ? props.candidates[cursor.value] : null))
 
 const live = computed(() => {
-  if (props.winner) return `Kura sonucu: ${shortAddress(props.winner, 6)}${props.winner === props.me ? ' (sen)' : ''}`
-  if (props.spinning) return 'Kura çekiliyor…'
-  return `${props.candidates.length} üye kurada`
+  if (props.winner) return `Draw result: ${shortAddress(props.winner, 6)}${props.winner === props.me ? ' (you)' : ''}`
+  if (props.spinning) return 'Drawing…'
+  return `${props.candidates.length} members in the draw`
 })
 </script>
 
@@ -75,7 +75,7 @@ const live = computed(() => {
       <p class="font-display font-bold" role="status" aria-live="polite">{{ live }}</p>
     </div>
 
-    <ul class="flex flex-wrap gap-1.5" aria-label="Kuradaki üyeler">
+    <ul class="flex flex-wrap gap-1.5" aria-label="Members in the draw">
       <li
         v-for="a in all"
         :key="a"
@@ -87,14 +87,14 @@ const live = computed(() => {
           highlighted === a ? 'scale-110 ring-2 ring-brand-500' : '',
           a === me && winner !== a ? 'outline outline-2 outline-offset-1 outline-ink/50' : '',
         ]"
-        :title="`${a}${excludedSet.has(a) ? ' · daha önce teslim aldı' : ''}${a === me ? ' · sen' : ''}`"
+        :title="`${a}${excludedSet.has(a) ? ' · already received' : ''}${a === me ? ' · you' : ''}`"
       >
         {{ initials(a) }}
       </li>
     </ul>
 
     <p class="text-xs leading-relaxed text-stone-600">
-      Sonucu kontrat belirler; bu animasyon yalnızca görseldir. Daha önce teslim alanlar (soluk çipler) kuraya girmez.
+      The contract decides the result; this animation is visual only. Members who already received (faded chips) are not in the draw.
     </p>
   </div>
 </template>

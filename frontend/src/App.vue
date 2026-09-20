@@ -29,18 +29,18 @@ const NetworkWarning = defineAsyncComponent(() => import('@/components/NetworkWa
 
     <footer class="site-footer">
       <div class="footer-top">
-        <div><RouterLink to="/" class="footer-brand">Stellerpool<span>.</span></RouterLink><p>Ortak hedefler.<br />Herkese açık kurallar.</p></div>
-        <nav v-if="!mainnetShowcase" aria-label="Alt menü"><span>KEŞFET</span><RouterLink to="/#nasil">Nasıl çalışır?</RouterLink><RouterLink to="/#hikaye">Hikâyeyi izle</RouterLink><RouterLink to="/#sss">Sık sorulan sorular</RouterLink></nav>
-        <nav v-if="!mainnetShowcase" aria-label="Başlangıç bağlantıları"><span>İLK ADIM</span><RouterLink to="/#hesapla">Planını hesapla</RouterLink><RouterLink to="/#basla">Cüzdanını hazırla</RouterLink><RouterLink to="/join">Havuza katıl ↗</RouterLink></nav>
-        <div class="footer-network"><span class="eyebrow">STELLAR ÜZERİNDE</span><strong>{{ config.label }}</strong><p>{{ mainnetShowcase ? 'Salt okunur tanıtım.' : 'Birlikte dene, akışı keşfet.' }}<br />Gerçek para kullanılmaz.</p></div>
+        <div><RouterLink to="/" class="footer-brand">Stellarpool<span>.</span></RouterLink><p>Shared goals.<br />Public rules.</p></div>
+        <nav v-if="!mainnetShowcase" aria-label="Footer menu"><span>EXPLORE</span><RouterLink to="/#nasil">How it works</RouterLink><RouterLink to="/#hikaye">Watch the story</RouterLink><RouterLink to="/#ucretler">Fees</RouterLink><RouterLink to="/#sss">FAQ</RouterLink></nav>
+        <nav v-if="!mainnetShowcase" aria-label="Getting started"><span>FIRST STEP</span><RouterLink to="/#hesapla">Calculate your plan</RouterLink><RouterLink to="/#basla">Set up your wallet</RouterLink><RouterLink to="/join">Join a pool ↗</RouterLink></nav>
+        <div class="footer-network"><span class="eyebrow">BUILT ON STELLAR</span><strong>{{ config.label }}</strong><p>{{ mainnetShowcase ? 'Read-only showcase.' : 'Try it together, explore the flow.' }}<br />No real money is used.</p></div>
       </div>
       <div class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-4 py-5 text-xs text-stone-600">
-        <span class="font-display text-sm font-semibold text-ink">Birlikte biriktir. Her şeyi doğrula.</span>
+        <span class="font-display text-sm font-semibold text-ink">Save together. Verify everything.</span>
         <span>
-          {{ mainnetShowcase ? 'Mainnet tanıtımı: fon ve cüzdan işlemleri kapalı.' : 'Testnet prototipi, gerçek para kullanılmaz.' }}
+          {{ mainnetShowcase ? 'Mainnet showcase: funds and wallet actions are disabled.' : 'Testnet prototype, no real money is used.' }}
         </span>
         <span v-if="poolContractId">
-          Kontrat:
+          Contract:
           <a
             :href="explorerContract(poolContractId)"
             target="_blank"
@@ -50,8 +50,8 @@ const NetworkWarning = defineAsyncComponent(() => import('@/components/NetworkWa
             {{ poolContractId.slice(0, 6) }}…{{ poolContractId.slice(-4) }}
           </a>
         </span>
-        <span v-else-if="!mainnetShowcase">Kontrat henüz yapılandırılmadı</span>
-        <span v-else>Mainnet havuz kontratı yayınlanmadı</span>
+        <span v-else-if="!mainnetShowcase">Contract not configured yet</span>
+        <span v-else>Mainnet pool contract not published</span>
       </div>
     </footer>
   </div>

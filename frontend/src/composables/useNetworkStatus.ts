@@ -15,7 +15,7 @@ export function useNetworkStatus() {
     try {
       if (!networkVerified) {
         const network = await rpcServer.getNetwork()
-        if (network.passphrase !== config.passphrase) throw new Error('RPC ağı eşleşmiyor.')
+        if (network.passphrase !== config.passphrase) throw new Error('RPC network does not match.')
         networkVerified = true
       }
       const latest = await rpcServer.getLatestLedger()

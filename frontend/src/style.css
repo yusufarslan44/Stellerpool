@@ -287,15 +287,15 @@
 @media (prefers-reduced-motion: no-preference) {
   [data-reveal] {
     opacity: 0;
-    transform: translateY(22px);
+    transform: translate3d(0, 16px, 0);
     transition:
-      opacity 0.8s var(--ease-out-soft),
-      transform 0.8s var(--ease-out-soft);
-    transition-delay: calc(var(--d, 0) * 80ms);
+      opacity 0.65s var(--ease-out-soft),
+      transform 0.7s var(--ease-out-soft);
+    transition-delay: calc(var(--d, 0) * 60ms);
   }
   [data-reveal].is-in {
     opacity: 1;
-    transform: none;
+    transform: translate3d(0, 0, 0);
   }
 }
 

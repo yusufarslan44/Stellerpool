@@ -14,18 +14,15 @@ import type {
  * RotatingPool kontratı için istemci katmanı. Tüm çağrılar gerçek Soroban RPC'ye gider,
  * sahte veri yoktur.
  *
- * NOT: Testnet'te yayındaki sponsorsuz kontrat (API v9) ile fonksiyon adları, parametreler ve
- * okunan alanlar doğrulandı (17 metot + okuma, canlı veriyle). Kura (`draw_recipient`,
- * `order_mode`) ve 30 üye API v10 hedefidir (docs/CONTRACT_HANDOFF.md); bu alanlar hâlâ
- * VARSAYIMDIR ve kontrat yayınlanınca `stellar contract bindings typescript` ile doğrulanmalı.
- * Uyuşmazlık varsa yalnızca bu dosya (ve types/pool.ts) değişir.
+ * Yayımlı Testnet kontratı API v12'dir. Önceki kontratların havuzları zincirde kalır;
+ * eski sürümde yeni akışın yazma işlemleri engellenir.
  */
 
 export class LegacyContractError extends Error {
   constructor() {
     super(
-      'Yapılandırılan kontrat eski sponsorlu sürüm (API v8). Arayüz sponsorsuz modele göre yazıldı; ' +
-        'kontrat yeniden yayınlanıp VITE_ROTATING_POOL_CONTRACT_ID güncellenene kadar zincir işlemi yapılamaz.',
+      'The configured contract is the old sponsored version (API v8). The interface is written for the sponsor-free model; ' +
+        'no on-chain action is possible until the contract is redeployed and VITE_ROTATING_POOL_CONTRACT_ID is updated.',
     )
     this.name = 'LegacyContractError'
   }
@@ -33,7 +30,7 @@ export class LegacyContractError extends Error {
 
 export class ContractNotConfiguredError extends Error {
   constructor() {
-    super('Havuz kontratı henüz yapılandırılmadı (VITE_ROTATING_POOL_CONTRACT_ID boş).')
+    super('The pool contract is not configured yet (VITE_ROTATING_POOL_CONTRACT_ID is empty).')
     this.name = 'ContractNotConfiguredError'
   }
 }
@@ -61,10 +58,6 @@ interface PoolMethods {
     number
   >
   join_pool: Method<{ pool_id: number; member: string }, null>
-  propose_terms: Method<
-    { pool_id: number; creator: string; recipient_order: string[]; verifiers: string[] },
-    number
-  >
   approve_terms: Method<{ pool_id: number; approver: string; version: number }, null>
   start_pool: Method<{ pool_id: number }, null>
   cancel_unstarted_pool: Method<{ pool_id: number }, null>
@@ -79,10 +72,6 @@ interface PoolMethods {
       amount: bigint
       doc_hash: Uint8Array
     },
-    number
-  >
-  approve_purchase: Method<
-    { pool_id: number; round: number; verifier: string; proposal_version: number },
     null
   >
   /** Kura modunda tüm katkılar tamamlanınca herkes çağırabilir; alıcıyı teslim almamışlar arasından seçer. */
@@ -112,14 +101,12 @@ export interface Signer {
 const EXPECTED_METHODS = [
   'create_pool',
   'join_pool',
-  'propose_terms',
   'approve_terms',
   'start_pool',
   'cancel_unstarted_pool',
   'deposit',
   'cure_payment',
   'propose_purchase',
-  'approve_purchase',
   'execute_round',
   'mark_overdue',
   'abort_pool',
@@ -132,9 +119,9 @@ const EXPECTED_METHODS = [
 export class ContractInterfaceError extends Error {
   constructor(missing: string[]) {
     super(
-      `Kontrat beklenen fonksiyonları sunmuyor: ${missing.join(', ')}. ` +
-        'Kontrat adresi veya sürümü yanlış olabilir; fonksiyon adları değiştiyse ' +
-        'frontend/src/services/pool.ts güncellenmeli.',
+      `The contract does not expose the expected functions: ${missing.join(', ')}. ` +
+        'The contract address or version may be wrong; if function names changed, ' +
+        'frontend/src/services/pool.ts must be updated.',
     )
     this.name = 'ContractInterfaceError'
   }
@@ -148,6 +135,8 @@ export interface ContractCapabilities {
   supportsDraw: boolean
   /** Peşinat (`create_pool` girdisi `down_payment`) destekleniyor mu? Sürüm numarasına değil zincirdeki arayüze bakılır. */
   supportsDownPayment: boolean
+  /** v12: order is finalized on the last join, with no verifier role or approval. */
+  simpleTerms: boolean
 }
 
 async function buildClient(signer?: Signer): Promise<PoolClient> {
@@ -189,6 +178,7 @@ function capabilitiesOf(client: unknown): ContractCapabilities {
     legacySponsor: hasMethod(client, 'fund_guarantee') || hasMethod(client, 'top_up'),
     supportsDraw: hasMethod(client, 'draw_recipient'),
     supportsDownPayment: hasInput(client, 'create_pool', 'down_payment'),
+    simpleTerms: !hasMethod(client, 'propose_terms') && !hasMethod(client, 'approve_purchase'),
   }
 }
 
@@ -196,7 +186,9 @@ async function getClient(signer?: Signer): Promise<PoolClient> {
   const client = await buildClient(signer)
   const missing = EXPECTED_METHODS.filter((m) => !hasMethod(client, m))
   if (missing.length > 0) throw new ContractInterfaceError(missing)
-  if (capabilitiesOf(client).legacySponsor) throw new LegacyContractError()
+  const caps = capabilitiesOf(client)
+  if (caps.legacySponsor) throw new LegacyContractError()
+  if (signer && !caps.simpleTerms) throw new Error('This old contract requires verifier approval. The new flow needs the v12 contract address.')
   return client
 }
 
@@ -250,19 +242,19 @@ function toHexOrNull(v: unknown): string | null {
 
 /**
  * Rust `Result` döndüren kontrat fonksiyonlarında SDK sonucu `Ok { value }` olarak sarmalar
- * (canlı Testnet kontratıyla doğrulandı). Hata varsa fırlatır, yoksa düz değeri döndürür.
+ * (Testnet kontratıyla doğrulandı). Hata varsa fırlatır, yoksa düz değeri döndürür.
  */
 function unwrap(raw: unknown): unknown {
   const r = raw as { isErr?: () => boolean; unwrap?: () => unknown; unwrapErr?: () => { message?: string } } | null
   if (r && typeof r.isErr === 'function' && typeof r.unwrap === 'function') {
-    if (r.isErr()) throw new Error(r.unwrapErr?.().message ?? 'Kontrat hata döndürdü.')
+    if (r.isErr()) throw new Error(r.unwrapErr?.().message ?? 'The contract returned an error.')
     return r.unwrap()
   }
   return raw
 }
 
 function record(raw: unknown, what: string): Record<string, unknown> {
-  if (!raw || typeof raw !== 'object') throw new Error(`Kontrat beklenmeyen bir ${what} yanıtı verdi.`)
+  if (!raw || typeof raw !== 'object') throw new Error(`The contract returned an unexpected ${what} response.`)
   return raw as Record<string, unknown>
 }
 
@@ -280,8 +272,6 @@ function mapPool(id: number, raw: unknown): PoolInfo {
     orderMode: toTag(r.order_mode) === 'Draw' ? 'Draw' : 'Fixed',
     downPayment: toBigInt(r.down_payment),
     recipientOrder: toStringList(r.recipient_order),
-    verifiers: toStringList(r.verifiers),
-    approvalThreshold: toNumber(r.approval_threshold),
     termsVersion: toNumber(r.terms_version),
     termsApprovals: toStringList(r.terms_approvals),
     currentRound: toNumber(r.current_round),
@@ -310,13 +300,11 @@ function mapRound(raw: unknown): RoundInfo {
     pot: toBigInt(r.pot),
     seller: toOptionalString(r.seller),
     docHash: toHexOrNull(r.doc_hash),
-    purchaseVersion: toNumber(r.purchase_version),
-    approvals: toStringList(r.approvals),
   }
 }
 
 function mapMember(address: string, raw: unknown): MemberStatus {
-  const r = record(raw, 'üye')
+  const r = record(raw, 'member')
   return {
     address,
     refundable: toBigInt(r.refundable),
@@ -382,10 +370,10 @@ export async function createPool(
   const caps = capabilitiesOf(c)
   const supportsDraw = caps.supportsDraw
   if ((params.downPayment ?? 0n) > 0n && !caps.supportsDownPayment) {
-    throw new Error('Yapılandırılan kontrat peşinatı desteklemiyor; peşinatı 0 yap.')
+    throw new Error('The configured contract does not support a down payment; set the down payment to 0.')
   }
   if (params.orderMode === 'Draw' && !supportsDraw) {
-    throw new Error('Yapılandırılan kontrat henüz kura desteklemiyor; sabit sıra seç.')
+    throw new Error('The configured contract does not support a draw yet; choose fixed order.')
   }
   const tx = await c.create_pool({
     creator: signer.address,
@@ -409,27 +397,6 @@ export async function createPool(
 export async function joinPool(signer: Signer, poolId: number) {
   const c = await getClient(signer)
   return send(await c.join_pool({ pool_id: poolId, member: signer.address }))
-}
-
-/**
- * Kurucu sırayı ve doğrulayıcıları önerir. Her değişiklik önceki tüm onayları geçersiz kılar.
- * Kura modunda sıra boş gönderilir; yalnızca doğrulayıcılar önerilir.
- */
-export async function proposeTerms(
-  signer: Signer,
-  poolId: number,
-  recipientOrder: string[],
-  verifiers: string[],
-) {
-  const c = await getClient(signer)
-  return send(
-    await c.propose_terms({
-      pool_id: poolId,
-      creator: signer.address,
-      recipient_order: recipientOrder,
-      verifiers,
-    }),
-  )
 }
 
 /** Üye, geçerli koşul sürümünü cüzdanıyla onaylar. */
@@ -463,7 +430,7 @@ export async function curePayment(signer: Signer, poolId: number) {
 
 /**
  * Sıradaki üye satıcıyı, varlığı, tutarı ve belge özetini kaydeder. Demoda satıcı,
- * havuzun izinli test satıcısı olmalıdır. Her yeni öneri önceki onayları siler.
+ * havuzun izinli test satıcısı olmalıdır.
  */
 export async function proposePurchase(
   signer: Signer,
@@ -484,24 +451,6 @@ export async function proposePurchase(
       asset: params.asset,
       amount: params.amount,
       doc_hash: params.docHash,
-    }),
-  )
-}
-
-/** Doğrulayıcı, geçerli alım önerisi sürümünü onaylar. Kurucunun onayı tek başına yeterli değildir. */
-export async function approvePurchase(
-  signer: Signer,
-  poolId: number,
-  round: number,
-  proposalVersion: number,
-) {
-  const c = await getClient(signer)
-  return send(
-    await c.approve_purchase({
-      pool_id: poolId,
-      round,
-      verifier: signer.address,
-      proposal_version: proposalVersion,
     }),
   )
 }

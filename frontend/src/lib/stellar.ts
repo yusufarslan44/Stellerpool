@@ -2,7 +2,7 @@ import { Asset, Horizon, Networks, rpc } from '@stellar/stellar-sdk'
 
 const network = import.meta.env.VITE_STELLAR_NETWORK?.trim().toLowerCase() || 'testnet'
 if (network !== 'testnet' && network !== 'mainnet') {
-  throw new Error('VITE_STELLAR_NETWORK yalnızca testnet veya mainnet olabilir.')
+  throw new Error('VITE_STELLAR_NETWORK must be either testnet or mainnet.')
 }
 
 /** Mainnet yalnızca tanıtım ve ağ okuması içindir; fon işlemleri Testnet'e özgüdür. */
@@ -10,7 +10,7 @@ export const mainnetShowcase = network === 'mainnet'
 
 export const config = mainnetShowcase
   ? {
-      label: 'Mainnet tanıtım',
+      label: 'Mainnet showcase',
       passphrase: Networks.PUBLIC,
       horizonUrl: 'https://horizon.stellar.org',
       rpcUrl: import.meta.env.VITE_STELLAR_RPC_URL?.trim() || 'https://mainnet.sorobanrpc.com',
@@ -29,7 +29,7 @@ export const circleFaucetUrl = 'https://faucet.circle.com'
 
 export function requireTestnetDemo(): void {
   if (mainnetShowcase) {
-    throw new Error('Mainnet tanıtım sürümü fon işlemi veya cüzdan imzası kabul etmez.')
+    throw new Error('The Mainnet showcase build does not accept funds transactions or wallet signatures.')
   }
 }
 

@@ -146,7 +146,7 @@ onBeforeUnmount(() => {
   token = null
 })
 
-// --- Anlatım simülasyonu (bağlantısız) -------------------------------------------------------
+// --- Illustrative simulation (offline) -------------------------------------------------------
 type Direction = 'deposit' | 'withdraw'
 
 const direction = ref<Direction>('deposit')
@@ -154,16 +154,16 @@ const step = ref(0)
 
 const flows = {
   deposit: [
-    { title: 'TRY yatırma talebi', text: 'Gerçek bir hizmette kullanıcı yetkili anchor üzerinden talep açar. Bu ekranda talep gönderilmez.' },
-    { title: 'Banka hareketi doğrulaması', text: 'Gerçek hizmette ödemeyi sağlayıcı doğrular. Bu simülasyon banka hesabına bağlanmaz.' },
-    { title: 'Stellar varlığının gönderimi', text: 'Gerçek hizmette ihraççı varlığı cüzdana aktarabilir. Burada token basılmaz veya transfer edilmez.' },
-    { title: 'Örnek akış bitti', text: 'Adımlar yalnızca anlatım içindir. TRY veya Stellar bakiyesi oluşmadı ve değişmedi.' },
+    { title: 'TRY deposit request', text: 'In a real service the user opens a request through an authorized anchor. No request is sent on this screen.' },
+    { title: 'Bank transfer verification', text: 'In a real service the provider verifies the payment. This simulation does not connect to a bank account.' },
+    { title: 'Sending the Stellar asset', text: 'In a real service the issuer can transfer the asset to the wallet. No token is minted or transferred here.' },
+    { title: 'Sample flow finished', text: 'The steps are for illustration only. No TRY or Stellar balance was created or changed.' },
   ],
   withdraw: [
-    { title: 'Varlığı çekme talebi', text: 'Gerçek bir hizmette kullanıcı yetkili anchor üzerinden çekim talebi açar. Bu ekranda talep gönderilmez.' },
-    { title: 'Varlık ve kimlik kontrolü', text: 'Gerçek hizmette sağlayıcı bakiye ve uygunluğu denetler. Bu simülasyon cüzdana bağlanmaz.' },
-    { title: 'Banka hesabına TRY ödemesi', text: 'Gerçek hizmette sağlayıcı uygun talebi banka kanalıyla sonuçlandırır. Burada ödeme emri verilmez.' },
-    { title: 'Örnek akış bitti', text: 'Adımlar yalnızca anlatım içindir. TRY veya Stellar bakiyesi oluşmadı ve değişmedi.' },
+    { title: 'Asset withdrawal request', text: 'In a real service the user opens a withdrawal request through an authorized anchor. No request is sent on this screen.' },
+    { title: 'Asset and identity check', text: 'In a real service the provider checks the balance and eligibility. This simulation does not connect to a wallet.' },
+    { title: 'TRY payment to a bank account', text: 'In a real service the provider settles an eligible request through the banking channel. No payment order is issued here.' },
+    { title: 'Sample flow finished', text: 'The steps are for illustration only. No TRY or Stellar balance was created or changed.' },
   ],
 } as const
 
@@ -185,80 +185,80 @@ function advance() {
     <div v-if="!compact" class="flex flex-wrap items-start justify-between gap-3">
       <div>
         <p class="eyebrow text-brand-700">Anchor · SEP-1 / SEP-10 / SEP-24</p>
-        <h2 :id="titleId" class="mt-1 text-2xl font-extrabold">TRY ile Stellar bağlantısı</h2>
+        <h2 :id="titleId" class="mt-1 text-2xl font-extrabold">Connecting TRY and Stellar</h2>
       </div>
       <span v-if="live" class="badge" :class="realTryAnchor ? 'bg-brand-100 text-brand-800' : 'bg-gold-100 text-amber-900'">
-        {{ usingTestAnchor ? 'Test anchor · TRY değil' : realTryAnchor ? anchorDomain : 'Test anchor · gerçek TL değil' }}
+        {{ usingTestAnchor ? 'Test anchor · not TRY' : realTryAnchor ? anchorDomain : 'Test anchor · not real TRY' }}
       </span>
-      <span v-else class="badge bg-amber-100 text-amber-900">Yalnızca simülasyon</span>
+      <span v-else class="badge bg-amber-100 text-amber-900">Simulation only</span>
     </div>
 
     <!-- CANLI AKIŞ -->
     <template v-if="live">
       <p v-if="compact" :id="titleId" class="text-sm leading-relaxed text-stone-600">
-        Bakiyeni <strong>{{ anchorDomain }}</strong> üzerinden {{ poolCode }} olarak yükle: cüzdanınla giriş imzalarsın, yatırma anchor'ın
-        kendi penceresinde yapılır ve durum burada izlenir.
+        Load your balance as {{ poolCode }} through <strong>{{ anchorDomain }}</strong>: you sign in with your wallet, the deposit happens in the anchor's
+        own window, and the status is tracked here.
         <template v-if="usingTestAnchor || (anchor && !anchor.supportsTry)">
-          <strong>Bu sağlayıcı test varlığı üretir, Türk lirası sunmaz.</strong>
+          <strong>This provider issues a test asset; it does not offer Turkish lira.</strong>
         </template>
       </p>
       <p v-else class="text-sm leading-relaxed text-stone-600">
-        Bu bölüm <strong>{{ anchorDomain }}</strong> ile gerçek anchor protokolünü çalıştırır: uç noktalar
-        <code class="font-mono">stellar.toml</code>'dan okunur, cüzdanınla giriş imzalarsın, yatırma penceresi anchor'ın
-        kendi arayüzünde açılır.
+        This section runs the real anchor protocol with <strong>{{ anchorDomain }}</strong>: the endpoints are
+        read from <code class="font-mono">stellar.toml</code>, you sign in with your wallet, and the deposit window opens in the anchor's
+        own interface.
         <template v-if="usingTestAnchor || (anchor && !anchor.supportsTry)">
-          <strong>Bu sağlayıcı test varlığı ({{ anchor?.assetCodes.join(', ') || 'USDC' }}) üretir, Türk lirası sunmaz.</strong>
-          Hackathon'un gerçek TL şartı, TRY sunan doğrulanmış bir sağlayıcı bulununca aynı akışla karşılanır.
+          <strong>This provider issues a test asset ({{ anchor?.assetCodes.join(', ') || 'USDC' }}); it does not offer Turkish lira.</strong>
+          The hackathon's real-TRY requirement will be met with the same flow once a verified provider offering TRY is found.
         </template>
       </p>
 
       <div v-if="loadingAnchor" class="skeleton h-24 rounded-2xl" aria-live="polite" />
 
       <div v-else-if="anchorError" role="alert" class="space-y-2 rounded-2xl bg-rose-50 p-4 text-sm text-rose-800">
-        <p>Anchor'a ulaşılamadı: {{ anchorError }}</p>
+        <p>The anchor could not be reached: {{ anchorError }}</p>
         <button type="button" class="btn-secondary !min-h-10" @click="loadAnchor">Tekrar dene</button>
       </div>
 
       <template v-else-if="anchor">
         <p v-if="compact && !depositAssets.length" role="status" class="rounded-2xl bg-gold-100/80 p-3 text-sm text-amber-950">
-          Bu anchor havuzun varlığını ({{ poolCode }}, aynı ihraççı) yatırma için sunmuyor. Bakiye yüklemek için
-          <RouterLink to="/#basla" class="font-semibold underline">kurulum sihirbazını</RouterLink> kullan.
+          This anchor does not offer the pool asset ({{ poolCode }}, same issuer) for deposits. To load a balance,
+          use the <RouterLink to="/#basla" class="font-semibold underline">setup wizard</RouterLink>.
         </p>
         <div v-if="!compact || depositAssets.length" class="flex flex-wrap items-center gap-2 text-xs">
           <span class="badge bg-sage-100 text-sage-800"><AppIcon name="check" class="!size-3.5" /> stellar.toml okundu</span>
-          <span class="badge bg-stone-100 text-stone-700">Varlıklar: {{ anchor.assetCodes.join(' · ') }}</span>
+          <span class="badge bg-stone-100 text-stone-700">Assets: {{ anchor.assetCodes.join(' · ') }}</span>
           <span class="badge" :class="anchor.supportsTry ? 'bg-sage-100 text-sage-800' : 'bg-gold-100 text-amber-900'">
-            {{ anchor.supportsTry ? 'TRY destekleniyor' : anchor.representsTry ? 'TRY temsili test varlığı · gerçek TL değil' : 'TRY yok' }}
+            {{ anchor.supportsTry ? 'TRY supported' : anchor.representsTry ? 'Test asset representing TRY · not real TRY' : 'No TRY' }}
           </span>
         </div>
 
-        <ol v-if="!compact || depositAssets.length" class="space-y-2 text-sm" aria-label="Anchor adımları">
+        <ol v-if="!compact || depositAssets.length" class="space-y-2 text-sm" aria-label="Anchor steps">
           <li class="flex items-start gap-2.5">
             <span class="mt-0.5 grid size-6 shrink-0 place-items-center rounded-full bg-sage-600 text-xs font-bold text-white">
               <AppIcon name="check" class="!size-3.5" />
             </span>
-            <span><strong>Anchor tanınır.</strong> Uç noktalar ve desteklenen varlıklar okundu.</span>
+            <span><strong>The anchor is recognized.</strong> Endpoints and supported assets were read.</span>
           </li>
           <li class="flex items-start gap-2.5">
             <span class="mt-0.5 grid size-6 shrink-0 place-items-center rounded-full text-xs font-bold text-white" :class="session ? 'bg-sage-600' : 'bg-brand-600'">
               <AppIcon v-if="session" name="check" class="!size-3.5" /><template v-else>2</template>
             </span>
-            <span><strong>Cüzdanınla giriş yaparsın.</strong> Anchor'ın gönderdiği doğrulama işlemi (challenge) uygulamada doğrulanır ve sen imzalarsın. Ücret ödenmez.</span>
+            <span><strong>You sign in with your wallet.</strong> The verification transaction (challenge) the anchor sends is validated in the app and you sign it. No fee is paid.</span>
           </li>
           <li class="flex items-start gap-2.5">
             <span class="mt-0.5 grid size-6 shrink-0 place-items-center rounded-full text-xs font-bold text-white" :class="finished && tx?.status === 'completed' ? 'bg-sage-600' : session ? 'bg-brand-600' : 'bg-stone-300'">3</span>
-            <span><strong>Anchor penceresinde işlemi tamamlarsın.</strong> Durum burada canlı izlenir.</span>
+            <span><strong>You complete the deposit in the anchor window.</strong> The status is tracked live here.</span>
           </li>
         </ol>
 
         <div v-if="!session && (!compact || depositAssets.length)" class="space-y-3 rounded-2xl bg-sand/60 p-4">
           <div class="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
             <p v-if="compact && selected" class="text-sm">
-              Yatırılacak: <strong>{{ poolCode }}</strong>
-              <span v-if="selected.minAmount || selected.maxAmount" class="text-stone-600"> · işlem başına {{ selected.minAmount ?? '—' }}–{{ selected.maxAmount ?? '—' }}</span>
+              To deposit: <strong>{{ poolCode }}</strong>
+              <span v-if="selected.minAmount || selected.maxAmount" class="text-stone-600"> · per transaction {{ selected.minAmount ?? '—' }}–{{ selected.maxAmount ?? '—' }}</span>
             </p>
             <div v-else>
-              <label class="label" :for="assetSelectId">Yatırılacak varlık</label>
+              <label class="label" :for="assetSelectId">Asset to deposit</label>
               <select :id="assetSelectId" v-model="asset" class="input">
                 <option v-for="a in depositAssets" :key="a.code" :value="a.code">
                   {{ a.code === 'native' ? 'XLM' : a.code }}{{ a.minAmount || a.maxAmount ? ` (${a.minAmount ?? '—'}–${a.maxAmount ?? '—'})` : '' }}
@@ -266,14 +266,14 @@ function advance() {
               </select>
             </div>
             <button v-if="!wallet.isConnected" type="button" class="btn-primary" :disabled="wallet.busy" @click="wallet.connect()">
-              <AppIcon name="wallet" class="!size-4" /> Önce cüzdan bağla
+              <AppIcon name="wallet" class="!size-4" /> Connect a wallet first
             </button>
             <button v-else type="button" class="btn-primary" :disabled="busy !== null || !selected" @click="begin">
-              {{ busy === 'auth' ? 'Cüzdanı onayla…' : 'Anchor ile başla' }}
+              {{ busy === 'auth' ? 'Confirm in wallet…' : 'Start with the anchor' }}
             </button>
           </div>
           <p v-if="!compact && asset && asset !== 'native'" class="text-xs text-stone-600">
-            {{ asset }} alabilmen için hesabında bu varlığa güven (trustline) olmalı. Yukarıdaki kurulum sihirbazının “güven” adımı bunu yapar.
+            To receive {{ asset }}, your account needs a trustline for this asset. The “trust” step of the setup wizard above does that.
           </p>
         </div>
 
@@ -283,31 +283,31 @@ function advance() {
             <p class="font-display font-bold">{{ tx ? (STATUS_LABELS[tx.status] ?? tx.status) : 'Durum okunuyor…' }}</p>
           </div>
           <p v-if="tx" class="text-xs text-stone-600">
-            İşlem no: <span class="font-mono">{{ tx.id.slice(0, 8) }}…</span>
-            <template v-if="tx.amountIn"> · yatırılan {{ tx.amountIn }}</template>
+            Transaction no.: <span class="font-mono">{{ tx.id.slice(0, 8) }}…</span>
+            <template v-if="tx.amountIn"> · deposited {{ tx.amountIn }}</template>
             <template v-if="tx.amountOut"> · gelen {{ tx.amountOut }}</template>
           </p>
           <div v-if="!finished" class="flex flex-wrap items-center gap-3">
             <button type="button" class="btn-primary" @click="openWindow">
-              Anchor penceresini aç <AppIcon name="external" class="!size-4" />
+              Open the anchor window <AppIcon name="external" class="!size-4" />
             </button>
             <span class="text-xs text-stone-600">
-              Pencere <strong class="font-mono">{{ session.host }}</strong> adresinde açılır<template v-if="!session.sameDomain">
-              (anchor'ın kendi arayüz sunucusu; adresi kontrol et)</template>.
+              The window opens at <strong class="font-mono">{{ session.host }}</strong><template v-if="!session.sameDomain">
+              (the anchor's own interface server; check the address)</template>.
             </span>
           </div>
           <div v-else class="flex flex-wrap items-center gap-3">
             <a v-if="wallet.address && tx?.status === 'completed'" :href="explorerAccount(wallet.address)" target="_blank" rel="noopener noreferrer" class="btn-secondary !min-h-10">
-              Bakiyeyi Stellar Expert'te gör <AppIcon name="external" class="!size-4" />
+              View the balance on Stellar Expert <AppIcon name="external" class="!size-4" />
             </a>
-            <button type="button" class="btn-secondary !min-h-10" @click="session = null; tx = null">Yeni işlem</button>
+            <button type="button" class="btn-secondary !min-h-10" @click="session = null; tx = null">New transaction</button>
           </div>
         </div>
 
         <p v-if="error" role="alert" class="rounded-2xl bg-rose-50 p-3 text-sm text-rose-800">{{ error }}</p>
         <p class="text-xs leading-relaxed text-stone-500">
-          Oturum anahtarı yalnızca bu sayfanın belleğinde tutulur. Uygulama banka bilgisi, kimlik verisi veya gizli anahtar istemez;
-          kimlik doğrulama (KYC) gerekirse anchor'ın kendi penceresinde istenir. Çekme (Stellar → TRY) akışı bu sürümde canlı değil.
+          The session key is kept only in this page's memory. The app never asks for bank details, identity data or a secret key;
+          if identity verification (KYC) is needed, it is requested in the anchor's own window. The withdrawal (Stellar → TRY) flow is not live in this version.
         </p>
       </template>
     </template>
@@ -315,21 +315,21 @@ function advance() {
     <!-- ANLATIM SİMÜLASYONU -->
     <component :is="live ? 'details' : 'div'" v-if="!compact" class="group space-y-4 rounded-2xl" :class="live ? 'border border-stone-200 p-4' : ''">
       <summary v-if="live" class="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 font-display font-bold marker:hidden [&::-webkit-details-marker]:hidden">
-        Anlatım simülasyonu (bağlantısız)
+        Illustrative simulation (offline)
         <AppIcon name="chevron" class="text-brand-600 transition-transform duration-300 group-open:rotate-180" />
       </summary>
 
       <p class="text-sm leading-relaxed text-stone-600">
-        Gerçek TRY anchor'ının nasıl işleyeceğini anlatan örnek. Kişisel bilgi istemez, ödeme talimatı veya zincir işlemi üretmez,
-        kullanılabilir bakiye oluşturmaz.
+        An example of how a real TRY anchor would work. It asks for no personal information and produces no payment instruction or chain transaction,
+        and creates no usable balance.
       </p>
 
-      <div class="flex flex-wrap gap-2" role="group" aria-label="Örnek akış yönü">
+      <div class="flex flex-wrap gap-2" role="group" aria-label="Direction of the sample flow">
         <button type="button" class="btn-secondary" :aria-pressed="direction === 'deposit'" :class="direction === 'deposit' ? '!border-brand-600 !bg-brand-50 !text-brand-900' : ''" @click="select('deposit')">
-          TRY → Stellar varlığı
+          TRY → Stellar asset
         </button>
         <button type="button" class="btn-secondary" :aria-pressed="direction === 'withdraw'" :class="direction === 'withdraw' ? '!border-brand-600 !bg-brand-50 !text-brand-900' : ''" @click="select('withdraw')">
-          Stellar varlığı → TRY
+          Stellar asset → TRY
         </button>
       </div>
 
@@ -342,13 +342,13 @@ function advance() {
             :class="n <= step + 1 ? 'bg-brand-500' : 'bg-gold-300/50'"
           />
         </div>
-        <p class="mt-3 text-xs font-semibold uppercase tracking-wide text-amber-900">Simülasyon · adım {{ step + 1 }} / 4</p>
+        <p class="mt-3 text-xs font-semibold uppercase tracking-wide text-amber-900">Simulation · step {{ step + 1 }} / 4</p>
         <h3 class="mt-2 font-semibold text-amber-950">{{ current.title }}</h3>
         <p class="mt-2 text-sm leading-relaxed text-amber-950">{{ current.text }}</p>
       </div>
 
       <button type="button" class="btn-primary" @click="advance">
-        {{ step === 3 ? 'Örneği başa al' : 'Sonraki örnek adım' }}
+        {{ step === 3 ? 'Restart the example' : 'Next example step' }}
       </button>
     </component>
   </section>

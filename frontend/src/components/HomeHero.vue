@@ -11,9 +11,9 @@ const { ledger, online } = useNetworkStatus()
 const goal = ref<SceneGoal>('home')
 const paused = ref(false)
 const options: { id: SceneGoal; title: string; icon: IconName; caption: string }[] = [
-  { id: 'home', title: 'Bir ev', icon: 'home', caption: 'Bir anahtar, ortak bir hayal.' },
-  { id: 'car', title: 'Bir araç', icon: 'car', caption: 'Birlikte çıkılan yeni bir yol.' },
-  { id: 'work', title: 'Bir iş yeri', icon: 'briefcase', caption: 'Yeni bir başlangıç için, birlikte.' },
+  { id: 'home', title: 'A home', icon: 'home', caption: 'A key, a shared dream.' },
+  { id: 'car', title: 'A car', icon: 'car', caption: 'A new road, taken together.' },
+  { id: 'work', title: 'A workplace', icon: 'briefcase', caption: 'For a new beginning, together.' },
 ]
 const selected = computed(() => options.find(option => option.id === goal.value)!)
 </script>
@@ -22,29 +22,29 @@ const selected = computed(() => options.find(option => option.id === goal.value)
   <section class="home-hero" aria-labelledby="hero-title" :class="{ 'motion-paused': paused }">
     <div class="hero-grid">
       <div class="hero-copy">
-        <div class="hero-kicker"><span class="hero-kicker-line" /> ORTAK HEDEFLER, AÇIK KURALLAR</div>
-        <h1 id="hero-title">Birlikte <br />biriktir.<br /><span>Her adımı gör.</span></h1>
-        <p class="hero-description">Bir ev, bir araç ya da yeni bir başlangıç. Tutarını ve taksidini söyle, sana uygun havuza katıl; katkıları, sırayı ve ödemeleri birlikte takip et.</p>
-        <div class="hero-actions"><a href="#basla" class="hero-primary">Birlikte başlayalım <span><AppIcon name="arrow" /></span></a><a href="#hikaye" class="hero-secondary"><span class="hero-play-icon" aria-hidden="true">▷</span> Hikâyeyi izle</a></div>
-        <div class="hero-proof"><span class="hero-avatars" aria-hidden="true"><i>A</i><i>M</i><i>Z</i><i>C</i></span><p><strong>Senin grubun. Ortak kurallarınız.</strong><span>Testnet’te keşfet · Gerçek para kullanılmaz</span></p></div>
+        <div class="hero-kicker"><span class="hero-kicker-line" /> SHARED GOALS, OPEN RULES</div>
+        <h1 id="hero-title">Save <br />together.<br /><span>See every step.</span></h1>
+        <p class="hero-description">A home, a car or a fresh start. Tell us the amount and the installment, join the pool that fits you, and follow contributions, order and payments together.</p>
+        <div class="hero-actions"><a href="#basla" class="hero-primary">Let’s start together <span><AppIcon name="arrow" /></span></a><a href="#hikaye" class="hero-secondary"><span class="hero-play-icon" aria-hidden="true">▷</span> Watch the story</a></div>
+        <div class="hero-proof"><span class="hero-avatars" aria-hidden="true"><i>A</i><i>M</i><i>Z</i><i>C</i></span><p><strong>Your group. Your shared rules.</strong><span>Explore on Testnet · No real money is used</span></p></div>
       </div>
       <div class="hero-visual">
-        <div class="hero-visual-top"><span><i /> BİRLİKTE NE İÇİN?</span><button type="button" :aria-label="paused ? '3D animasyonu oynat' : '3D animasyonu duraklat'" :aria-pressed="paused" @click="paused = !paused"><svg viewBox="0 0 16 16" aria-hidden="true"><path v-if="paused" d="m5 3 8 5-8 5Z" fill="currentColor"/><path v-else d="M5 3v10M11 3v10" stroke="currentColor" stroke-width="2"/></svg></button></div>
-        <div class="hero-goals" role="group" aria-label="3D hedefini seç"><button v-for="option in options" :key="option.id" type="button" :aria-pressed="goal === option.id" @click="goal = option.id"><AppIcon :name="option.icon" />{{ option.title }}</button></div>
+        <div class="hero-visual-top"><span><i /> TOGETHER, FOR WHAT?</span><button type="button" :aria-label="paused ? 'Play 3D animation' : 'Pause 3D animation'" :aria-pressed="paused" @click="paused = !paused"><svg viewBox="0 0 16 16" aria-hidden="true"><path v-if="paused" d="m5 3 8 5-8 5Z" fill="currentColor"/><path v-else d="M5 3v10M11 3v10" stroke="currentColor" stroke-width="2"/></svg></button></div>
+        <div class="hero-goals" role="group" aria-label="Choose the 3D goal"><button v-for="option in options" :key="option.id" type="button" :aria-pressed="goal === option.id" @click="goal = option.id"><AppIcon :name="option.icon" />{{ option.title }}</button></div>
         <div class="hero-scene-wrap">
           <div class="hero-orbit hero-orbit-one" aria-hidden="true" /><div class="hero-orbit hero-orbit-two" aria-hidden="true" />
           <span class="hero-scene-word" aria-hidden="true">birlikte.</span>
-          <Scene3D :goal="goal" :coins="4" :paused="paused" :label="`${selected.title} hedefinin çevresinde dört üyeyi temsil eden altın paralar`" />
-          <div class="hero-float-card hero-member-card"><span class="hero-float-icon"><AppIcon name="users" /></span><span><strong>4 üye</strong><small>Ortak bir hedef</small></span><span class="hero-small-check">✓</span></div>
-          <div class="hero-float-card hero-contract-card"><span class="hero-float-icon gold"><AppIcon name="lock" /></span><span><strong>Katkılar sözleşmede</strong><small>Her adım takip edilebilir</small></span></div>
+          <Scene3D :goal="goal" :coins="4" :paused="paused" :label="`Gold coins representing four members around the goal: ${selected.title}`" />
+          <div class="hero-float-card hero-member-card"><span class="hero-float-icon"><AppIcon name="users" /></span><span><strong>4 members</strong><small>One shared goal</small></span><span class="hero-small-check">✓</span></div>
+          <div class="hero-float-card hero-contract-card"><span class="hero-float-icon gold"><AppIcon name="lock" /></span><span><strong>Contributions in the contract</strong><small>Every step is traceable</small></span></div>
         </div>
-        <div class="hero-visual-bottom"><div aria-live="polite"><span>HAYALİNLE BAŞLAR</span><p>{{ selected.caption }}</p></div><span class="hero-visual-count">0{{ options.findIndex(o => o.id === goal) + 1 }}<small> / 03</small></span></div>
-        <p class="hero-demo-note">Örnek görselleştirme · Gerçek teslimat hizmeti değildir.</p>
+        <div class="hero-visual-bottom"><div aria-live="polite"><span>IT STARTS WITH YOUR DREAM</span><p>{{ selected.caption }}</p></div><span class="hero-visual-count">0{{ options.findIndex(o => o.id === goal) + 1 }}<small> / 03</small></span></div>
+        <p class="hero-demo-note">Sample visualization · Not a real delivery service.</p>
       </div>
     </div>
     <div class="hero-bottom">
-      <ol aria-label="Birlikte birikime başlangıç"><li><span>01</span> Grubunu kur</li><li><span>02</span> Kuralları onayla</li><li><span>03</span> Birlikte ilerle</li></ol>
-      <div class="hero-live"><i :class="{ offline: online === false }" /><span v-if="online === false">Ağa ulaşılamıyor</span><span v-else-if="ledger">Stellar {{ config.label }} <b>#{{ ledger.toLocaleString('tr-TR') }}</b></span><span v-else>Stellar ağına bağlanılıyor</span></div>
+      <ol aria-label="Getting started with saving together"><li><span>01</span> Form your group</li><li><span>02</span> Approve the rules</li><li><span>03</span> Progress together</li></ol>
+      <div class="hero-live"><i :class="{ offline: online === false }" /><span v-if="online === false">Network unreachable</span><span v-else-if="ledger">Stellar {{ config.label }} <b>#{{ ledger.toLocaleString('en-US') }}</b></span><span v-else>Connecting to the Stellar network</span></div>
     </div>
   </section>
 </template>
@@ -89,7 +89,7 @@ const selected = computed(() => options.find(option => option.id === goal.value)
 .hero-scene-word { position: absolute; top: 20px; left: 0; right: 0; text-align: center; font: 700 87px var(--font-display); letter-spacing: -.07em; color: #a8b68d1c; }
 .hero-orbit { position: absolute; width: 83%; height: 71%; top: 16%; left: 9%; border: 1px solid #b8c99d4d; border-radius: 50%; transform: rotate(-20deg); pointer-events: none; }
 .hero-orbit-two { transform: rotate(20deg); width: 64%; left: 18%; height: 82%; top: 9%; border-style: dashed; border-color: #b8c99d35; }
-.hero-float-card { position: absolute; display: flex; align-items: center; gap: 9px; padding: 10px 13px 10px 9px; border: 1px solid #ffffffd9; border-radius: 14px; background: #fffff3dc; backdrop-filter: blur(12px); box-shadow: 0 10px 24px -10px #55674023; animation: hero-float 9s ease-in-out infinite; pointer-events: none; }
+.hero-float-card { position: absolute; display: flex; align-items: center; gap: 9px; padding: 10px 13px 10px 9px; border: 1px solid #ffffffd9; border-radius: 14px; background: #fffff3f5; box-shadow: 0 10px 24px -10px #55674023; will-change: transform; animation: hero-float 9s ease-in-out infinite; pointer-events: none; }
 .hero-member-card { left: 4%; top: 25%; transform: rotate(-5deg); }
 .hero-contract-card { right: 2%; bottom: 14%; animation-delay: -4s; }
 .hero-float-icon { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 10px; background: #e1ecd5; color: #608354; }

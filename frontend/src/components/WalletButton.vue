@@ -16,7 +16,7 @@ const wallet = useWalletStore()
         {{ shortAddress(wallet.address) }}
       </span>
       <button type="button" class="btn-secondary !min-h-9 !px-3 !py-1.5" @click="wallet.disconnect()">
-        Çıkış
+        Disconnect
       </button>
     </template>
     <button
@@ -27,7 +27,7 @@ const wallet = useWalletStore()
       @click="wallet.connect()"
     >
       <AppIcon name="wallet" class="wallet-symbol" />
-      {{ wallet.busy ? 'Bağlanıyor…' : 'Cüzdan bağla' }}
+      {{ wallet.busy ? 'Connecting…' : 'Connect wallet' }}
     </button>
   </div>
 </template>

@@ -7,7 +7,7 @@ const emit = defineEmits<{ goto: [index: number] }>()
 </script>
 
 <template>
-  <nav aria-label="Adımlar">
+  <nav aria-label="Steps">
     <ol class="flex items-center">
       <li
         v-for="(s, i) in steps"
@@ -20,7 +20,7 @@ const emit = defineEmits<{ goto: [index: number] }>()
           class="flex min-h-11 items-center gap-2 rounded-full pr-1 text-left disabled:cursor-default"
           :disabled="i >= current"
           :aria-current="i === current ? 'step' : undefined"
-          :aria-label="`Adım ${i + 1}: ${s.label}${i < current ? ' (tamamlandı, geri dön)' : ''}`"
+          :aria-label="`Step ${i + 1}: ${s.label}${i < current ? ' (completed, go back)' : ''}`"
           @click="emit('goto', i)"
         >
           <span

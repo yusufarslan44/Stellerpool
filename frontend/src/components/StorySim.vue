@@ -8,29 +8,32 @@ import { sha256, toHex } from '@/lib/hash'
 import { illoUrl } from '@/lib/illo'
 import type { IlloName } from '@/lib/icon-data'
 
-/** Normal akışın görsel anlatımı: dört katkı, alım önerisi, iki onay ve satıcıya ödeme.
+/** Normal akışın görsel anlatımı: dört katkı, alım kaydı ve satıcıya ödeme.
  * Kişiler ve tutarlar örnektir; zincire işlem gönderilmez.
  * Her sahne kendi durumunu taşır; ileri/geri ve bölüm seçimi aynı sonucu verir.
  */
-type Phase = 'intro' | 'collect' | 'funded' | 'purchase' | 'verify' | 'pay' | 'done'
+type Phase = 'intro' | 'collect' | 'funded' | 'purchase' | 'pay' | 'done'
 
 interface Person {
   id: string
   name: string
+  /** Possessive form: Ayşe’s, Mehmet’s, Zeynep’s, Can’s. */
+  gen: string
   illo: IlloName
 }
 const PEOPLE: Person[] = [
-  { id: 'ayse', name: 'Ayşe', illo: 'ayse' },
-  { id: 'mehmet', name: 'Mehmet', illo: 'mehmet' },
-  { id: 'zeynep', name: 'Zeynep', illo: 'zeynep' },
-  { id: 'can', name: 'Can', illo: 'can' },
+  { id: 'ayse', name: 'Ayşe', gen: 'Ayşe’s', illo: 'ayse' },
+  { id: 'mehmet', name: 'Mehmet', gen: 'Mehmet’s', illo: 'mehmet' },
+  { id: 'zeynep', name: 'Zeynep', gen: 'Zeynep’s', illo: 'zeynep' },
+  { id: 'can', name: 'Can', gen: 'Can’s', illo: 'can' },
 ]
 const ALL = PEOPLE.map((p) => p.id)
-const VERIFIERS = ['A', 'B', 'C']
 const AMOUNT = 10
 const POT = AMOUNT * PEOPLE.length
-const NEEDED = 2
-const DOC = 'Örnek alım belgesi: araç, 40 birim, Örnek Galeri'
+// Plan: peşinat katılırken kontrata yatar; sıra gelince yalnızca kendi alımına eklenir (alım = havuz + alıcının peşinatı).
+const DOWN = 2
+const PAYOUT = POT + DOWN
+const DOC = `Sample purchase document: car, ${PAYOUT} units, Sample Gallery`
 
 const reduced =
   typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -39,7 +42,6 @@ const reduced =
 interface Step {
   phase: Phase
   paid?: string[]
-  approvals?: string[]
   /** Bu sahneye girilirken oynatılan para animasyonu. */
   fly?: { kind: 'in' | 'send'; ids?: string[] }
   /** Sahnenin ekranda kalma süresi (ms); anlatı metninin okunma süresine göre. */
@@ -48,17 +50,15 @@ interface Step {
 const A_M_Z = ['ayse', 'mehmet', 'zeynep']
 
 const STEPS: Step[] = [
-  { phase: 'intro', hold: 8500 },
-  { phase: 'collect', hold: 5000 },
-  { phase: 'collect', paid: ['ayse'], fly: { kind: 'in', ids: ['ayse'] }, hold: 3200 },
-  { phase: 'collect', paid: ['ayse', 'mehmet'], fly: { kind: 'in', ids: ['mehmet'] }, hold: 3200 },
-  { phase: 'collect', paid: A_M_Z, fly: { kind: 'in', ids: ['zeynep'] }, hold: 3200 },
-  { phase: 'funded', paid: ALL, fly: { kind: 'in', ids: ['can'] }, hold: 7500 },
-  { phase: 'purchase', paid: ALL, hold: 8500 },
-  { phase: 'verify', paid: ALL, hold: 6500 },
-  { phase: 'verify', paid: ALL, approvals: ['A'], hold: 4000 },
-  { phase: 'pay', paid: ALL, approvals: ['A', 'B'], hold: 7000 },
-  { phase: 'done', paid: ALL, approvals: ['A', 'B'], fly: { kind: 'send' }, hold: 12000 },
+  { phase: 'intro', hold: 3500 },
+  { phase: 'collect', hold: 2200 },
+  { phase: 'collect', paid: ['ayse'], fly: { kind: 'in', ids: ['ayse'] }, hold: 1500 },
+  { phase: 'collect', paid: ['ayse', 'mehmet'], fly: { kind: 'in', ids: ['mehmet'] }, hold: 1500 },
+  { phase: 'collect', paid: A_M_Z, fly: { kind: 'in', ids: ['zeynep'] }, hold: 1500 },
+  { phase: 'funded', paid: ALL, fly: { kind: 'in', ids: ['can'] }, hold: 2800 },
+  { phase: 'purchase', paid: ALL, hold: 3200 },
+  { phase: 'pay', paid: ALL, hold: 2800 },
+  { phase: 'done', paid: ALL, fly: { kind: 'send' }, hold: 5000 },
 ]
 
 // --- Durum ---------------------------------------------------------------------------------
@@ -72,11 +72,10 @@ const pageVisible = ref(true)
 const step = computed(() => STEPS[index.value]!)
 const phase = computed(() => step.value.phase)
 const paid = computed(() => step.value.paid ?? [])
-const approvals = computed(() => step.value.approvals ?? [])
 const rulesAccepted = computed(() => index.value > 0)
 const sent = computed(() => phase.value === 'done')
 const docHash = ref<string | null>(null)
-const showHash = computed(() => (['verify', 'pay', 'done'] as Phase[]).includes(phase.value))
+const showHash = computed(() => (['purchase', 'pay', 'done'] as Phase[]).includes(phase.value))
 
 const stage = ref<HTMLElement | null>(null)
 const jarEl = ref<HTMLElement | null>(null)
@@ -89,14 +88,13 @@ const recipient = 'ayse'
 const incoming = computed(() => step.value.fly?.kind === 'in' ? step.value.fly.ids?.[0] : undefined)
 const balance = computed(() => sent.value ? 0 : funded.value * AMOUNT)
 
-const CHAPTERS = ['Kurallar', 'Katkı', 'Alım', 'Onay', 'Gönderim']
+const CHAPTERS = ['Rules', 'Contribution', 'Purchase', 'Payment']
 function chapterOf(p: Phase): number {
   switch (p) {
     case 'intro': return 0
     case 'collect': case 'funded': return 1
     case 'purchase': return 2
-    case 'verify': case 'pay': return 3
-    default: return 4
+    case 'pay': case 'done': return 3
   }
 }
 const chapter = computed(() => chapterOf(phase.value))
@@ -134,7 +132,7 @@ function flyCoin(from: HTMLElement | null, to: HTMLElement | null, delay = 0) {
       { transform: `translate(${(x0 + x1) / 2}px, ${Math.min(y0, y1) - 46}px) scale(1.15)`, opacity: 1, offset: 0.5 },
       { transform: `translate(${x1}px, ${y1}px) scale(0.7)`, opacity: 0.9 },
     ],
-    { duration: 1500, delay, easing: 'cubic-bezier(0.3, 0.7, 0.3, 1)', fill: 'both' },
+    { duration: 1000, delay, easing: 'cubic-bezier(0.3, 0.7, 0.3, 1)', fill: 'both' },
   )
   flights.set(anim, coin)
   anim.onfinish = () => { coin.remove(); flights.delete(anim) }
@@ -145,7 +143,7 @@ function playFx(s: Step) {
   const fly = s.fly
   if (!fly) return
   if (fly.kind === 'in') fly.ids?.forEach((id) => flyCoin(personEls[id] ?? null, jarEl.value))
-  else for (let i = 0; i < PEOPLE.length; i++) flyCoin(jarEl.value, storeEl.value, i * 240)
+  else for (let i = 0; i < PEOPLE.length; i++) flyCoin(jarEl.value, storeEl.value, i * 150)
 }
 
 // --- Oynatıcı ------------------------------------------------------------------------------
@@ -156,7 +154,8 @@ let last = 0
 function goTo(i: number, animate: boolean, hold = false) {
   clearFlights()
   index.value = (i + STEPS.length) % STEPS.length
-  elapsed.value = hold ? -1500 : 0
+  elapsed.value = hold ? -1000 : 0
+  void nextTick(paintBar)
   const selectedIndex = index.value
   if (animate) void nextTick(() => { if (index.value === selectedIndex) playFx(STEPS[selectedIndex]!) })
 }
@@ -171,6 +170,7 @@ function tick(now: number) {
   elapsed.value += Math.min(now - last, 100)
   last = now
   if (elapsed.value >= step.value.hold) goTo(index.value + 1, true)
+  paintBar()
   raf = requestAnimationFrame(tick)
 }
 watch(
@@ -186,6 +186,15 @@ watch(
   { immediate: true },
 )
 
+const barEl = ref<HTMLElement | null>(null)
+function fraction(): number {
+  if (sent.value) return 1
+  const within = Math.max(0, Math.min(1, elapsed.value / step.value.hold))
+  return (index.value + within) / (STEPS.length - 1)
+}
+function paintBar() {
+  if (barEl.value) barEl.value.style.transform = `scaleX(${Math.min(1, fraction())})`
+}
 const progress = computed(() => {
   if (sent.value) return 100
   const within = Math.max(0, Math.min(1, elapsed.value / step.value.hold))
@@ -214,25 +223,21 @@ onBeforeUnmount(() => {
 const story = computed<{ title: string; text: string }>(() => {
   switch (phase.value) {
     case 'intro':
-      return { title: 'Dört arkadaş. Ortak bir hedef.', text: `Ayşe, Mehmet, Zeynep ve Can aynı planı onaylıyor: kişi başı ${AMOUNT} birim, tur başına ${POT} birim. Bu örnek turda sıra Ayşe’de. Birlikte nasıl ilerlediklerini izle.` }
+      return { title: 'Four friends. One shared goal.', text: `Ayşe, Mehmet, Zeynep and Can agree on a plan: ${AMOUNT} units each per round, ${PEOPLE.length} rounds. Round one is Ayşe’s.` }
     case 'collect': {
       const person = PEOPLE.find(p => p.id === incoming.value)
       return person
-        ? { title: `${person.name}’nin katkısı havuza katıldı`, text: `${person.name} kendi ${AMOUNT} birimini sözleşmeye yatırdı. ${funded.value} arkadaşın katkısı birleşti; havuzda şimdi ${balance.value} birim var. Sıradaki katkıyla hedefe bir adım daha yaklaşılıyor.` }
-        : { title: 'Küçük katkılar, ortak bir tutar', text: `Kurallar onaylandı. Şimdi dört arkadaş sırayla ${AMOUNT}’ar birim yatırıyor. Altın paraları takip et: her katkı doğrudan ortak sözleşmeye gidiyor.` }
+        ? { title: `${person.gen} contribution joined the pool`, text: `${person.name} deposits ${AMOUNT} units. The pool now holds ${balance.value}.` }
+        : { title: 'Small contributions, one shared amount', text: `Each friend deposits ${AMOUNT} units into the shared contract.` }
     }
     case 'funded':
-      return { title: '4 katkı birleşti. 40 birim hazır!', text: `Can da katkısını yatırdı. Herkesin ${AMOUNT} birimi sözleşmede birleşti; Ayşe’nin örnek alımı için gereken ${POT} birim tamamlandı. Şimdi alımın ayrıntıları paylaşılabilir.` }
+      return { title: '4 contributions combined. 40 units ready!', text: `Can pays too. The ${POT}-unit pool is complete, and it is Ayşe’s turn to register her purchase.` }
     case 'purchase':
-      return { title: 'Ayşe alımını öneriyor', text: `Ayşe, Örnek Galeri’yi ve ${POT} birimlik araç alım belgesini paylaşıyor. Tutar sözleşmede bekliyor; sırada belgenin doğrulanması var.` }
-    case 'verify':
-      return approvals.value.length
-        ? { title: 'İlk onay geldi. Bir onay daha!', text: `Doğrulayıcı A belgeyi kontrol edip onayladı. Ödeme için gereken ${NEEDED} onayın ${approvals.value.length} tanesi tamam. Her onay, aynı alım önerisine veriliyor.` }
-        : { title: 'Alım, birlikte doğrulanıyor', text: `Üç doğrulayıcı alım belgesini kontrol ediyor. Ödeme için en az ${NEEDED} onay gerekiyor. Belgenin parmak izi, herkesin aynı öneriyi kontrol etmesini sağlıyor.` }
+      return { title: 'Ayşe proposes her purchase', text: `Ayşe registers Sample Gallery and the document digest on-chain. Purchase: ${POT} pool + ${DOWN} her down payment = ${PAYOUT} units.` }
     case 'pay':
-      return { title: 'İki onay. Ödemeye hazır.', text: `A ve B onayladı; gereken eşik tamamlandı. ${POT} birim, Ayşe’nin önerdiği demo satıcısına gönderilebilir. Gönderimi başlatmak için tek bir yöneticiye bağlı kalınmaz.` }
+      return { title: 'Purchase recorded. Ready to pay.', text: `${PAYOUT} units can go only to this seller. Anyone can trigger the payment; no administrator is needed.` }
     case 'done':
-      return { title: 'İlk tur tamam. Sıradaki Mehmet!', text: `${POT} birim doğrudan Örnek Galeri’ye ödendi; Ayşe’nin örnek alımı tamamlandı. Sonraki turda dört arkadaş yine eşit katkı yapacak, bu kez sıra Mehmet’te olacak.` }
+      return { title: 'Round one done. Mehmet is next!', text: `${PAYOUT} units were paid straight to Sample Gallery. Next round, everyone contributes again and it is Mehmet’s turn.` }
   }
 })
 
@@ -242,8 +247,8 @@ const shortHash = computed(() =>
 
 function statusOf(id: string): { label: string; cls: string } {
   return paid.value.includes(id)
-    ? { label: `+${AMOUNT} birim ✓`, cls: 'bg-sage-100 text-sage-800' }
-    : { label: 'Katkı bekleniyor', cls: 'bg-stone-100 text-stone-700' }
+    ? { label: `+${AMOUNT} units ✓`, cls: 'bg-sage-100 text-sage-800' }
+    : { label: 'Awaiting contribution', cls: 'bg-stone-100 text-stone-700' }
 }
 
 </script>
@@ -252,7 +257,7 @@ function statusOf(id: string): { label: string; cls: string } {
   <div class="story-board card overflow-hidden !p-0" :class="{ 'story-complete': sent, 'story-paused': !playing }">
     <!-- Başlık: bölüm çubuğu + dürüstlük etiketi -->
     <div class="flex flex-wrap items-center justify-between gap-3 border-b border-stone-100 px-5 py-4 sm:px-7">
-      <ol class="flex flex-wrap items-center gap-1.5 text-xs font-semibold" aria-label="Hikâye bölümleri">
+      <ol class="flex flex-wrap items-center gap-1.5 text-xs font-semibold" aria-label="Story chapters">
         <li v-for="(c, i) in CHAPTERS" :key="c" class="flex items-center gap-1.5">
           <button
             type="button"
@@ -267,8 +272,8 @@ function statusOf(id: string): { label: string; cls: string } {
         </li>
       </ol>
       <div class="flex flex-wrap items-center gap-2">
-        <span class="badge bg-brand-50 text-brand-800 ring-1 ring-brand-100">Örnek tur 1 / 4</span>
-        <span class="badge bg-gold-100 text-amber-900">Örnek hikâye · gerçek işlem değil</span>
+        <span class="badge bg-brand-50 text-brand-800 ring-1 ring-brand-100">Sample round 1 / 4</span>
+        <span class="badge bg-gold-100 text-amber-900">Sample story · not a real transaction</span>
       </div>
     </div>
 
@@ -286,18 +291,18 @@ function statusOf(id: string): { label: string; cls: string } {
       </div>
     </div>
 
-    <div class="story-scoreboard" aria-label="Tur özeti">
-      <div><span>ORTAK HEDEF</span><strong><AppIcon name="car" /> Ayşe’nin alımı</strong></div>
-      <div><span>KATKILAR</span><strong :key="funded" class="pop">{{ funded }}<small> / {{ PEOPLE.length }} kişi</small></strong></div>
-      <div><span>{{ sent ? 'SATICIYA ÖDENDİ' : 'SÖZLEŞMEDE' }}</span><strong :key="`${balance}-${sent}`" class="pop">{{ sent ? POT : balance }}<small> birim</small></strong></div>
-      <div><span>DOĞRULAMA</span><strong :key="approvals.length" class="pop">{{ approvals.length }}<small> / {{ NEEDED }} onay</small></strong></div>
+    <div class="story-scoreboard" aria-label="Round summary">
+      <div><span>SHARED GOAL</span><strong><AppIcon name="car" /> Ayşe’s purchase</strong></div>
+      <div><span>CONTRIBUTIONS</span><strong :key="funded" class="pop">{{ funded }}<small> / {{ PEOPLE.length }} people</small></strong></div>
+      <div><span>{{ sent ? 'PAID TO SELLER' : 'IN THE CONTRACT' }}</span><strong :key="`${balance}-${sent}`" class="pop">{{ sent ? PAYOUT : balance }}<small> units</small></strong></div>
+      <div><span>PURCHASE RECORD</span><strong class="pop"><small>{{ chapter >= 2 ? 'Document digest recorded' : 'Pending' }}</small></strong></div>
     </div>
 
     <!-- Sahne -->
     <div ref="stage" class="story-stage relative grid gap-5 px-5 py-6 sm:px-7 md:grid-cols-[1.25fr_1fr_1fr]">
       <!-- Arkadaşlar -->
       <div class="order-2 md:order-1">
-        <p class="eyebrow mb-2 text-stone-600">Arkadaşlar</p>
+        <p class="eyebrow mb-2 text-stone-600">Friends</p>
         <div class="grid grid-cols-2 gap-2.5">
           <div
             v-for="p in PEOPLE"
@@ -315,7 +320,7 @@ function statusOf(id: string): { label: string; cls: string } {
             <span class="font-display text-sm font-bold">{{ p.name }}</span>
             <span class="badge !px-2 !py-0.5 text-[11px]" :class="statusOf(p.id).cls">{{ statusOf(p.id).label }}</span>
             <span v-if="p.id === recipient" class="absolute -top-2.5 left-2 flex items-center gap-1 rounded-full bg-gold-400 px-2 py-0.5 text-[10px] font-bold text-ink">
-              {{ sent ? 'Alımı ödendi' : 'Bu tur sırası' }}
+              {{ sent ? 'Purchase paid' : 'This round’s turn' }}
               <Illo v-if="sent" name="car" :size="16" class="pop" />
             </span>
           </div>
@@ -334,55 +339,41 @@ function statusOf(id: string): { label: string; cls: string } {
             />
             <Illo name="memo" :size="52" :class="rulesAccepted ? 'pop' : ''" />
           </span>
-          <span class="mt-1 text-xs font-bold">Grup kuralları</span>
+          <span class="mt-1 text-xs font-bold">Group rules</span>
           <span class="badge mt-0.5 text-[11px]" :class="rulesAccepted ? 'bg-sage-100 text-sage-800' : 'bg-stone-100 text-stone-600'">
-            {{ rulesAccepted ? 'Kabul edildi' : 'Onay bekliyor' }}
+            {{ rulesAccepted ? 'Accepted' : 'Awaiting approval' }}
           </span>
         </div>
 
         <div class="flex flex-col items-center gap-2">
         <div :ref="(el) => (jarEl = el as HTMLElement | null)" class="relative">
           <div class="story-pool-scene" :class="{ 'pool-ready': funded === PEOPLE.length && !sent }">
-            <Scene3D :coins="PEOPLE.length" :filled="sent ? 0 : funded" :paused="!playing" :label="`Havuz: ${sent ? 0 : funded * AMOUNT} / ${POT} birim; ${sent ? 0 : funded} üyenin katkısı sözleşmede`" />
+            <Scene3D :coins="PEOPLE.length" :filled="sent ? 0 : funded" :paused="!playing" :label="`Pool: ${sent ? 0 : funded * AMOUNT} / ${POT} units; ${sent ? 0 : funded} members’ contributions are in the contract`" />
           </div>
           <Illo v-if="funded === PEOPLE.length && !sent" name="lock" :size="34" class="pop absolute right-4 bottom-3" />
         </div>
         <p class="text-center text-sm font-bold tabular-nums">
-          {{ sent ? 0 : funded * AMOUNT }} / {{ POT }} birim
-          <span class="block text-xs font-normal text-stone-600">{{ sent ? `${POT} birim satıcıya gitti` : 'sözleşmede' }}</span>
+          {{ sent ? 0 : funded * AMOUNT }} / {{ POT }} units
+          <span class="block text-xs font-normal text-stone-600">{{ sent ? `${PAYOUT} units went to the seller` : 'in the contract' }}</span>
         </p>
         </div>
       </div>
 
-      <!-- Doğrulayıcılar + satıcı -->
+      <!-- Alım kaydı ve kayıtlı demo satıcısı -->
       <div class="order-3 flex flex-col gap-4">
-        <div>
-          <p class="eyebrow mb-2 text-stone-600">Doğrulayıcılar</p>
-          <div class="grid grid-cols-3 gap-2">
-            <div
-              v-for="v in VERIFIERS"
-              :key="v"
-              class="story-verifier flex flex-col items-center gap-1 rounded-2xl border-2 bg-white p-2 text-center transition-[border-color] duration-300"
-              :class="approvals.includes(v) ? 'is-approved border-sage-500 bg-sage-50' : 'border-stone-200 opacity-80'"
-              :aria-label="`Doğrulayıcı ${v}: ${approvals.includes(v) ? 'onayladı' : 'bekliyor'}`"
-            >
-              <Illo :name="approvals.includes(v) ? 'check' : 'magnifier'" :size="34" />
-              <span class="text-[11px] font-bold">{{ v }}</span>
-              <span class="text-[10px]" :class="approvals.includes(v) ? 'font-bold text-sage-800' : 'text-stone-500'">
-                {{ approvals.includes(v) ? 'Onayladı ✓' : 'Bekliyor' }}
-              </span>
-            </div>
-          </div>
+        <div class="rounded-2xl border border-stone-200 bg-white p-3">
+          <p class="eyebrow mb-2 text-stone-600">Purchase record</p>
+          <p class="text-sm text-stone-700">The recipient registers the demo seller and the document digest. Purchase = pool {{ POT }} + recipient’s down payment {{ DOWN }} = {{ PAYOUT }} units.</p>
           <p v-if="shortHash" class="pop mt-2 break-all rounded-xl bg-sand/70 p-2 font-mono text-[11px] text-stone-700">
-            Belge özeti (SHA-256): {{ shortHash }}
+            Document digest (SHA-256): {{ shortHash }}
           </p>
         </div>
 
         <div :ref="(el) => (storeEl = el as HTMLElement | null)" class="story-store mt-auto flex items-center gap-3 rounded-2xl bg-sand/60 p-3" :class="{ 'is-paid': sent, 'is-proposed': chapter >= 2 }">
           <Illo name="store" :size="48" :class="sent ? 'pop' : ''" />
           <div class="min-w-0">
-            <p class="text-sm font-bold">Örnek Galeri</p>
-            <p class="text-xs text-stone-600">{{ sent ? `${POT} birim aldı ✓` : chapter >= 2 ? 'Ayşe’nin önerdiği satıcı' : 'Satıcı (önerilecek)' }}</p>
+            <p class="text-sm font-bold">Sample Gallery</p>
+            <p class="text-xs text-stone-600">{{ sent ? `Received ${PAYOUT} units ✓` : chapter >= 2 ? 'The seller Ayşe proposed' : 'Seller (to be proposed)' }}</p>
           </div>
         </div>
       </div>
@@ -391,7 +382,7 @@ function statusOf(id: string): { label: string; cls: string } {
     <Transition name="story-finale">
       <div v-if="sent" class="story-finale" :aria-live="playing ? 'off' : 'polite'">
         <div class="finale-art" aria-hidden="true"><span /><Illo name="car" :size="78" /></div>
-        <div class="finale-copy"><span>BİRLİKTE TAMAMLANDI</span><strong>{{ POT }} birim, doğrudan satıcıya.</strong><p>Ayşe’nin örnek alımı ödendi. Yeni turda sıra Mehmet’te.</p><div class="finale-order"><span v-for="(person, i) in PEOPLE" :key="person.id" :class="{ completed: i === 0, next: i === 1 }">{{ person.name }} <small>{{ i === 0 ? '✓' : i === 1 ? 'Sıradaki' : `0${i + 1}` }}</small></span></div></div>
+        <div class="finale-copy"><span>COMPLETED TOGETHER</span><strong>{{ PAYOUT }} units, straight to the seller.</strong><p>Ayşe’s sample purchase is paid. In the new round it is Mehmet’s turn.</p><div class="finale-order"><span v-for="(person, i) in PEOPLE" :key="person.id" :class="{ completed: i === 0, next: i === 1 }">{{ person.name }} <small>{{ i === 0 ? '✓' : i === 1 ? 'Next' : `0${i + 1}` }}</small></span></div></div>
       </div>
     </Transition>
 
@@ -400,43 +391,43 @@ function statusOf(id: string): { label: string; cls: string } {
       <div
         class="h-1.5 overflow-hidden rounded-full bg-stone-200"
         role="progressbar"
-        aria-label="Hikâye ilerlemesi"
+        aria-label="Story progress"
         aria-valuemin="0"
         aria-valuemax="100"
         :aria-valuenow="progress"
       >
-        <div class="h-full rounded-full bg-gradient-to-r from-brand-500 to-gold-400 transition-[width] duration-200" :style="{ width: `${progress}%` }" />
+        <div ref="barEl" class="h-full w-full origin-left rounded-full bg-gradient-to-r from-brand-500 to-gold-400 will-change-transform" style="transform: scaleX(0)" />
       </div>
       <div class="flex flex-wrap items-center gap-2">
         <button
           type="button"
           class="btn-primary !min-h-10"
-          :aria-label="autoplay ? 'Hikâyeyi duraklat' : 'Hikâyeyi oynat'"
+          :aria-label="autoplay ? 'Pause the story' : 'Play the story'"
           @click="togglePlay"
         >
           <svg v-if="autoplay" viewBox="0 0 24 24" class="size-4" fill="currentColor" aria-hidden="true"><path d="M6 5h4v14H6zM14 5h4v14h-4z" /></svg>
           <svg v-else viewBox="0 0 24 24" class="size-4" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg>
-          {{ autoplay ? 'Duraklat' : 'Oynat' }}
+          {{ autoplay ? 'Pause' : 'Play' }}
         </button>
-        <button type="button" class="btn-secondary !min-h-10" aria-label="Önceki sahne" @click="prev">
+        <button type="button" class="btn-secondary !min-h-10" aria-label="Previous scene" @click="prev">
           <AppIcon name="back" class="!size-4" />
         </button>
-        <button type="button" class="btn-secondary !min-h-10" aria-label="Sonraki sahne" @click="next">
+        <button type="button" class="btn-secondary !min-h-10" aria-label="Next scene" @click="next">
           <AppIcon name="arrow" class="!size-4" />
         </button>
         <button type="button" class="btn-secondary !min-h-10" @click="restart">
-          <AppIcon name="refresh" class="!size-4" /> Baştan
+          <AppIcon name="refresh" class="!size-4" /> Restart
         </button>
-        <span class="text-xs tabular-nums text-stone-500">Sahne {{ index + 1 }} / {{ STEPS.length }}</span>
+        <span class="text-xs tabular-nums text-stone-500">Scene {{ index + 1 }} / {{ STEPS.length }}</span>
         <RouterLink to="/join" class="btn-secondary !min-h-10 ml-auto">
-          Havuza katıl <AppIcon name="arrow" class="!size-4" />
+          Join a pool <AppIcon name="arrow" class="!size-4" />
         </RouterLink>
       </div>
     </div>
 
     <p class="border-t border-stone-100 bg-sand/40 px-5 py-3 text-xs leading-relaxed text-stone-600 sm:px-7">
-      Bu bir anlatım örneğidir: kişiler, tutarlar ve satıcı kurgusaldır, zincire hiçbir işlem gitmez. Kurallar,
-      Testnet’te yayındaki havuz kontratının kurallarını yansıtır.
+      This is an illustrative example: the people, amounts and seller are fictional, and no transaction reaches the chain. The rules
+      reflect those of the pool contract published on Testnet.
     </p>
   </div>
 </template>
@@ -455,8 +446,6 @@ function statusOf(id: string): { label: string; cls: string } {
 .story-board .is-contributing { animation: contribution-highlight 3s ease-out both; }
 .pool-ready::after { content: ''; position: absolute; inset: 14%; border: 1px solid #bf9a4380; border-radius: 50%; animation: pool-halo 4s ease-in-out infinite; pointer-events: none; }
 .story-pool-scene { position: relative; }
-.story-verifier { transition: background .5s, border-color .5s, transform .5s; }
-.story-verifier.is-approved { background: #e9f3dc; transform: translateY(-3px); box-shadow: 0 4px 0 #d6e4c8; }
 .story-store { transition: background .5s, box-shadow .5s; border: 1px solid transparent; }
 .story-store.is-proposed { border-color: #d7dfc1; }
 .story-store.is-paid { background: #dfedcc; border-color: #a9c58c; box-shadow: 0 8px 25px -15px #40713666; }

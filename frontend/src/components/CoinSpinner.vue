@@ -12,7 +12,7 @@ const LAYERS = 8
     class="inline-block"
     :style="{ width: `${size}px`, height: `${size}px`, perspective: `${size * 12}px` }"
     role="status"
-    aria-label="Yükleniyor"
+    aria-label="Loading"
   >
     <span
       class="relative block size-full"

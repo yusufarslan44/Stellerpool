@@ -13,56 +13,57 @@ interface HowStep {
 const steps: HowStep[] = [
   {
     icon: 'users',
-    title: 'Havuza katıl',
-    short: 'Tutarı ve taksidi söyle, uygun havuza yönlendirilirsin.',
+    title: 'Join a pool',
+    short: 'Tell us the amount and installment; you are routed to a matching pool.',
     detail:
-      'Toplam bedeli, peşinatı ve ödeyebileceğin taksidi girersin; kişi sayısı ve vade otomatik çıkar. Aynı plandaki açık bir havuza katılırsın, yoksa senin için yeni bir havuz açılır. Herkes aynı tutarı öder ve herkes bir kez alır.',
-    who: 'Sen',
+      'You enter the total price, the down payment and the installment you can afford; the number of people and the term are worked out automatically. You join an open pool with the same plan, or a new pool is opened for you. Everyone pays the same amount and everyone receives once.',
+    who: 'You',
   },
   {
     icon: 'users',
-    title: 'Grup dolar',
-    short: 'Kapalı grup birlikte karar verir.',
+    title: 'The group fills',
+    short: 'The down payment is paid on joining; the order is set when the group is full.',
     detail:
-      'Aynı plandaki üyeler cüzdanlarıyla katılır. Herkes sırayı, katkı tutarını, gecikme ve durma kurallarını görür.',
-    who: 'Üyeler',
+      'Members with the same plan join with their wallets and deposit their down payments into the contract. When the group is full, the join order becomes the delivery order (there is no order in a draw). If the group does not fill within the setup period, the pool is cancelled and the down payments are refunded.',
+    who: 'Members',
   },
   {
     icon: 'lock',
-    title: 'Kurallar kilitlenir',
-    short: 'Sıra ve doğrulayıcılar herkesçe onaylanır.',
+    title: 'Rules lock in',
+    short: 'The monthly installment and delivery method are approved by everyone.',
     detail:
-      'Sıra ve doğrulayıcılar belirlenir. Üyeler aynı sürümü onaylamadan havuz başlamaz. Başladıktan sonra sıra kimse tarafından değiştirilemez.',
-    who: 'Herkes',
+      'In fixed order the join order is recorded automatically; in a draw the recipient is chosen every round. The pool does not start until members approve the same installment and schedule terms.',
+    who: 'Everyone',
   },
   {
     icon: 'wallet',
-    title: 'Herkes öder',
-    short: 'Para bir kişide değil, sözleşmede durur.',
+    title: 'Everyone pays',
+    short: 'The money sits in the contract, not with a person.',
     detail:
-      'Her turda herkes aynı katkıyı sözleşmeye yatırır. Ödemeyen olursa ek süre başlar; süre bitince yalnızca henüz satıcıya ödenmemiş turun katkıları iade edilebilir.',
-    who: 'Üyeler',
+      'Every round everyone deposits the same contribution into the contract. Once all are in, the recipient is known; in a draw it is drawn by a transaction anyone can call. If someone does not pay, a grace period starts; when it ends, only that round’s contributions and unspent down payments are refunded, and earlier rounds cannot be recovered.',
+    who: 'Members',
   },
   {
     icon: 'receipt',
-    title: 'Satıcıya ödenir',
-    short: 'Tutar sıradaki kişiye değil, satıcıya gider.',
+    title: 'The seller is paid',
+    short: 'The amount goes to the seller, not to the person whose turn it is.',
     detail:
-      'Sıradaki üye satıcıyı ve alım belgesini önerir, doğrulayıcılar onaylar. Sonra tur tutarı doğrudan satıcıya gider; kimse fonu serbestçe çekemez.',
-    who: 'Sıradaki üye ve doğrulayıcılar',
+      'The recipient registers the demo seller recorded in the pool and the purchase-document digest. The amount is the pool plus the recipient’s own down payment and goes straight to that seller; anyone can trigger the payment, and nobody can freely withdraw the funds. If nothing is registered within the purchase period, the round stops and refunds begin.',
+    who: 'Recipient',
   },
 ]
 
 const stageNotes = [
-  ['Birlikte başlar', 'Eşit katkı · ortak hedef'],
-  ['Grup tamam', 'Herkes kuralları görür'],
-  ['Herkes onaylar', 'Aynı kurallar · sabit sıra'],
-  ['Katkılar birleşir', 'Her tur · eşit ödeme'],
-  ['Hedefe ulaşılır', 'Onaylı belge · doğrudan ödeme'],
+  ['Starting together', 'Equal contributions · shared goal'],
+  ['Group complete', 'Down payment paid · order set'],
+  ['Everyone approves', 'Same installment · monthly schedule'],
+  ['Contributions combine', 'Every round · equal payment'],
+  ['Goal reached', 'Purchase record · direct payment'],
 ]
 const section = ref<HTMLElement | null>(null)
 const active = ref(0)
-const progress = ref(0)
+// Çubuk her karede güncellenir; reaktif tutulursa tüm bileşen saniyede 60 kez yeniden çizilir. DOM'a doğrudan yazılır.
+let progress = 0
 const autoplay = ref(true)
 const reduced = ref(false)
 const visible = ref(false)
@@ -83,22 +84,30 @@ let motion: MediaQueryList | undefined
 function choose(index: number) {
   active.value = (index + steps.length) % steps.length
   // Elle seçim anlatımı kapatmaz; adım biraz daha bekler, sonra otomatik devam eder.
-  progress.value = HOLD
+  progress = HOLD
+  paintProgress()
 }
 function togglePlay() {
   autoplay.value = !autoplay.value
   // Açık bir oynat eylemi klavye odağında bile hemen sürdürür.
   focused.value = false
 }
+function paintProgress() {
+  const bar = section.value?.querySelector<HTMLElement>('.how-step-progress')
+  if (bar) bar.style.transform = `scaleX(${Math.max(0, Math.min(1, progress))})`
+}
 function tick(now: number) {
-  progress.value += Math.min(now - last, 100) / duration
+  progress += Math.min(now - last, 100) / duration
   last = now
-  if (progress.value >= 1) {
-    progress.value = 0
+  if (progress >= 1) {
+    progress = 0
     active.value = (active.value + 1) % steps.length
   }
+  paintProgress()
   raf = requestAnimationFrame(tick)
 }
+// Adım değişince yeni çubuk DOM'a girer; ilk boyamayı güncel değerle yap.
+watch(active, paintProgress, { flush: 'post' })
 watch(
   playing,
   (play) => {
@@ -138,15 +147,15 @@ onBeforeUnmount(() => {
 <template>
   <section id="nasil" ref="section" class="how-section scroll-mt-28" aria-labelledby="nasil-baslik">
     <header v-reveal class="how-heading">
-      <p class="eyebrow text-brand-700"><span class="how-eyebrow-dot" /> Adım adım</p>
-      <h2 id="nasil-baslik" class="mt-3 text-4xl font-extrabold sm:text-5xl">5 adımda nasıl çalışır?</h2>
-      <p class="mt-4 text-stone-600">Ortak bir hedeften ilk ödemeye. Her adımda kimin ne yaptığını keşfet.</p>
+      <p class="eyebrow text-brand-700"><span class="how-eyebrow-dot" /> Step by step</p>
+      <h2 id="nasil-baslik" class="mt-3 text-4xl font-extrabold sm:text-5xl">How it works in 5 steps</h2>
+      <p class="mt-4 text-stone-600">From a shared goal to the first payment. See who does what at every step.</p>
     </header>
 
     <div v-reveal class="how-layout" @focusin="focused = ($event.target as HTMLElement).matches(':focus-visible')" @focusout="leaveFocus">
       <div class="how-steps">
-        <div class="how-list-heading"><span>Birlikte, adım adım</span><span>01 — 05</span></div>
-        <ol class="how-list" aria-label="Havuzun işleyiş adımları">
+        <div class="how-list-heading"><span>Together, step by step</span><span>01 — 05</span></div>
+        <ol class="how-list" aria-label="Steps of how a pool works">
           <li v-for="(step, index) in steps" :key="step.title" :class="{ 'is-active': active === index, 'is-past': active > index }">
             <button type="button" class="how-step" :aria-current="active === index ? 'step' : undefined" aria-controls="how-detail" @click="choose(index)">
               <span class="how-step-number">{{ String(index + 1).padStart(2, '0') }}</span>
@@ -156,22 +165,22 @@ onBeforeUnmount(() => {
                 <span class="how-step-short">{{ step.short }}</span>
               </span>
               <span class="how-step-icon"><AppIcon :name="step.icon" /></span>
-              <span v-if="active === index" class="how-step-progress" :style="{ transform: `scaleX(${Math.max(0, progress)})` }" />
+              <span v-if="active === index" class="how-step-progress" />
             </button>
           </li>
         </ol>
-        <p class="how-list-note"><AppIcon name="eye" /> Bir adıma dokun, kendi hızında keşfet.</p>
+        <p class="how-list-note"><AppIcon name="eye" /> Tap a step and explore at your own pace.</p>
       </div>
 
-      <article id="how-detail" class="how-feature" aria-label="Seçili adımın ayrıntıları">
+      <article id="how-detail" class="how-feature" aria-label="Details of the selected step">
         <div class="how-stage">
-          <div class="how-stage-top"><span><i /> İŞLEYİŞ REHBERİ</span><span class="how-stage-counter">0{{ active + 1 }}<span> / 05</span></span></div>
+          <div class="how-stage-top"><span><i /> HOW-IT-WORKS GUIDE</span><span class="how-stage-counter">0{{ active + 1 }}<span> / 05</span></span></div>
           <span class="how-stage-watermark" aria-hidden="true">0{{ active + 1 }}</span>
           <StepScene3D :step="active" :reduced="reduced" :paused="!visible || !pageVisible || !autoplay" :preview-duration="duration" />
           <Transition name="how-note" mode="out-in">
             <div :key="active" class="how-scene-note"><span class="how-note-icon"><AppIcon :name="current.icon" /></span><span><strong>{{ stageNotes[active]![0] }}</strong><small>{{ stageNotes[active]![1] }}</small></span></div>
           </Transition>
-          <span class="how-stage-caption">Hedef tasarımın görsel anlatımı</span>
+          <span class="how-stage-caption">Visual explanation of the target design</span>
         </div>
 
         <div class="how-detail-body">
@@ -182,16 +191,16 @@ onBeforeUnmount(() => {
             </Transition>
           </div>
           <div class="how-controls">
-            <button type="button" class="how-play" :aria-label="autoplay ? 'Otomatik anlatımı duraklat' : 'Otomatik anlatımı başlat'" :disabled="reduced" @click="togglePlay">
+            <button type="button" class="how-play" :aria-label="autoplay ? 'Pause auto-play' : 'Start auto-play'" :disabled="reduced" @click="togglePlay">
               <svg viewBox="0 0 20 20" aria-hidden="true"><path v-if="autoplay" d="M6 4v12M14 4v12" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" /><path v-else d="m6 3 11 7-11 7Z" fill="currentColor" /></svg>
-              <span>{{ reduced ? 'Adımlarla ilerle' : autoplay ? 'Otomatik anlatım' : 'Anlatımı başlat' }}</span>
+              <span>{{ reduced ? 'Move through the steps' : autoplay ? 'Auto-play' : 'Start auto-play' }}</span>
             </button>
-            <div class="how-pagination"><button type="button" class="how-nav" aria-label="Önceki adım" @click="choose(active - 1)"><AppIcon name="back" /></button><span>{{ active + 1 }} / 5</span><button type="button" class="how-nav how-nav-next" aria-label="Sonraki adım" @click="choose(active + 1)"><AppIcon name="arrow" /></button></div>
+            <div class="how-pagination"><button type="button" class="how-nav" aria-label="Previous step" @click="choose(active - 1)"><AppIcon name="back" /></button><span>{{ active + 1 }} / 5</span><button type="button" class="how-nav how-nav-next" aria-label="Next step" @click="choose(active + 1)"><AppIcon name="arrow" /></button></div>
           </div>
         </div>
       </article>
     </div>
-    <div v-reveal class="how-footer"><span><AppIcon name="users" /> Eşit katkı</span><i /><span><AppIcon name="lock" /> Ortak kurallar</span><i /><span><AppIcon name="store" /> Doğrudan satıcıya</span></div>
+    <div v-reveal class="how-footer"><span><AppIcon name="users" /> Equal contributions</span><i /><span><AppIcon name="lock" /> Shared rules</span><i /><span><AppIcon name="store" /> Straight to the seller</span></div>
   </section>
 </template>
 
@@ -220,7 +229,7 @@ onBeforeUnmount(() => {
 .how-step-short { font-size: 12px; line-height: 1.5; color: #776f60; }
 .how-step-icon { display: grid; place-items: center; margin-left: auto; color: #a4ad96; flex-shrink: 0; }
 .is-active .how-step-icon { color: #14805a; }
-.how-step-progress { position: absolute; bottom: 0; left: 0; width: 100%; height: 3px; background: #1f9d6b; transform-origin: left; }
+.how-step-progress { position: absolute; bottom: 0; left: 0; width: 100%; height: 3px; background: #1f9d6b; transform: scaleX(0); transform-origin: left; will-change: transform; }
 .how-list-note { display: flex; align-items: center; gap: 7px; padding: 20px 8px 0; font-size: 12px; color: #7c7667; }
 .how-list-note :deep(svg) { width: 16px; height: 16px; }
 .how-feature { min-width: 0; overflow: hidden; border-radius: 30px; background: #fffefa; border: 1px solid #e3e4d5; box-shadow: 0 18px 60px -35px #3c563d45; }
@@ -232,7 +241,7 @@ onBeforeUnmount(() => {
 .how-stage-counter { font: 650 16px var(--font-display); color: #35533c; }
 .how-stage-counter span { font-size: 11px; opacity: .55; }
 .how-stage-watermark { position: absolute; top: 35px; right: 22px; color: #66866410; font: 800 180px/1 var(--font-display); pointer-events: none; }
-.how-scene-note { position: absolute; left: 22px; bottom: 29px; display: flex; align-items: center; gap: 10px; padding: 11px 15px 11px 11px; border: 1px solid #ffffffda; border-radius: 16px; background: #fffff2d9; backdrop-filter: blur(14px); box-shadow: 0 6px 20px #394d3212; pointer-events: none; }
+.how-scene-note { position: absolute; left: 22px; bottom: 29px; display: flex; align-items: center; gap: 10px; padding: 11px 15px 11px 11px; border: 1px solid #ffffffda; border-radius: 16px; background: #fffff4f2; box-shadow: 0 6px 20px #394d3212; pointer-events: none; }
 .how-note-icon { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; background: #dfedda; color: #176c48; }
 .how-note-icon :deep(svg) { width: 19px; height: 19px; }
 .how-scene-note strong, .how-scene-note small { display: block; }
@@ -243,7 +252,7 @@ onBeforeUnmount(() => {
 .how-detail-meta { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; font-size: 10px; color: #6e7865; }
 .how-detail-meta > span:first-child { color: #14805a; font-weight: 700; letter-spacing: .12em; }
 .how-detail-meta > span:last-child { padding: 4px 9px; border: 1px solid #e5e9dd; border-radius: 7px; background: #f4f6ed; }
-.how-copy { min-height: 145px; padding-top: 13px; }
+.how-copy { min-height: 200px; padding-top: 13px; }
 .how-copy h3 { color: #263e2d; font-size: 27px; font-weight: 750; line-height: 1.15; }
 .how-copy p { margin-top: 10px; color: #726d61; font-size: 14px; line-height: 1.75; }
 .how-controls { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 20px; padding-top: 17px; border-top: 1px solid #ecece3; }
@@ -261,16 +270,17 @@ onBeforeUnmount(() => {
 .how-footer > span { display: flex; align-items: center; gap: 6px; }
 .how-footer :deep(svg) { width: 15px; height: 15px; color: #5c805c; }
 .how-footer > i { width: 3px; height: 3px; border-radius: 50%; background: #b8bea5; }
-.how-copy-enter-active, .how-copy-leave-active, .how-note-enter-active, .how-note-leave-active { transition: opacity .12s, transform .16s; }
-.how-copy-enter-from, .how-note-enter-from { opacity: 0; transform: translateY(10px); }
-.how-copy-leave-to, .how-note-leave-to { opacity: 0; transform: translateY(-7px); }
+.how-copy-enter-active, .how-note-enter-active { transition: opacity .42s var(--ease-out-soft, ease-out), transform .5s var(--ease-out-soft, ease-out); }
+.how-copy-leave-active, .how-note-leave-active { transition: opacity .18s ease-in, transform .2s ease-in; }
+.how-copy-enter-from, .how-note-enter-from { opacity: 0; transform: translateY(12px); }
+.how-copy-leave-to, .how-note-leave-to { opacity: 0; transform: translateY(-6px); }
 @media (max-width: 1023px) {
   .how-layout { gap: 20px; grid-template-columns: 1fr 1.1fr; }
   .how-step { gap: 10px; padding: 13px; }
   .how-step-title { font-size: 16px; }
   .how-step-icon { display: none; }
   .how-detail-body { padding: 22px; }
-  .how-copy { min-height: 185px; }
+  .how-copy { min-height: 235px; }
 }
 @media (max-width: 767px) {
   .how-layout { grid-template-columns: 1fr; gap: 22px; }
@@ -286,7 +296,7 @@ onBeforeUnmount(() => {
   .how-list-note { padding-top: 12px; }
   .how-stage { height: 310px; }
   .how-feature { border-radius: 24px; }
-  .how-copy { min-height: 157px; }
+  .how-copy { min-height: 250px; }
   .how-copy h3 { font-size: 25px; }
   .how-footer { gap: 10px; font-size: 10px; }
 }

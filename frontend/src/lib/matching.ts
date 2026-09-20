@@ -3,6 +3,7 @@ import type { OrderMode, PoolInfo } from '@/types/pool'
 /** Kullanıcının seçtiği planın havuz eşleştirmesinde önemli olan alanları. */
 export interface PoolPlan {
   token: string
+  demoSeller: string
   contributionAmount: bigint
   memberLimit: number
   orderMode: OrderMode
@@ -15,13 +16,14 @@ export interface PoolPlan {
 
 /**
  * Bir havuzun bu plana ve bu kullanıcıya uyup uymadığı. Katılım zincirde reddedilecek hiçbir havuz
- * önerilmez: dolu, başlamış, kuruluş süresi geçmiş, kullanıcı zaten üye ya da satıcı/doğrulayıcı.
+ * önerilmez: dolu, başlamış, kuruluş süresi geçmiş, kullanıcı zaten üye ya da satıcı.
  */
 export function poolMatches(pool: PoolInfo, plan: PoolPlan, me: string | null, nowSeconds: number): boolean {
   if (pool.status !== 'Filling') return false
   if (pool.members.length >= pool.memberLimit) return false
   if (pool.setupDeadline <= nowSeconds) return false
   if (pool.token !== plan.token) return false
+  if (pool.demoSeller !== plan.demoSeller) return false
   if (pool.contributionAmount !== plan.contributionAmount) return false
   if (pool.memberLimit !== plan.memberLimit) return false
   if (pool.orderMode !== plan.orderMode) return false
@@ -32,7 +34,6 @@ export function poolMatches(pool: PoolInfo, plan: PoolPlan, me: string | null, n
   if (me !== null) {
     if (pool.members.includes(me)) return false
     if (pool.demoSeller === me) return false
-    if (pool.verifiers.includes(me)) return false
   }
   return true
 }

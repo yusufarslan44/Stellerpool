@@ -7,11 +7,11 @@ import AppIcon from './AppIcon.vue'
 const WalletButton = defineAsyncComponent(() => import('./WalletButton.vue'))
 const route = useRoute()
 const items = [
-  { id: 'nasil', label: 'Nasıl çalışır', hint: 'Beş adımda keşfet' },
-  { id: 'hikaye', label: 'Hikâyeyi izle', hint: 'Bir turun içinden' },
-  { id: 'basla', label: 'Başla', hint: 'Hesabını hazırla' },
-  { id: 'hesapla', label: 'Hesapla', hint: 'Planını oluştur' },
-  { id: 'sss', label: 'Sorular', hint: 'Aklındakiler' },
+  { id: 'nasil', label: 'How it works', hint: 'Explore in five steps' },
+  { id: 'hikaye', label: 'Watch the story', hint: 'From inside a round' },
+  { id: 'basla', label: 'Get started', hint: 'Set up your account' },
+  { id: 'hesapla', label: 'Calculate', hint: 'Build your plan' },
+  { id: 'sss', label: 'FAQ', hint: 'Your questions' },
 ]
 const header = ref<HTMLElement | null>(null)
 const toggle = ref<HTMLButtonElement | null>(null)
@@ -61,29 +61,29 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <a href="#main-content" class="skip-link">İçeriğe geç</a>
+  <a href="#main-content" class="skip-link">Skip to content</a>
   <header ref="header" class="site-header" :class="{ 'is-scrolled': scrolled, 'menu-open': menuOpen }" @keydown.esc="close(true)">
     <div class="nav-shell" :class="{ 'is-showcase': mainnetShowcase }">
-      <RouterLink to="/" class="brand" aria-label="Stellerpool ana sayfa" @click="close()">
+      <RouterLink to="/" class="brand" aria-label="Stellarpool home" @click="close()">
         <span class="brand-symbol" aria-hidden="true"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="15.5" fill="none" stroke="currentColor" stroke-width="1.1" opacity=".65"/><path d="m20 9 3.3 7 7.7 1.1-5.5 5.4 1.3 7.6L20 26.5l-6.8 3.6 1.3-7.6L9 17.1l7.7-1.1Z" fill="currentColor" /></svg></span>
-        <span>Stellerpool<span class="brand-dot">.</span></span>
+        <span>Stellarpool<span class="brand-dot">.</span></span>
       </RouterLink>
-      <nav v-if="!mainnetShowcase" class="desktop-nav" aria-label="Ana menü">
+      <nav v-if="!mainnetShowcase" class="desktop-nav" aria-label="Main menu">
         <RouterLink v-for="(item, index) in items" :key="item.id" :to="`/#${item.id}`" :class="{ current: active === index }" :aria-current="active === index ? 'location' : undefined"><span>{{ item.label }}</span><i aria-hidden="true" /></RouterLink>
       </nav>
       <div class="nav-actions">
-        <span class="nav-network" :title="mainnetShowcase ? 'Salt okunur Mainnet tanıtımı' : 'Gerçek para kullanılmayan test ağı'"><i />{{ config.label }}</span>
+        <span class="nav-network" :title="mainnetShowcase ? 'Read-only Mainnet showcase' : 'Test network, no real money'"><i />{{ config.label }}</span>
         <div v-if="!mainnetShowcase" class="nav-wallet"><WalletButton /></div>
-        <button v-if="!mainnetShowcase" ref="toggle" type="button" class="menu-toggle" :aria-expanded="menuOpen" aria-controls="mobile-navigation" :aria-label="menuOpen ? 'Menüyü kapat' : 'Menüyü aç'" @click="menuOpen = !menuOpen"><span /><span /></button>
+        <button v-if="!mainnetShowcase" ref="toggle" type="button" class="menu-toggle" :aria-expanded="menuOpen" aria-controls="mobile-navigation" :aria-label="menuOpen ? 'Close menu' : 'Open menu'" @click="menuOpen = !menuOpen"><span /><span /></button>
       </div>
     </div>
     <div class="nav-progress" aria-hidden="true"><span :style="{ transform: `scaleX(${progress})` }" /></div>
     <Transition name="mobile-nav">
-      <nav v-if="menuOpen && !mainnetShowcase" id="mobile-navigation" class="mobile-navigation" aria-label="Mobil menü">
-        <div class="mobile-nav-heading">BİRLİKTE KEŞFEDELİM <span>01 — 05</span></div>
+      <nav v-if="menuOpen && !mainnetShowcase" id="mobile-navigation" class="mobile-navigation" aria-label="Mobile menu">
+        <div class="mobile-nav-heading">LET’S EXPLORE TOGETHER <span>01 — 05</span></div>
         <RouterLink v-for="(item, index) in items" :key="item.id" :to="`/#${item.id}`" :aria-current="active === index ? 'location' : undefined" @click="close()"><span class="mobile-nav-number">0{{ index + 1 }}</span><span><strong>{{ item.label }}</strong><small>{{ item.hint }}</small></span><AppIcon name="arrow" /></RouterLink>
-        <div class="mobile-nav-bottom"><WalletButton /><RouterLink to="/join" class="mobile-create" @click="close()">Havuza katıl <AppIcon name="arrow" /></RouterLink></div>
-        <p>Stellar {{ config.label }} · Gerçek para kullanılmaz.</p>
+        <div class="mobile-nav-bottom"><WalletButton /><RouterLink to="/join" class="mobile-create" @click="close()">Join a pool <AppIcon name="arrow" /></RouterLink></div>
+        <p>Stellar {{ config.label }} · No real money is used.</p>
       </nav>
     </Transition>
   </header>

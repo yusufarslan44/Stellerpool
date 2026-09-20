@@ -351,9 +351,11 @@ async function init() {
   }
 }
 watch(() => [props.step, props.reduced, props.paused], (values, previous) => sync?.(values[0] !== previous[0]))
+const whenIdle = (fn: () => void) => ('requestIdleCallback' in window ? window.requestIdleCallback(fn, { timeout: 500 }) : setTimeout(fn, 80))
+
 onMounted(() => {
   lazyObserver = new IntersectionObserver(([entry]) => {
-    if (entry?.isIntersecting) { lazyObserver?.disconnect(); void init() }
+    if (entry?.isIntersecting) { lazyObserver?.disconnect(); whenIdle(() => { void init() }) }
   }, { rootMargin: '180px' })
   if (host.value) lazyObserver.observe(host.value)
 })

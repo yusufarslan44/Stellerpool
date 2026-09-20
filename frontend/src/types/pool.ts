@@ -19,10 +19,6 @@ export const MAX_MEMBERS =
   Number.isInteger(configuredMax) && configuredMax >= MIN_MEMBERS && configuredMax <= UI_MAX_MEMBERS
     ? configuredMax
     : DEFAULT_MAX_MEMBERS
-/** Kontratın doğrulayıcı sınırları (API v9 ve v10). */
-export const MIN_VERIFIERS = 2
-export const MAX_VERIFIERS = 10
-
 /** Havuz: Filling → Active → Completed / Aborted. */
 export type PoolStatus = 'Filling' | 'Active' | 'Completed' | 'Aborted'
 
@@ -53,11 +49,7 @@ export interface PoolInfo {
   downPayment: bigint
   /** Önerilen veya başlatılınca kilitlenen tahsisat sırası. Kura modunda boştur. */
   recipientOrder: string[]
-  /** Önerilen doğrulayıcılar (creator ve üyelerden farklı adresler). */
-  verifiers: string[]
-  /** Gereken doğrulayıcı onayı (demo için en az 2/3). */
-  approvalThreshold: number
-  /** Koşul sürümü; sıra veya doğrulayıcı değişince artar ve önceki onaylar silinir. 0 = önerilmedi. */
+  /** Koşul sürümü; havuz dolduğunda 1 olur. */
   termsVersion: number
   /** Geçerli koşul sürümünü onaylayan üyeler. */
   termsApprovals: string[]
@@ -94,10 +86,6 @@ export interface RoundInfo {
   seller: string | null
   /** Zincir dışı alım belgesinin SHA-256 özeti (hex); yoksa null. */
   docHash: string | null
-  /** Alım önerisi sürümü; her yeni öneride artar ve önceki onayları siler. */
-  purchaseVersion: number
-  /** Geçerli alım sürümünü onaylayan doğrulayıcılar. */
-  approvals: string[]
 }
 
 export interface MemberStatus {

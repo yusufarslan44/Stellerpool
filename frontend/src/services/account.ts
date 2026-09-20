@@ -69,7 +69,7 @@ export async function fundWithFriendbot(address: string): Promise<void> {
   const res = await fetch(`${friendbotUrl}?addr=${encodeURIComponent(address)}`)
   if (!res.ok) {
     const detail = await res.text().catch(() => '')
-    throw new Error(`Friendbot hesabı fonlayamadı (${res.status}). ${detail.slice(0, 120)}`)
+    throw new Error(`Friendbot could not fund the account (${res.status}). ${detail.slice(0, 120)}`)
   }
 }
 

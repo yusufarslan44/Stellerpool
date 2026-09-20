@@ -14,7 +14,7 @@ const props = withDefaults(defineProps<{ coins?: number; filled?: number; label?
   coins: 4,
   paused: false,
   filled: -1,
-  label: 'Havuzu temsil eden üç boyutlu altın paralar',
+  label: 'Three-dimensional gold coins representing the pool',
 })
 
 type Three = typeof import('three')
@@ -383,11 +383,14 @@ async function init() {
   }
 }
 
+const whenIdle = (fn: () => void) => ('requestIdleCallback' in window ? window.requestIdleCallback(fn, { timeout: 500 }) : setTimeout(fn, 80))
+
 onMounted(() => {
   lazyObserver = new IntersectionObserver(([entry]) => {
     if (!entry?.isIntersecting) return
     lazyObserver?.disconnect()
-    void init().catch(() => { failed.value = true; cleanup?.() })
+    // Ağır kurulum (shader derleme, ortam haritası) kaydırmayı dondurmasın: tarayıcı boştayken başlat.
+    whenIdle(() => { void init().catch(() => { failed.value = true; cleanup?.() }) })
   }, { rootMargin: '220px' })
   if (host.value) lazyObserver.observe(host.value)
 })

@@ -12,16 +12,16 @@ onMounted(() => {
 onBeforeUnmount(() => observer?.disconnect())
 </script>
 <template>
-  <div ref="host" class="contract-flow" :class="{ running: visible && !paused }" aria-label="Para akışı: üyelerin katkıları sözleşmede toplanır, yeterli onayla demo satıcısına ödenir.">
-    <div class="flow-top"><span>PARANIN İZLEDİĞİ YOL</span><button type="button" :aria-label="paused ? 'Akış animasyonunu oynat' : 'Akış animasyonunu duraklat'" @click="paused = !paused">{{ paused ? '▷' : 'Ⅱ' }}</button></div>
+  <div ref="host" class="contract-flow" :class="{ running: visible && !paused }" aria-label="Money flow: member contributions are collected in the contract and paid to the registered demo seller.">
+    <div class="flow-top"><span>THE PATH OF THE MONEY</span><button type="button" :aria-label="paused ? 'Play flow animation' : 'Pause flow animation'" @click="paused = !paused">{{ paused ? '▷' : 'Ⅱ' }}</button></div>
     <div class="flow-track">
-      <div class="flow-node"><div class="flow-pedestal"><Illo name="crowd" :size="63" /></div><strong>Üyeler</strong><small>Eşit katkı</small></div>
+      <div class="flow-node"><div class="flow-pedestal"><Illo name="crowd" :size="63" /></div><strong>Members</strong><small>Equal contributions</small></div>
       <div class="flow-line" aria-hidden="true"><i /><i /><span>›</span></div>
-      <div class="flow-node central"><div class="flow-pedestal"><Illo name="lock" :size="70" /><span class="flow-orbit" /></div><strong>Sözleşme</strong><small>Kurallar + onaylar</small></div>
+      <div class="flow-node central"><div class="flow-pedestal"><Illo name="lock" :size="70" /><span class="flow-orbit" /></div><strong>Contract</strong><small>Rules + approvals</small></div>
       <div class="flow-line second" aria-hidden="true"><i /><i /><span>›</span></div>
-      <div class="flow-node"><div class="flow-pedestal"><Illo name="store" :size="64" /></div><strong>Demo satıcısı</strong><small>Doğrudan ödeme</small></div>
+      <div class="flow-node"><div class="flow-pedestal"><Illo name="store" :size="64" /></div><strong>Demo seller</strong><small>Direct payment</small></div>
     </div>
-    <p>Örnek akış · Yeterli doğrulayıcı onayıyla</p>
+    <p>Sample flow · to the seller after the purchase record</p>
   </div>
 </template>
 <style scoped>

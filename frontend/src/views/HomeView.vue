@@ -8,6 +8,7 @@ import Illo from '@/components/Illo.vue'
 import PoolCalculator from '@/components/PoolCalculator.vue'
 import HomeHero from '@/components/HomeHero.vue'
 import ContractFlow from '@/components/ContractFlow.vue'
+import FeesTable from '@/components/FeesTable.vue'
 import HowItWorks from '@/components/HowItWorks.vue'
 import StorySim from '@/components/StorySim.vue'
 import StepIndicator from '@/components/StepIndicator.vue'
@@ -17,6 +18,7 @@ import {
   circleFaucetUrl,
   config,
   explorerAccount,
+  explorerContract,
   explorerTx,
   poolAsset,
   poolAssetFromCircleFaucet,
@@ -108,9 +110,9 @@ const hasBalance = computed(() => {
 })
 
 const SETUP = computed(() => [
-  { key: 'wallet', label: 'Cüzdan', done: wallet.isConnected },
-  { key: 'activate', label: 'Hesap', done: account.value?.exists === true },
-  { key: 'trust', label: `${token} kabul`, done: account.value?.hasTrustline === true },
+  { key: 'wallet', label: 'Wallet', done: wallet.isConnected },
+  { key: 'activate', label: 'Account', done: account.value?.exists === true },
+  { key: 'trust', label: `Accept ${token}`, done: account.value?.hasTrustline === true },
   { key: 'faucet', label: `Test ${token}`, done: hasBalance.value },
 ])
 const setupIndex = computed(() => {
@@ -134,97 +136,91 @@ onBeforeUnmount(() => clearInterval(poll))
 const ROLES: { icon: IlloName; title: string; text: string; tone: string }[] = [
   {
     icon: 'seedling',
-    title: 'Kurucu',
-    text: 'Havuzu açar, sıra ve doğrulayıcıları önerir. Parayı çekme yetkisi yoktur.',
+    title: 'Founder',
+    text: 'Opens the pool and joins it. In fixed order, the join order is used; the founder cannot withdraw funds.',
     tone: 'bg-brand-100 text-brand-800',
   },
   {
     icon: 'lock',
-    title: 'Kontrat',
-    text: 'Katkıları tur bazında tutar ve koşullar sağlanınca yalnızca izinli demo satıcısına ödeme yapar.',
+    title: 'Contract',
+    text: 'Holds contributions per round and, once conditions are met, pays only the allowed demo seller.',
     tone: 'bg-gold-100 text-amber-900',
   },
   {
     icon: 'handshake',
-    title: 'Üye',
-    text: 'Katılır, her tur katkısını öder. Sırası gelince satıcıyı ve alım belgesini önerir.',
+    title: 'Member',
+    text: 'Joins and pays their contribution every round. When their turn comes, they register the seller and the purchase document.',
     tone: 'bg-sage-100 text-sage-800',
-  },
-  {
-    icon: 'magnifier',
-    title: 'Doğrulayıcı',
-    text: 'Alım belgesini zincir dışında kontrol eder ve onaylar. Tutar ancak yeterli onayla çıkar.',
-    tone: 'bg-stone-200 text-stone-800',
   },
 ]
 
+// Decentralization: every sentence was verified against the contract source (no admin, upgrade, pause or fee function;
+// execute_round / mark_overdue / abort_pool / cancel_unstarted_pool do not require a privileged caller).
 const TRUST: { icon: IlloName; title: string; text: string }[] = [
   {
     icon: 'lock',
-    title: 'Para sözleşmede',
-    text: 'Testnet kontratında katkılar Soroban kontratına gider; kurucuda serbest çekim fonksiyonu yoktur.',
+    title: 'No admin key',
+    text: 'The contract has no admin, upgrade, pause or fee function. The founder cannot withdraw the money, and neither can we. A new version means a new address.',
   },
   {
-    icon: 'pin',
-    title: 'Sabit sıra',
-    text: 'Havuz başlayınca üyeler ve sıra değişmez; sıra yalnızca üyelerin onayladığı sürümle geçerlidir. İstersen sıra yerine kura seç.',
+    icon: 'key',
+    title: 'Your keys, your funds',
+    text: 'Your wallet signs every transaction. We never see or store your keys; only you and the contract’s rules can touch your money.',
   },
   {
-    icon: 'shield',
-    title: 'Açık risk sınırı',
-    text: 'Bir tur ödendikten sonra geçmiş katkılar kontrattan geri alınamaz; gelecek teslimat garanti edilmez.',
+    icon: 'handshake',
+    title: 'Anyone can call',
+    text: 'Marking a deadline as missed, ending the pool and triggering payment for a round whose conditions are met are open to everyone. Even if this site goes down, the contract keeps working.',
   },
-  { icon: 'eyes', title: 'Herkes doğrular', text: 'Zincire yazılan demo işlemler Stellar Expert’te görülebilir.' },
+  {
+    icon: 'eyes',
+    title: 'Anyone can verify',
+    text: 'The contract address, transactions and source code are public. You do not have to trust us; you can check for yourself.',
+  },
+]
+
+// Honesty panel: the places we do not count as decentralized. The claim "fully decentralized" is deliberately not made.
+const OFFCHAIN: { title: string; text: string }[] = [
+  { title: 'Anchor and TRYT', text: 'We operate the test anchor and the TRYT asset; it is not real Turkish lira.' },
+  { title: 'Purchase document', text: 'The document itself stays off-chain; only its digest is recorded on-chain. No real purchase verification is performed.' },
+  { title: 'Draw randomness', text: 'Hackathon-grade; not sufficient for high amounts.' },
+  { title: 'Audit', text: 'No independent security audit has been done; there are only unit tests.' },
+  { title: 'This site and network endpoints', text: 'The site and the RPC/Horizon endpoints are centralized servers; the contract itself can also be called from any other client.' },
+  { title: 'Seller', text: 'Payment goes only to the allowed demo address registered in the pool; no real seller is verified.' },
 ]
 
 const FAQ = [
   {
-    q: 'Organizatör parayı alıp kaçabilir mi?',
-    a: 'Testnet kontratında kurucunun serbest çekim fonksiyonu yok: tur tutarı yalnızca havuzda kayıtlı izinli demo satıcısına gidebilir, iade yalnızca katkı sahibine yapılır. Kontrat birim testlerinden geçti ancak bağımsız güvenlik denetimi yapılmadı.',
+    q: 'Can the organizer take the money and run?',
+    a: 'No. The contract has no free-withdrawal function for the founder: the round amount can only go to the allowed demo seller registered in the pool, and refunds go only to the contributor. The fixed delivery order is created automatically from the join order. Once the pool starts, members and order are locked. No real seller, title deed or registration is verified. The contract passed its unit tests but has not had an independent security audit.',
   },
   {
-    q: 'Sıram sonradan değiştirilebilir mi?',
-    a: 'Hayır. Başlamadan önce sıra yalnızca üyelerin onayladığı sürümle geçerli olur, kurucu tek başına değiştiremez. Havuz başladıktan sonra üyeler ve sıra kilitlidir.',
+    q: 'How does the draw work, and when is it drawn?',
+    a: 'In draw mode there is no predefined order. Every round each member pays their own contribution; once all are in, anyone can call a transaction and the contract picks the recipient among members who have not yet received. The winner has already paid their share. Unlike companies, there is no fixed draw day, notary or live broadcast: the draw can happen as soon as everyone has paid their installment. If someone does not pay, a grace period starts; if that also ends, the round stops and refunds begin. On-chain randomness is hackathon-grade and not enough for real high-value use.',
   },
   {
-    q: 'Kura nasıl çalışıyor?',
-    a: 'Kura modunda önceden sıra yoktur. Her tur herkes kendi katkısını yatırır; hepsi tamamlanınca herkesin çağırabileceği bir işlemle, henüz teslim almamış üyeler arasından alıcıyı kontrat seçer. Kazanan zaten payını ödemiştir. Zincir üstü rastgelelik hackathon düzeyindedir, yüksek tutarlı gerçek kullanım için yetmez. Kura Testnet kontratında canlı denendi; oluşturma formunda “Kura” seçilebilir.',
+    q: 'What is the down payment, and are there fees?',
+    a: 'The down payment is not a fee: when the pool is created, an amount per member is set, everyone pays it when joining, and it is held in the contract. When your turn comes, it is added to your purchase and goes to the seller; if the pool is cancelled and you have not received yet, it is refunded. The higher the down payment, the smaller the target, so your installment gives fewer people and a shorter term. There is no organization fee, commission or interest; details are in the “Fees” section.',
   },
   {
-    q: 'Peşinat veya organizasyon ücreti var mı?',
-    a: 'Organizasyon ücreti yok: şirketler tek seferlik yaklaşık %7–14 alır, burada kimseye ücret ayrılmaz. Peşinat var ve kontratta tutulur: havuz kurulurken üye başına bir peşinat belirlenir, herkes katılırken yatırır. Sıran gelince o tutar alımına eklenip satıcıya gider; havuz iptal olursa henüz almadıysan iade edilir. Şirketlerdeki gibi peşinat yükseldikçe hedef küçülür, verdiğin taksitle daha az kişi ve daha kısa vade çıkar. Fark: peşinat şirkete değil kontrata yatar ve yalnızca kendi alımına gider, birikime sayılmaz.',
+    q: 'How large can a group be?',
+    a: 'The published Testnet contract supports 2 to 30 members. In a large group the amount sent to the seller in one round also grows; if someone who received early stops contributing, the gap grows too. Making the group bigger does not remove this risk.',
   },
   {
-    q: 'Kura ne zaman çekilir?',
-    a: 'Şirketlerde çekiliş genelde her ay noter kontrolünde yapılır. Burada kura tarihi sabit değildir: her turda herkes taksidini yatırır yatırmaz çekilebilir. Katkı süresi (aylık planda 30 gün) içinde herkes öderse hemen; ödemeyen olursa ek süre gelir, o da biterse tur durur ve iade başlar. Kura herkesin çağırabileceği bir işlemle zincirde yapılır, sonucu kontrat belirler ve herkes doğrulayabilir. Noter veya canlı yayın yoktur.',
+    q: 'What happens if someone stops paying?',
+    a: 'When the contribution deadline passes, the round enters a grace period. If that ends too, anyone can end the pool; only the contributions of the round that has not yet been paid out are refunded, earlier rounds cannot be recovered. Example: if four people pay 10 units each, 40 units go to the seller in round one. If Ayşe does not pay round two, that round stops and only the round-two contributions are refunded; Mehmet, Zeynep and Can’s round-one shares cannot be recovered. This flow was tried live on Testnet (transaction links are in the README).',
   },
   {
-    q: 'Kaç kişilik grup kurulabilir?',
-    a: 'Yayındaki Testnet kontratı 2 ile 30 üyeyi destekliyor. Büyük grupta bir turda satıcıya giden tutar da büyür; erken teslim alan sonraki katkıyı bırakırsa açık da büyür. Grubu büyütmek bu riski ortadan kaldırmaz.',
+    q: 'Is there a sponsor, insurance or delivery guarantee?',
+    a: 'No. There is no separate sponsor, no advance on someone else’s behalf and no platform guarantee. More people joining does not remove the risk that someone who received early stops paying later. That risk can only be managed in a familiar, closed group and with separate agreements.',
   },
   {
-    q: 'Biri ödemeyi bırakırsa ne olur?',
-    a: 'Katkı süresi dolunca tur ek süreye geçer. Ek süre de biterse herkes havuzu sonlandırabilir; yalnızca henüz ödenmemiş turun katkıları iade edilir, önceki turlar geri alınamaz. Bu akış Testnet’te canlı olarak denendi (işlem bağlantıları README’de).',
+    q: 'Is real money used?',
+    a: 'No. This is a Stellar Testnet interface; a test asset is used. There is no real money, no real TRY deposit/withdrawal and no home or car delivery. The anchor section works with a test anchor and does not offer Turkish lira.',
   },
   {
-    q: 'Ayşe ilk turda alıp sonra bırakırsa ne olur?',
-    a: 'Dört kişi 10’ar birim yatırırsa ilk tur 40 birim satıcıya gider ve havuzda o turun parası kalmaz. Ayşe sonraki turu ödemezse ikinci tur durur; yalnızca ikinci turda yatırılan katkılar iade edilir. Mehmet, Zeynep ve Can’ın ilk tur payları kontrattan geri alınamaz.',
-  },
-  {
-    q: 'Sponsor, sigorta ya da teslimat garantisi var mı?',
-    a: 'Hayır. Ayrı sponsor, başkası adına avans ve platform garantisi yok. Daha fazla kişi katılması da erken teslim alanın gelecekteki ödeme riskini ortadan kaldırmaz. Bu risk yalnızca tanıdık, kapalı bir grupta ve ayrı sözleşmelerle yönetilebilir.',
-  },
-  {
-    q: 'Param kime gider?',
-    a: 'Doğrulayıcı eşiği onayladıktan sonra yalnızca havuzda kayıtlı izinli demo satıcısına test varlığı gider. Gerçek satıcı, tapu veya ruhsat doğrulanmaz.',
-  },
-  {
-    q: 'Faiz veya vade farkı var mı?',
-    a: 'Hayır, örnek hesapta faiz veya vade farkı modellenmiyor. Kontratta ücret ya da organizasyon bedeli yok; gerçek bir ürünün ücretleri ayrıca belirlenir.',
-  },
-  {
-    q: 'Gerçek para mı kullanılıyor?',
-    a: 'Hayır. Bu, Stellar Testnet arayüzüdür; test varlığı kullanılır. Gerçek para, gerçek TL girişi/çıkışı, ev veya araç teslimi yoktur. Anchor bölümü test anchor’ı ile çalışır, Türk lirası sunmaz.',
+    q: 'Is it fully decentralized?',
+    a: 'No, only partly. The money rules are on-chain and there is no admin key; however the test anchor, the purchase-document check, the draw randomness and this site remain centralized or limited. We list exactly which ones in the “Still centralized” box in the Trust section.',
   },
 ]
 </script>
@@ -240,15 +236,15 @@ const FAQ = [
     >
       <Illo name="bulb" :size="30" />
       <span>
-        <strong>Durum:</strong> Bu derleme henüz bir havuz kontratına bağlı değil
-        (<code class="font-mono">VITE_ROTATING_POOL_CONTRACT_ID</code> boş). Sponsorsuz havuz kontratı Testnet’te yayında;
-        adresi yapılandırılınca havuz açılır ve okunur. Gerçek para yoktur.
+        <strong>Status:</strong> This build is not connected to a pool contract yet
+        (<code class="font-mono">VITE_ROTATING_POOL_CONTRACT_ID</code> is empty). The sponsor-free pool contract is live on Testnet;
+        once its address is configured, pools can be opened and read. No real money is involved.
       </span>
     </p>
 
     <div class="home-intro-strip" v-reveal>
-      <span class="intro-strip-label">BİRLİKTE BİRİKİMİN TEMELİ</span>
-      <span><AppIcon name="users" /> Tanıdığın bir grup</span><span><AppIcon name="lock" /> Herkesin onayladığı kurallar</span><span><AppIcon name="eye" /> Görünür para akışı</span>
+      <span class="intro-strip-label">THE FOUNDATION OF SAVING TOGETHER</span>
+      <span><AppIcon name="users" /> A group you know</span><span><AppIcon name="lock" /> Rules everyone approves</span><span><AppIcon name="eye" /> Visible money flow</span>
     </div>
 
     <HowItWorks />
@@ -256,11 +252,10 @@ const FAQ = [
     <!-- 2b · HİKÂYE: kendiliğinden oynayan örnek tur -->
     <section id="hikaye" class="home-story scroll-mt-28 space-y-8" aria-labelledby="hikaye-baslik">
       <div v-reveal class="mx-auto max-w-2xl text-center">
-        <p class="eyebrow text-brand-700">İzle</p>
-        <h2 id="hikaye-baslik" class="mt-2 text-4xl font-extrabold sm:text-5xl">Bir tur böyle işler</h2>
+        <p class="eyebrow text-brand-700">Watch</p>
+        <h2 id="hikaye-baslik" class="mt-2 text-4xl font-extrabold sm:text-5xl">This is how a round works</h2>
         <p class="mt-3 text-stone-600">
-          Dört arkadaşın katkısı tek bir hedefte buluşuyor. Paraları takip et, onayların toplanışını izle;
-          ilk turun satıcıya ödemeyle tamamlanışına eşlik et.
+          Four friends pool their contributions, record a purchase and pay the seller, in under half a minute.
         </p>
       </div>
       <div v-reveal><StorySim /></div>
@@ -269,9 +264,9 @@ const FAQ = [
     <!-- 3 · BAŞLA (hesap hazırlama sihirbazı) -->
     <section id="basla" class="home-setup scroll-mt-28 space-y-8" aria-labelledby="basla-baslik">
       <div v-reveal class="mx-auto max-w-2xl text-center">
-        <p class="eyebrow text-brand-700">Başla</p>
-        <h2 id="basla-baslik" class="mt-2 text-4xl font-extrabold sm:text-5xl">Hesabını dört adımda hazırla</h2>
-        <p class="mt-3 text-stone-600">Hepsi {{ config.label }} üzerinde, gerçek para yok. Sırayla ilerle.</p>
+        <p class="eyebrow text-brand-700">Get started</p>
+        <h2 id="basla-baslik" class="mt-2 text-4xl font-extrabold sm:text-5xl">Set up your account in four steps</h2>
+        <p class="mt-3 text-stone-600">All on {{ config.label }}, no real money. Go step by step.</p>
       </div>
 
       <div v-reveal class="card mx-auto max-w-3xl space-y-6 !p-5 sm:!p-8">
@@ -286,17 +281,17 @@ const FAQ = [
                   <Illo name="purse" :size="40" />
                 </span>
                 <div>
-                  <h3 class="text-2xl font-extrabold">1. Cüzdanını bağla</h3>
-                  <p class="text-stone-600">Cüzdan, hesabın ve imzan demektir. Şifreni kimseyle paylaşmayız.</p>
+                  <h3 class="text-2xl font-extrabold">1. Connect your wallet</h3>
+                  <p class="text-stone-600">Your wallet is your account and your signature. We never share your secrets.</p>
                 </div>
               </div>
               <button type="button" class="btn-primary btn-lg" :disabled="wallet.busy" @click="wallet.connect()">
-                {{ wallet.busy ? 'Bağlanıyor…' : 'Cüzdan bağla' }}
+                {{ wallet.busy ? 'Connecting…' : 'Connect wallet' }}
               </button>
               <p v-if="wallet.error" role="alert" class="text-sm text-rose-700">{{ wallet.error }}</p>
               <p class="text-sm text-stone-600">
-                Freighter, xBull, Albedo, LOBSTR, Hana veya Rabet kullanabilirsin. Uzantı yüklemek
-                istemezsen Albedo web üzerinden çalışır.
+                You can use Freighter, xBull, Albedo, LOBSTR, Hana or Rabet. If you do not want to
+                install an extension, Albedo works in the browser.
               </p>
             </div>
 
@@ -304,7 +299,7 @@ const FAQ = [
             <div v-else-if="loading && !account" class="grid min-h-56 place-items-center">
               <div class="flex flex-col items-center gap-3 text-stone-600">
                 <CoinSpinner :size="52" />
-                Hesabın okunuyor…
+                Reading your account…
               </div>
             </div>
 
@@ -315,15 +310,15 @@ const FAQ = [
                   <Illo name="sparkles" :size="40" />
                 </span>
                 <div>
-                  <h3 class="text-2xl font-extrabold">2. Hesabını etkinleştir</h3>
+                  <h3 class="text-2xl font-extrabold">2. Activate your account</h3>
                   <p class="text-stone-600">
-                    Stellar hesabı ilk kez oluşurken az miktarda işlem ücreti (XLM) gerekir. Testnet’te bunu
-                    ücretsiz bir musluktan (Friendbot) alırız.
+                    A Stellar account needs a small amount of transaction fee (XLM) when first created. On Testnet we get it
+                    from a free faucet (Friendbot).
                   </p>
                 </div>
               </div>
               <button type="button" class="btn-primary btn-lg" :disabled="busy !== null" @click="fund">
-                {{ busy === 'fund' ? 'Etkinleştiriliyor…' : `${config.label} hesabını etkinleştir` }}
+                {{ busy === 'fund' ? 'Activating…' : `Activate your ${config.label} account` }}
               </button>
             </div>
 
@@ -334,15 +329,15 @@ const FAQ = [
                   <Illo name="coin" :size="40" />
                 </span>
                 <div>
-                  <h3 class="text-2xl font-extrabold">3. {{ token }} kabul etmeyi aç</h3>
+                  <h3 class="text-2xl font-extrabold">3. Enable accepting {{ token }}</h3>
                   <p class="text-stone-600">
-                    Hesabının {{ token }} tutabilmesi için bir kez izin vermen gerekir (trustline). Cüzdanın
-                    imza isteyecek.
+                    To let your account hold {{ token }}, you need to allow it once (a trustline). Your wallet
+                    will ask for a signature.
                   </p>
                 </div>
               </div>
               <button type="button" class="btn-primary btn-lg" :disabled="busy !== null" @click="trust">
-                {{ busy === 'trust' ? 'Cüzdanı onayla…' : `${token} kabul etmeyi aç` }}
+                {{ busy === 'trust' ? 'Confirm in wallet…' : `Enable accepting ${token}` }}
               </button>
             </div>
 
@@ -353,43 +348,43 @@ const FAQ = [
                   <Illo name="moneybag" :size="40" />
                 </span>
                 <div>
-                  <h3 class="text-2xl font-extrabold">4. Test {{ token }} al</h3>
+                  <h3 class="text-2xl font-extrabold">4. Get test {{ token }}</h3>
                   <p v-if="poolAssetFromCircleFaucet" class="text-stone-600">
-                    Deneme için gerçek olmayan test parası gerekir. Circle’ın sayfasında “Stellar Testnet”
-                    ağını seç, adresini yapıştır.
+                    You need non-real test money to try things out. On Circle’s page, choose the “Stellar Testnet”
+                    network and paste your address.
                   </p>
                   <p v-else class="text-stone-600">
-                    Deneme için gerçek olmayan test parası gerekir. Bu havuz varlığı ({{ token }}) bir faucet'ten değil,
-                    anchor üzerinden yüklenir.
+                    You need non-real test money to try things out. This pool asset ({{ token }}) does not come from a faucet;
+                    it is loaded through the anchor.
                   </p>
                 </div>
               </div>
               <AnchorDemo v-if="!poolAssetFromCircleFaucet" compact @completed="refresh" />
               <div class="flex flex-wrap gap-3">
                 <a v-if="poolAssetFromCircleFaucet" :href="circleFaucetUrl" target="_blank" rel="noopener noreferrer" class="btn-primary btn-lg">
-                  Circle’ı aç <AppIcon name="external" class="!size-4" />
+                  Open Circle <AppIcon name="external" class="!size-4" />
                 </a>
                 <button v-if="poolAssetFromCircleFaucet" type="button" class="btn-secondary btn-lg" @click="copyAddress">
                   <AppIcon name="copy" class="!size-4" />
-                  {{ copied ? 'Kopyalandı ✓' : 'Adresimi kopyala' }}
+                  {{ copied ? 'Copied ✓' : 'Copy my address' }}
                 </button>
                 <button type="button" class="btn-secondary btn-lg" :disabled="loading" @click="refresh">
                   <AppIcon name="refresh" class="!size-4" />
-                  Bakiyemi kontrol et
+                  Check my balance
                 </button>
               </div>
-              <p class="text-sm text-stone-600">Bakiye gelince bu ekran kendiliğinden bir sonraki adıma geçer.</p>
+              <p class="text-sm text-stone-600">This screen moves to the next step automatically once the balance arrives.</p>
             </div>
 
             <!-- Hazır -->
             <div v-else class="flex flex-col items-center gap-4 py-4 text-center">
               <Illo name="party" :size="84" class="pop" />
-              <h3 class="text-3xl font-extrabold">Hazırsın!</h3>
+              <h3 class="text-3xl font-extrabold">You're all set!</h3>
               <p class="max-w-md text-stone-600">
-                Cüzdanın bağlı, hesabın etkin ve test {{ token }} elinde. Şimdi bir havuza katılabilirsin.
+                Your wallet is connected, your account is active and you hold test {{ token }}. You can join a pool now.
               </p>
               <RouterLink to="/join" class="btn-primary btn-lg">
-                Havuza katıl <AppIcon name="arrow" class="!size-4" />
+                Join a pool <AppIcon name="arrow" class="!size-4" />
               </RouterLink>
             </div>
           </div>
@@ -398,7 +393,7 @@ const FAQ = [
         <!-- Hesap özeti -->
         <dl v-if="account && wallet.address" class="grid gap-3 border-t border-stone-100 pt-5 sm:grid-cols-3">
           <div class="rounded-2xl bg-sand/60 p-3.5">
-            <dt class="text-xs text-stone-600">Adres</dt>
+            <dt class="text-xs text-stone-600">Address</dt>
             <dd class="mt-0.5 font-mono text-sm">
               <a
                 :href="explorerAccount(wallet.address)"
@@ -411,7 +406,7 @@ const FAQ = [
             </dd>
           </div>
           <div class="rounded-2xl bg-sand/60 p-3.5">
-            <dt class="text-xs text-stone-600">XLM (işlem ücreti)</dt>
+            <dt class="text-xs text-stone-600">XLM (transaction fee)</dt>
             <dd class="mt-0.5 text-lg font-bold tabular-nums">
               {{ account.exists ? formatDecimalString(account.xlm) : '—' }}
             </dd>
@@ -425,7 +420,7 @@ const FAQ = [
         </dl>
 
         <p v-if="lastTx" class="text-sm text-sage-800">
-          İşlem gönderildi:
+          Transaction sent:
           <a :href="explorerTx(lastTx)" target="_blank" rel="noopener noreferrer" class="font-mono underline">
             {{ lastTx.slice(0, 8) }}…
           </a>
@@ -435,11 +430,11 @@ const FAQ = [
 
       <form v-reveal class="mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-3 px-2" @submit.prevent="openPool">
         <div>
-          <h3 class="text-lg font-bold">Havuz numaran var mı?</h3>
-          <p class="text-sm text-stone-600">Sana verilen numarayı girip doğrudan havuza git.</p>
+          <h3 class="text-lg font-bold">Have a pool number?</h3>
+          <p class="text-sm text-stone-600">Enter the number you were given and go straight to the pool.</p>
         </div>
         <div class="flex gap-2">
-          <label class="sr-only" for="pool-id">Havuz numarası</label>
+          <label class="sr-only" for="pool-id">Pool number</label>
           <input
             id="pool-id"
             v-model="poolIdInput"
@@ -448,10 +443,10 @@ const FAQ = [
             min="0"
             step="1"
             inputmode="numeric"
-            placeholder="Havuz no"
+            placeholder="Pool no."
             required
           />
-          <button type="submit" class="btn-primary">Aç</button>
+          <button type="submit" class="btn-primary">Open</button>
         </div>
       </form>
     </section>
@@ -459,8 +454,8 @@ const FAQ = [
     <!-- 4 · KİM NE YAPAR -->
     <section class="home-roles space-y-8" aria-labelledby="roller-baslik">
       <div v-reveal class="mx-auto max-w-2xl text-center">
-        <p class="eyebrow text-brand-700">Roller</p>
-        <h2 id="roller-baslik" class="mt-2 text-4xl font-extrabold sm:text-5xl">Havuzda kim ne yapar?</h2>
+        <p class="eyebrow text-brand-700">Roles</p>
+        <h2 id="roller-baslik" class="mt-2 text-4xl font-extrabold sm:text-5xl">Who does what in a pool?</h2>
       </div>
       <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <article v-for="(r, i) in ROLES" :key="r.title" v-reveal="i" v-tilt class="role-card bento h-full">
@@ -477,9 +472,9 @@ const FAQ = [
     <!-- 5 · HESAPLA -->
     <section id="hesapla" class="scroll-mt-28 space-y-8" aria-labelledby="hesapla-baslik">
       <div v-reveal class="mx-auto max-w-2xl text-center">
-        <p class="eyebrow text-brand-700">Hesapla</p>
-        <h2 id="hesapla-baslik" class="mt-2 text-4xl font-extrabold sm:text-5xl">Planını birlikte çizelim</h2>
-        <p class="mt-3 text-stone-600">Amacını seç, tutarı ve kişi sayısını ayarla. Sağdaki paralar üye sayısını gösterir.</p>
+        <p class="eyebrow text-brand-700">Calculate</p>
+        <h2 id="hesapla-baslik" class="mt-2 text-4xl font-extrabold sm:text-5xl">Let’s sketch your plan together</h2>
+        <p class="mt-3 text-stone-600">Pick your goal and adjust the amount and number of people. The coins on the right show the member count.</p>
       </div>
       <div v-reveal>
         <PoolCalculator />
@@ -490,10 +485,10 @@ const FAQ = [
     <section class="home-trust espresso relative overflow-hidden rounded-[2.25rem] px-5 py-12 text-white sm:px-10 sm:py-16" aria-labelledby="guven-baslik">
       <div class="trust-intro">
         <div v-reveal>
-          <p class="eyebrow text-gold-300">Güven modeli</p>
-          <h2 id="guven-baslik" class="mt-3 text-4xl font-extrabold sm:text-5xl">Kurallar kodda.<br /><span>Herkese açık.</span></h2>
-          <p class="trust-description">Katkının nereye gittiğini gör. Sırayı, onayları ve ödeme koşullarını grubunla birlikte takip et.</p>
-          <a href="#sss" class="trust-link">Kuralları ve sınırları incele <AppIcon name="arrow" /></a>
+          <p class="eyebrow text-gold-300">Trust model</p>
+          <h2 id="guven-baslik" class="mt-3 text-4xl font-extrabold sm:text-5xl">Rules in code.<br /><span>Open to everyone.</span></h2>
+          <p class="trust-description">See where your contribution goes. Follow the order, approvals and payment conditions together with your group.</p>
+          <a href="#sss" class="trust-link">Review the rules and limits <AppIcon name="arrow" /></a>
         </div>
         <div v-reveal><ContractFlow /></div>
       </div>
@@ -511,10 +506,43 @@ const FAQ = [
           <p class="mt-1.5 text-sm leading-relaxed text-stone-200">{{ t.text }}</p>
         </article>
       </div>
+      <div class="trust-verify" v-reveal>
+        <span>Check for yourself:</span>
+        <a
+          v-if="poolContractId"
+          :href="explorerContract(poolContractId)"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Open the contract on Stellar Expert <AppIcon name="external" />
+        </a>
+        <a href="https://github.com/yusufarslan44/Stellerpool" target="_blank" rel="noopener noreferrer">
+          Source code (GitHub) <AppIcon name="external" />
+        </a>
+      </div>
+      <div class="trust-offchain" v-reveal aria-labelledby="merkezi-baslik">
+        <h3 id="merkezi-baslik">Still centralized</h3>
+        <p>We do not claim to be fully decentralized. For the following items you still rely on someone, or on a server:</p>
+        <ul>
+          <li v-for="o in OFFCHAIN" :key="o.title"><strong>{{ o.title }}</strong><span>{{ o.text }}</span></li>
+        </ul>
+      </div>
       <p class="mt-8 text-center text-xs text-stone-300">
-        Kontrat Testnet’te yayında ve birim testlerinden geçti, ancak bağımsız güvenlik denetiminden geçmedi;
-        gerçek para için kullanılmamalıdır.
+        The contract is live on Testnet and passed its unit tests, but has not had an independent security audit;
+        it must not be used with real money.
       </p>
+    </section>
+
+    <!-- 6b · ÜCRETLER -->
+    <section id="ucretler" class="home-fees scroll-mt-28 space-y-8" aria-labelledby="ucret-baslik">
+      <div v-reveal class="mx-auto max-w-2xl text-center">
+        <p class="eyebrow text-brand-700">Fees</p>
+        <h2 id="ucret-baslik" class="mt-2 text-4xl font-extrabold sm:text-5xl">What do you pay, and to whom?</h2>
+        <p class="mt-3 text-stone-600">
+          No organization fee, commission or interest. The only thing you pay is the network’s very small transaction fee.
+        </p>
+      </div>
+      <div v-reveal><FeesTable /></div>
     </section>
 
     <!-- 7 · ANCHOR SİMÜLASYONU -->
@@ -523,10 +551,10 @@ const FAQ = [
     <!-- 8 · SSS -->
     <section id="sss" class="home-faq scroll-mt-28" aria-labelledby="sss-baslik">
       <div v-reveal class="faq-heading">
-        <p class="eyebrow text-brand-700">Aklındakiler</p>
-        <h2 id="sss-baslik" class="mt-2 text-4xl font-extrabold sm:text-5xl">Sık sorulan sorular</h2>
+        <p class="eyebrow text-brand-700">Your questions</p>
+        <h2 id="sss-baslik" class="mt-2 text-4xl font-extrabold sm:text-5xl">Frequently asked questions</h2>
         <p class="mt-3 text-sm text-stone-600">
-          Cevaplar Testnet prototipini anlatır. Bağımsız denetimden geçmeden gerçek para için kullanılmamalıdır.
+          The answers describe the Testnet prototype. It must not be used with real money before an independent audit.
         </p>
       </div>
       <div class="faq-list">
@@ -545,8 +573,8 @@ const FAQ = [
       </div>
     </section>
     <section v-reveal class="home-closing" aria-labelledby="closing-title">
-      <div><p class="eyebrow">BÜYÜK HEDEFLER, KÜÇÜK ADIMLAR</p><h2 id="closing-title">İlk adımı<br /><span>birlikte atalım.</span></h2><p>Grubunu düşün, planını oluştur.<br />Nasıl işlediğini Testnet’te keşfet.</p></div>
-      <div class="closing-actions"><a href="#basla" class="closing-primary">Hesabını hazırla <AppIcon name="arrow" /></a><a href="#hesapla">Önce planımı hesaplayayım ↗</a><span>Gerçek para kullanılmaz.</span></div>
+      <div><p class="eyebrow">BIG GOALS, SMALL STEPS</p><h2 id="closing-title">Let’s take the<br /><span>first step together.</span></h2><p>Think of your group, build your plan.<br />Discover how it works on Testnet.</p></div>
+      <div class="closing-actions"><a href="#basla" class="closing-primary">Set up your account <AppIcon name="arrow" /></a><a href="#hesapla">Let me calculate my plan first ↗</a><span>No real money is used.</span></div>
       <span class="closing-orbit" aria-hidden="true" /><span class="closing-star" aria-hidden="true">✳</span>
     </section>
   </div>
@@ -583,6 +611,17 @@ const FAQ = [
 .home-trust article h3 { color: #edf0d9; font-size: 16px; }
 .home-trust article p { color: #adbc9a; font-size: 12px; line-height: 1.85; }
 .home-trust > p { color: #92a785; font-size: 10px; }
+.trust-verify { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px 22px; margin-top: 26px; color: #92a785; font-size: 11px; }
+.trust-verify a { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; color: #e2d4a1; text-decoration: underline; text-underline-offset: 3px; }
+.trust-verify :deep(svg) { width: 13px; height: 13px; }
+.trust-offchain { margin-top: 26px; padding: 26px 28px; border: 1px dashed #d9c98a66; border-radius: 22px; background: #ffffff05; }
+.trust-offchain h3 { color: #e9dfb2; font: 600 18px var(--font-display); }
+.trust-offchain > p { margin-top: 6px; color: #adbc9a; font-size: 12px; line-height: 1.8; }
+.trust-offchain ul { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px 24px; margin-top: 18px; }
+.trust-offchain li { display: grid; gap: 3px; align-content: start; }
+.trust-offchain li strong { color: #edf0d9; font-size: 13px; font-weight: 600; }
+.trust-offchain li span { color: #adbc9a; font-size: 12px; line-height: 1.75; }
+.home-fees { padding-top: 8px; }
 .home-faq { display: grid; grid-template-columns: .8fr 1.5fr; gap: 55px; align-items: start; }
 .faq-heading { position: sticky; top: 125px; }
 .home-faq h2 { font-size: 43px; }
@@ -607,7 +646,7 @@ const FAQ = [
 .closing-orbit::after { content: ''; position: absolute; inset: 35px; border: 1px dashed #b3c19555; border-radius: 50%; }
 .closing-star { position: absolute; top: 38px; right: 330px; font-size: 95px; line-height: 1; color: #acbd8452; transform: rotate(-15deg); z-index: -1; }
 @media(max-width:1200px) { .home-story::before { left: -10px; right: -10px; } }
-@media(max-width:1023px) { .home-faq { gap: 30px; grid-template-columns: .8fr 1.3fr; } .trust-intro { gap: 25px; grid-template-columns: 1fr; } .trust-description { max-width: 480px; } }
-@media(max-width:767px) { .home-intro-strip { justify-content: center; gap: 15px 20px; padding-inline: 0; } .home-intro-strip .intro-strip-label { flex-basis: 100%; justify-content: center; } .home-intro-strip > span { font-size: 10px; } .home-page :deep(h2) { font-size: 34px; } .home-story::before { inset: 90px -10px -20px; border-radius: 28px; } .home-faq { grid-template-columns: 1fr; gap: 28px; } .faq-heading { position: static; text-align: center; } .faq-heading > p:last-child { margin-inline: auto; max-width: 330px; } .home-closing { padding: 32px 25px; flex-direction: column; align-items: flex-start; gap: 27px; border-radius: 25px; } .home-closing h2 { font-size: 41px; } .closing-actions { align-items: flex-start; } .closing-star { right: 20px; top: 40px; } .role-card { padding: 23px 20px; } }
+@media(max-width:1023px) { .trust-offchain ul { grid-template-columns: repeat(2, 1fr); } .home-faq { gap: 30px; grid-template-columns: .8fr 1.3fr; } .trust-intro { gap: 25px; grid-template-columns: 1fr; } .trust-description { max-width: 480px; } }
+@media(max-width:767px) { .trust-offchain { padding: 22px 18px; } .trust-offchain ul { grid-template-columns: 1fr; } .home-intro-strip { justify-content: center; gap: 15px 20px; padding-inline: 0; } .home-intro-strip .intro-strip-label { flex-basis: 100%; justify-content: center; } .home-intro-strip > span { font-size: 10px; } .home-page :deep(h2) { font-size: 34px; } .home-story::before { inset: 90px -10px -20px; border-radius: 28px; } .home-faq { grid-template-columns: 1fr; gap: 28px; } .faq-heading { position: static; text-align: center; } .faq-heading > p:last-child { margin-inline: auto; max-width: 330px; } .home-closing { padding: 32px 25px; flex-direction: column; align-items: flex-start; gap: 27px; border-radius: 25px; } .home-closing h2 { font-size: 41px; } .closing-actions { align-items: flex-start; } .closing-star { right: 20px; top: 40px; } .role-card { padding: 23px 20px; } }
 @media(prefers-reduced-motion:reduce) { .role-art, .closing-primary { transition: none; } .role-card:hover .role-art { transform: rotate(-7deg); } .closing-primary:hover { transform: none; } }
 </style>

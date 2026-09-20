@@ -7,7 +7,7 @@ export function errorMessage(e: unknown): string {
     if (typeof obj.message === 'string') return obj.message
     if (typeof obj.error === 'string') return obj.error
   }
-  return 'Bilinmeyen bir hata oluştu.'
+  return 'An unknown error occurred.'
 }
 
 /** Kullanıcı cüzdan penceresini kapattıysa veya imzayı reddettiyse true. */

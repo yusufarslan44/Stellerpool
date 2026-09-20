@@ -53,9 +53,9 @@ function requireHttps(url: string, what: string): URL {
   try {
     parsed = new URL(url)
   } catch {
-    throw new Error(`Anchor ${what} adresi geçersiz.`)
+    throw new Error(`The anchor ${what} address is invalid.`)
   }
-  if (parsed.protocol !== 'https:') throw new Error(`Anchor ${what} adresi https olmalı.`)
+  if (parsed.protocol !== 'https:') throw new Error(`The anchor ${what} address must use https.`)
   return parsed
 }
 
@@ -84,9 +84,9 @@ async function requestJson<T>(url: string, init: RequestInit = {}): Promise<T> {
   }
   if (!res.ok) {
     const detail = (body as { error?: string } | null)?.error ?? text.slice(0, 140)
-    throw new Error(`Anchor yanıtı ${res.status}: ${detail || 'ayrıntı yok'}`)
+    throw new Error(`Anchor response ${res.status}: ${detail || 'no details'}`)
   }
-  if (body === null || typeof body !== 'object') throw new Error('Anchor beklenmeyen bir yanıt verdi.')
+  if (body === null || typeof body !== 'object') throw new Error('The anchor returned an unexpected response.')
   return body as T
 }
 
@@ -109,10 +109,10 @@ export async function resolveAnchor(domain: string = anchorDomain): Promise<Anch
   const toml = await StellarToml.Resolver.resolve(domain, { timeout: TIMEOUT_MS })
   const { WEB_AUTH_ENDPOINT, TRANSFER_SERVER_SEP0024, SIGNING_KEY } = toml
   if (!WEB_AUTH_ENDPOINT || !TRANSFER_SERVER_SEP0024 || !SIGNING_KEY) {
-    throw new Error(`${domain} SEP-10 ve SEP-24 uç noktalarını yayınlamıyor.`)
+    throw new Error(`${domain} does not publish SEP-10 and SEP-24 endpoints.`)
   }
   if (toml.NETWORK_PASSPHRASE && toml.NETWORK_PASSPHRASE !== config.passphrase) {
-    throw new Error(`${domain} farklı bir ağ için yapılandırılmış.`)
+    throw new Error(`${domain} is configured for a different network.`)
   }
   requireHttps(WEB_AUTH_ENDPOINT, 'web auth')
   const sep24 = requireHttps(TRANSFER_SERVER_SEP0024, 'SEP-24')
@@ -160,9 +160,9 @@ export async function authenticate(anchor: AnchorInfo, account: string, sign: Si
   challengeUrl.searchParams.set('account', account)
   challengeUrl.searchParams.set('home_domain', anchor.domain)
   const challenge = await requestJson<{ transaction?: string; network_passphrase?: string }>(challengeUrl.toString())
-  if (!challenge.transaction) throw new Error('Anchor challenge işlemi göndermedi.')
+  if (!challenge.transaction) throw new Error('The anchor did not send a challenge transaction.')
   if (challenge.network_passphrase && challenge.network_passphrase !== config.passphrase) {
-    throw new Error('Anchor challenge farklı bir ağ için hazırlanmış.')
+    throw new Error('The anchor challenge was prepared for a different network.')
   }
 
   // Sunucu imzası, home domain ve web_auth_domain kontrolü (SEP-10 istemci doğrulaması).
@@ -173,7 +173,7 @@ export async function authenticate(anchor: AnchorInfo, account: string, sign: Si
     anchor.domain,
     new URL(anchor.webAuthEndpoint).host,
   )
-  if (clientAccountID !== account) throw new Error('Anchor challenge başka bir hesap için üretilmiş.')
+  if (clientAccountID !== account) throw new Error('The anchor challenge was generated for a different account.')
 
   const { signedTxXdr } = await sign(challenge.transaction, { networkPassphrase: config.passphrase, address: account })
   const res = await requestJson<{ token?: string }>(anchor.webAuthEndpoint, {
@@ -181,7 +181,7 @@ export async function authenticate(anchor: AnchorInfo, account: string, sign: Si
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ transaction: signedTxXdr }),
   })
-  if (!res.token) throw new Error('Anchor oturum anahtarı vermedi.')
+  if (!res.token) throw new Error('The anchor did not provide a session key.')
   return res.token
 }
 
@@ -229,7 +229,7 @@ export async function getTransaction(anchor: AnchorInfo, token: string, id: stri
     headers: { Authorization: `Bearer ${token}` },
   })
   const t = res.transaction
-  if (!t?.status) throw new Error('Anchor işlem durumunu vermedi.')
+  if (!t?.status) throw new Error('The anchor did not provide the transaction status.')
   return {
     id: t.id ?? id,
     status: t.status,
@@ -242,19 +242,19 @@ export async function getTransaction(anchor: AnchorInfo, token: string, id: stri
 /** SEP-24 durum kodlarının Türkçe karşılıkları. */
 export const STATUS_LABELS: Record<string, string> = {
   incomplete: 'Anchor formu bekleniyor',
-  pending_user_transfer_start: 'Senden ödeme bekleniyor',
-  pending_user_transfer_complete: 'Ödemen işleniyor',
-  pending_external: 'Dış sistemde işleniyor',
-  pending_anchor: 'Anchor işliyor',
-  pending_stellar: 'Stellar işlemi bekleniyor',
-  pending_trust: 'Varlık için trustline gerekiyor',
-  pending_user: 'Senden işlem bekleniyor',
-  completed: 'Tamamlandı',
-  refunded: 'İade edildi',
-  expired: 'Süresi doldu',
+  pending_user_transfer_start: 'Waiting for your payment',
+  pending_user_transfer_complete: 'Your payment is being processed',
+  pending_external: 'Processing in an external system',
+  pending_anchor: 'The anchor is processing',
+  pending_stellar: 'Waiting for the Stellar transaction',
+  pending_trust: 'A trustline is required for the asset',
+  pending_user: 'Waiting for action from you',
+  completed: 'Completed',
+  refunded: 'Refunded',
+  expired: 'Expired',
   no_market: 'Uygun piyasa yok',
-  too_small: 'Tutar çok küçük',
-  too_large: 'Tutar çok büyük',
+  too_small: 'Amount too small',
+  too_large: 'Amount too large',
   error: 'Anchor hata bildirdi',
 }
 

@@ -23,7 +23,7 @@ export const useWalletStore = defineStore('wallet', () => {
     try {
       const { networkPassphrase } = await StellarWalletsKit.getNetwork()
       if (networkPassphrase && networkPassphrase !== config.passphrase) {
-        networkWarning.value = `Cüzdanınız ${config.label} ağında değil. İşlem yapmadan önce cüzdanınızı ${config.label} ağına geçirin.`
+        networkWarning.value = `Your wallet is not on ${config.label}. Switch your wallet to ${config.label} before transacting.`
       }
     } catch {
       // Bazı cüzdanlar ağ bilgisini vermez; imza sırasında zaten ağ parolası gönderiyoruz.
@@ -65,7 +65,7 @@ export const useWalletStore = defineStore('wallet', () => {
   /** `contract.Client` ve trustline işlemleri için imza fonksiyonu. */
   async function signTransaction(xdr: string, opts?: SignOptions) {
     requireTestnetDemo()
-    if (!address.value) throw new Error('Önce cüzdanınızı bağlayın.')
+    if (!address.value) throw new Error('Connect your wallet first.')
     return StellarWalletsKit.signTransaction(xdr, {
       networkPassphrase: opts?.networkPassphrase ?? config.passphrase,
       address: opts?.address ?? address.value,
