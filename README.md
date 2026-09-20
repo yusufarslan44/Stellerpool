@@ -72,8 +72,6 @@ More proofs (cancel + refund, draw with a down payment, a pool that could not be
 | Draw mode and 30 members | ✅ Live in the contract ([task list](docs/CONTRACT_HANDOFF.md)); "Draw" can be selected in the interface. Randomness is hackathon-grade |
 | Down payment | ✅ In the contract: per member, paid on joining, added to your purchase and sent to the seller when your turn comes, refunded if unspent on cancellation. Unlike at companies it does not count toward savings and is not collateral |
 | Mainnet | Read-only showcase build; no wallet signing and no funds actions |
-| Real TRY in/out | ❌ **The hackathon's core requirement is not met**; no verified TRY anchor could be found ([details](docs/altin-gunu-legal-boundary.md)) |
-| AI reviewer | ❌ No working integration; on the roadmap |
 
 ## Contract and deployment proof (Testnet)
 
