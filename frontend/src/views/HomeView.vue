@@ -19,6 +19,7 @@ import {
   explorerAccount,
   explorerTx,
   poolAsset,
+  poolAssetFromCircleFaucet,
   poolContractId,
 } from '@/lib/stellar'
 import { addTrustline, fundWithFriendbot, loadAccount } from '@/services/account'
@@ -349,17 +350,22 @@ const FAQ = [
                 </span>
                 <div>
                   <h3 class="text-2xl font-extrabold">4. Test {{ token }} al</h3>
-                  <p class="text-stone-600">
+                  <p v-if="poolAssetFromCircleFaucet" class="text-stone-600">
                     Deneme için gerçek olmayan test parası gerekir. Circle’ın sayfasında “Stellar Testnet”
                     ağını seç, adresini yapıştır.
                   </p>
+                  <p v-else class="text-stone-600">
+                    Deneme için gerçek olmayan test parası gerekir. Bu havuz varlığı ({{ token }}) bir faucet'ten değil,
+                    anchor üzerinden yüklenir.
+                  </p>
                 </div>
               </div>
+              <AnchorDemo v-if="!poolAssetFromCircleFaucet" compact @completed="refresh" />
               <div class="flex flex-wrap gap-3">
-                <a :href="circleFaucetUrl" target="_blank" rel="noopener noreferrer" class="btn-primary btn-lg">
+                <a v-if="poolAssetFromCircleFaucet" :href="circleFaucetUrl" target="_blank" rel="noopener noreferrer" class="btn-primary btn-lg">
                   Circle’ı aç <AppIcon name="external" class="!size-4" />
                 </a>
-                <button type="button" class="btn-secondary btn-lg" @click="copyAddress">
+                <button v-if="poolAssetFromCircleFaucet" type="button" class="btn-secondary btn-lg" @click="copyAddress">
                   <AppIcon name="copy" class="!size-4" />
                   {{ copied ? 'Kopyalandı ✓' : 'Adresimi kopyala' }}
                 </button>

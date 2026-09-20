@@ -43,6 +43,11 @@ export const poolAsset = new Asset(
     'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5',
 )
 
+/** Circle'ın Testnet USDC ihraççısı: bu varlığın test bakiyesi Circle faucet'inden alınır. */
+export const CIRCLE_TESTNET_USDC_ISSUER = 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5'
+export const poolAssetFromCircleFaucet =
+  poolAsset.getCode() === 'USDC' && poolAsset.getIssuer() === CIRCLE_TESTNET_USDC_ISSUER
+
 /** Havuz asset'inin Stellar Asset Contract (SAC) adresi. Kontrat token olarak bunu alır. */
 export const poolTokenContractId = poolAsset.contractId(config.passphrase)
 

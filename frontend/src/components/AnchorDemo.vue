@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import AppIcon from '@/components/AppIcon.vue'
 import Illo from '@/components/Illo.vue'
@@ -32,6 +32,10 @@ const props = defineProps<{
 const emit = defineEmits<{ completed: [] }>()
 
 const live = !mainnetShowcase
+/** Sayfada birden fazla örnek olabilir (ana sayfada kompakt + tam); id'ler benzersiz olmalı. */
+const uid = useId()
+const titleId = `anchor-title-${uid}`
+const assetSelectId = `anchor-asset-${uid}`
 const poolCode = poolAsset.getCode()
 const wallet = useWalletStore()
 
@@ -56,6 +60,8 @@ const depositAssets = computed(() =>
     .map(([code, v]) => ({ code, ...v })),
 )
 const selected = computed(() => depositAssets.value.find((a) => a.code === asset.value) ?? null)
+/** Anchor gerçek bir TRY varlığı sunuyorsa (TRY/TRYB); aksi halde test anchor'ı olarak etiketlenir. */
+const realTryAnchor = computed(() => !usingTestAnchor && !!anchor.value?.supportsTry)
 const finished = computed(() => (tx.value ? TERMINAL_STATUSES.has(tx.value.status) : false))
 watch(
   () => tx.value?.status,
@@ -175,21 +181,21 @@ function advance() {
 </script>
 
 <template>
-  <section v-if="!compact || live" :class="compact ? 'space-y-4' : 'card space-y-5'" aria-labelledby="anchor-demo-title">
+  <section v-if="!compact || live" :class="compact ? 'space-y-4' : 'card space-y-5'" :aria-labelledby="titleId">
     <div v-if="!compact" class="flex flex-wrap items-start justify-between gap-3">
       <div>
         <p class="eyebrow text-brand-700">Anchor · SEP-1 / SEP-10 / SEP-24</p>
-        <h2 id="anchor-demo-title" class="mt-1 text-2xl font-extrabold">TRY ile Stellar bağlantısı</h2>
+        <h2 :id="titleId" class="mt-1 text-2xl font-extrabold">TRY ile Stellar bağlantısı</h2>
       </div>
-      <span v-if="live" class="badge" :class="usingTestAnchor ? 'bg-gold-100 text-amber-900' : 'bg-brand-100 text-brand-800'">
-        {{ usingTestAnchor ? 'Test anchor · TRY değil' : anchorDomain }}
+      <span v-if="live" class="badge" :class="realTryAnchor ? 'bg-brand-100 text-brand-800' : 'bg-gold-100 text-amber-900'">
+        {{ usingTestAnchor ? 'Test anchor · TRY değil' : realTryAnchor ? anchorDomain : 'Test anchor · gerçek TL değil' }}
       </span>
       <span v-else class="badge bg-amber-100 text-amber-900">Yalnızca simülasyon</span>
     </div>
 
     <!-- CANLI AKIŞ -->
     <template v-if="live">
-      <p v-if="compact" id="anchor-demo-title" class="text-sm leading-relaxed text-stone-600">
+      <p v-if="compact" :id="titleId" class="text-sm leading-relaxed text-stone-600">
         Bakiyeni <strong>{{ anchorDomain }}</strong> üzerinden {{ poolCode }} olarak yükle: cüzdanınla giriş imzalarsın, yatırma anchor'ın
         kendi penceresinde yapılır ve durum burada izlenir.
         <template v-if="usingTestAnchor || (anchor && !anchor.supportsTry)">
@@ -222,7 +228,7 @@ function advance() {
           <span class="badge bg-sage-100 text-sage-800"><AppIcon name="check" class="!size-3.5" /> stellar.toml okundu</span>
           <span class="badge bg-stone-100 text-stone-700">Varlıklar: {{ anchor.assetCodes.join(' · ') }}</span>
           <span class="badge" :class="anchor.supportsTry ? 'bg-sage-100 text-sage-800' : 'bg-gold-100 text-amber-900'">
-            {{ anchor.supportsTry ? 'TRY destekleniyor' : 'TRY yok' }}
+            {{ anchor.supportsTry ? 'TRY destekleniyor' : anchor.representsTry ? 'TRY temsili test varlığı · gerçek TL değil' : 'TRY yok' }}
           </span>
         </div>
 
@@ -252,8 +258,8 @@ function advance() {
               <span v-if="selected.minAmount || selected.maxAmount" class="text-stone-600"> · işlem başına {{ selected.minAmount ?? '—' }}–{{ selected.maxAmount ?? '—' }}</span>
             </p>
             <div v-else>
-              <label class="label" for="anchor-asset">Yatırılacak varlık</label>
-              <select id="anchor-asset" v-model="asset" class="input">
+              <label class="label" :for="assetSelectId">Yatırılacak varlık</label>
+              <select :id="assetSelectId" v-model="asset" class="input">
                 <option v-for="a in depositAssets" :key="a.code" :value="a.code">
                   {{ a.code === 'native' ? 'XLM' : a.code }}{{ a.minAmount || a.maxAmount ? ` (${a.minAmount ?? '—'}–${a.maxAmount ?? '—'})` : '' }}
                 </option>

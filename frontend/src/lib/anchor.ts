@@ -33,8 +33,10 @@ export interface AnchorInfo {
   withdraw: Record<string, AssetSupport>
   /** stellar.toml'da ve SEP-24 bilgisinde geçen tüm varlık kodları. */
   assetCodes: string[]
-  /** Anchor TRY veya TRYB varlığı sunuyor mu? Sunmuyorsa arayüz "TRY değil" der. */
+  /** Anchor gerçek bir TRY varlığı (TRY / TRYB) sunuyor mu? Sunmuyorsa arayüz "TRY değil" der. */
   supportsTry: boolean
+  /** TRY'yi yalnızca TEMSİL eden bir test varlığı (örn. TRYT) var mı? Bu gerçek Türk lirası değildir. */
+  representsTry: boolean
   /** stellar.toml [[CURRENCIES]] kayıtlarındaki varlık kodu → ihraççı eşlemesi (native'in ihraççısı yoktur). */
   issuers: Record<string, string>
 }
@@ -135,7 +137,8 @@ export async function resolveAnchor(domain: string = anchorDomain): Promise<Anch
     deposit,
     withdraw,
     assetCodes,
-    supportsTry: assetCodes.some((c) => /^TRY/i.test(c)),
+    supportsTry: assetCodes.some((c) => /^TRYB?$/i.test(c)),
+    representsTry: assetCodes.some((c) => /^TRY/i.test(c) && !/^TRYB?$/i.test(c)),
     issuers,
   }
 }
