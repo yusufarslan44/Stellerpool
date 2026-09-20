@@ -19,7 +19,7 @@ export const MAX_MEMBERS =
   Number.isInteger(configuredMax) && configuredMax >= MIN_MEMBERS && configuredMax <= UI_MAX_MEMBERS
     ? configuredMax
     : DEFAULT_MAX_MEMBERS
-/** Havuz: Filling → Active → Completed / Aborted. */
+/** Pool: Filling → Active → Completed / Aborted. */
 export type PoolStatus = 'Filling' | 'Active' | 'Completed' | 'Aborted'
 
 /**
@@ -38,7 +38,7 @@ export type RoundPhase = 'Collecting' | 'Grace' | 'AwaitingDraw' | 'AwaitingPurc
 export interface PoolInfo {
   id: number
   creator: string
-  /** Havuz asset'inin SAC kontrat adresi. */
+  /** SAC contract address of the pool asset. */
   token: string
   contributionAmount: bigint
   memberLimit: number

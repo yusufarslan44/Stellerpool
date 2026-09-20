@@ -11,7 +11,7 @@ defineProps<{ kind: 1 | 2 | 3 | 4 | 5 }>()
     <rect width="240" height="170" rx="22" fill="#f4f3e2" />
     <circle cx="200" cy="30" r="46" fill="#c9edd8" opacity="0.55" />
 
-    <!-- 1: havuzu kur -->
+    <!-- 1: set up the pool -->
     <g v-if="kind === 1">
       <g v-for="(x, i) in [52, 100, 148, 196]" :key="x">
         <circle

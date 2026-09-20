@@ -1,22 +1,22 @@
-# Sunum içeriği taslağı (Pro Hackathon 2026)
+# Pitch content draft (Pro Hackathon 2026)
 
-**Sürüm notu:** Bu taslak tarihsel v10/v11 demo kanıtları içerir. Yeni doğrulayıcısız API v12 dağıtılana kadar canlı sitede yeni akış gösterilemez. Güncel ürün akışı için [plan](plan.md) esas alınır.
+**Version note:** This draft still contains historical v10/v11 demo proofs. The current product flow is the verifier-free **API v12** (contract `CB5O6WCGCSA5PKH5HXWKO3WFEDHNEKJ5ZNW6EMNSERYDK6J4VYKLG46O`, live on Testnet, 33 unit tests). For the current product flow, [plan](plan.md) and the [README](../README.md) are authoritative.
 
-Bu, resmi Stellar sunum şablonuna (kopyasını alıp doldurun — orijinali düzenlemeyin)
-yapıştırmaya hazır, slayt slayt içerik taslağıdır. Şablonun kendi slayt sırası/başlıkları
-bundan farklıysa, içeriği ona göre dağıtın — yapı değil, içerik önemli.
+This is a slide-by-slide content draft, ready to paste into the official Stellar
+presentation template (make a copy and fill it in — do not edit the original). If the
+template's own slide order or headings differ, distribute the content accordingly: the
+content matters, not the structure.
 
-**Dil notu:** Aşağıdaki metin Türkçe yazıldı (projenin çalışma dili). Jüri karışık/
-uluslararası olabileceğinden sunumu İngilizce'ye çevirmek muhtemelen daha güvenli —
-bu bir karar noktası, siz seçin.
+**Language note:** The pitch is written in English so that a mixed/international jury can
+follow it directly.
 
 ---
 
-## 1. Başlık / Takım
+## 1. Title / Team
 
-**Stellarpool** — şeffaf, akıllı sözleşme tabanlı grup tasarruf havuzu (Stellar/Soroban)
+**Stellarpool** — a transparent, smart-contract-based group savings pool (Stellar/Soroban)
 
-> Birlikte biriktir. Her şeyi doğrula.
+> Save together. Verify everything.
 
 Track: **Genesis**
 
@@ -24,161 +24,168 @@ Track: **Genesis**
 
 ## 2. Problem (Narrative Why)
 
-Türkiye'de ev, araç ya da ortak bir hedef için grup halinde birikim yapmak çok
-yaygın: altın günleri, tasarruf finansman şirketlerinin (Eminevim, Fuzul gibi)
-çekilişli/sıralı grupları.
+Saving in a group for a home, a car or a shared goal is very common in Turkey:
+"gold days" circles and the draw-based/ordered groups of savings-finance companies
+(such as Eminevim and Fuzul).
 
-**Ortak sorun güven:**
-- Para bir kişinin ya da bir kurumun elinde toplanır.
-- Kurallar (kimin ne zaman alacağı, biri ödemezse ne olacağı) genelde şeffaf değil.
-- Katılımcının elinde, "param nerede, kurallar gerçekten uygulanıyor mu" sorusuna
-  cevap verecek bir kanıt yok — güvene dayalı bir sistem.
+**The shared problem is trust:**
+- The money is collected in the hands of one person or one institution.
+- The rules (who receives when, what happens if someone stops paying) are usually not transparent.
+- A participant has no proof that answers "where is my money, and are the rules really
+  being applied?" — it is a system based on trust.
 
-**Hedef kullanıcı:** birbirini tanıyan, ortak bir alım için sırayla ya da kurayla
-birikim yapmak isteyen küçük gruplar (arkadaş çevresi, aile, iş arkadaşları).
-
----
-
-## 3. Çözüm / Değer önerisi
-
-Stellarpool bu koordinasyonu bir kişiye ya da kuruma değil, **bir Soroban akıllı
-sözleşmesine** emanet eder:
-
-- Katkılar tur bazında doğrudan kontratta toplanır — kurucunun ortak parayı tek
-  başına çekme yetkisi **hiçbir zaman** yoktur.
-- API v12 akışında ödeme, **tüm üyelerin onayladığı kurallar**, eksiksiz tur katkıları ve alıcının alım kaydı sonrasında kayıtlı demo satıcısına gider — alıcının cebine değil.
-- Alıcı sırası ya da **kura** ile belirlenir (30 üyeye kadar grup desteklenir).
-- Bir ödeme aksarsa tur durur; yalnızca **o turun** katkıları sahiplerine iade
-  edilir — kurallar kod içinde, herkes zincir üstünden doğrulayabilir.
-
-Bu, Fuzul/Eminevim gibi mevcut ürünlerin sunduğu deneyime (sıra/kura ile ev-araç
-birikimi) yaklaşırken, "güven bana" yerine "doğrula" diyen bir model sunuyor.
+**Target user:** small groups who know each other and want to save toward a shared
+purchase, by rotation or by draw (friends, family, colleagues).
 
 ---
 
-## 4. Canlı demo
+## 3. Solution / Value proposition
 
-- **Demo URL:** https://stellerpool.arslanyusuf.com (Testnet, canlı kontrata bağlı)
-- **Kontrat:** `CC7W3SKQHBLZ2JPTGSK42H6IAJQ22A4PUK6CSN2T4PUJRY4LQ445GYMB` (API v10,
+Stellarpool entrusts this coordination not to a person or an institution but to a
+**Soroban smart contract**:
+
+- Contributions are collected directly in the contract per round — the founder **never**
+  has the authority to withdraw the shared money alone.
+- In the API v12 flow, payment goes to the registered demo seller — not to the
+  recipient's pocket — after the **rules approved by all members**, the complete round
+  contributions and the recipient's purchase record.
+- The recipient is chosen by fixed order or by **draw** (groups of up to 30 members are supported).
+- If a payment stalls, the round stops; only **that round's** contributions are refunded
+  to their owners — the rules are in code and anyone can verify them on-chain.
+
+While approaching the experience that existing products such as Fuzul/Eminevim offer
+(saving for a home or car by order/draw), it offers a model that says "verify" instead of
+"trust me".
+
+---
+
+## 4. Live demo
+
+- **Demo URL:** https://stellerpool.arslanyusuf.com (Testnet, connected to the live contract)
+- **Contract:** `CB5O6WCGCSA5PKH5HXWKO3WFEDHNEKJ5ZNW6EMNSERYDK6J4VYKLG46O` (API v12,
   Stellar Testnet)
-- V12 dağıtıldıktan sonra gösterilecek akış: plan gir → uygun havuza katıl veya aç → üyeler koşulları onaylar → başlat → katkı yatır → (kura varsa) kura çek → alımı kaydet → satıcıya öde.
+- Flow to show: enter a plan → join a matching pool or open one → members approve the
+  terms → start → deposit contributions → (if draw) hold the draw → record the purchase →
+  pay the seller.
 
-*(Buraya 2-3 ekran görüntüsü veya kısa bir GIF/video ekleyin: havuz oluşturma,
-kura çekme anı, tamamlanmış havuz.)*
+*(Add 2–3 screenshots or a short GIF/video here: pool creation, the moment of the draw,
+a completed pool.)*
 
 ---
 
-## 5. Teknik mimari
+## 5. Technical architecture
 
-**Akıllı sözleşme (Soroban, Rust):**
-- `rotating_pool` kontratı — çok havuzlu, tam durum makinesi:
-  `Filling → Active → Completed | Aborted`; tur: `Collecting → Grace →
+**Smart contract (Soroban, Rust):**
+- The `rotating_pool` contract — multi-pool, with a full state machine:
+  `Filling → Active → Completed | Aborted`; round: `Collecting → Grace →
   (AwaitingDraw) → AwaitingPurchase → Settled`.
-- 4 nesil boyunca gerçek üretim baskısıyla evrildi: sponsor modelinden
-  sponsorsuz modele, ardından kura modu + 30 üyeye — her adımda **canlı Testnet
-  deploy'u ve gerçek işlem kanıtı** ile (`docs/IMPLEMENTATION_LOG.md`, 14 faz).
-- **27 birim testi**, 30 üyeli tam kura akışı dahil; her invocation Mainnet kaynak
-  limitlerine (`InvocationResourceLimits::mainnet()`) karşı otomatik doğrulanıyor.
-- Checks-effects-interactions deseni, `require_auth` ile rol bazlı yetkilendirme,
-  TTL yönetimli persistent storage.
+- It evolved through several generations under real production pressure: from a sponsor
+  model to a sponsor-free model, then draw mode + 30 members, then a down payment, then
+  purchase without verifiers — at every step with a **live Testnet deployment and real
+  transaction proof** (`docs/IMPLEMENTATION_LOG.md`).
+- **33 unit tests**, including the full 30-member draw flow; every invocation is
+  automatically checked against Mainnet resource limits (`InvocationResourceLimits::mainnet()`).
+- Checks-effects-interactions pattern, role-based authorization with `require_auth`,
+  persistent storage with TTL management.
 
-**Anchor (SEP-1/10/24) — kendi backend'imiz:**
-- `testanchor.stellar.org`'a bağımlı kalmak yerine **kendi SEP-1/10/24 servisimizi**
-  yazdık (`backend/`, Node.js/TypeScript).
-- Gerçek bir Testnet varlığı (`TRYT`, TRY'yi temsil eder) ihraç edildi; SEP-10
-  cüzdan girişi, SEP-24 interaktif yatırma, `pending_trust` durumunu kendiliğinden
-  yeniden deneyen bir akış — uçtan uca, gerçek Testnet işlemleriyle doğrulandı.
-- Anchor artık ayrı bir vitrin değil, **havuza katkı adımının içinde** ("Bakiyen
-  yetmiyor mu? Anchor ile yükle").
+**Anchor (SEP-1/10/24) — our own backend:**
+- Instead of depending on `testanchor.stellar.org`, we wrote **our own SEP-1/10/24 service**
+  (`backend/`, Node.js/TypeScript).
+- A real Testnet asset (`TRYT`, which represents TRY) was issued; wallet-signed SEP-10
+  login, SEP-24 interactive deposit, and a flow that retries the `pending_trust` state by
+  itself — verified end-to-end with real Testnet transactions.
+- The anchor is no longer a separate showcase; it sits **inside the contribution step of
+  the pool** ("Not enough balance? Load it with the anchor").
 
-**Frontend:** Vue 3 + TypeScript, Stellar Wallets Kit ile gerçek cüzdan bağlantısı,
-kontratın zincirdeki arayüzünü okuyup kura/kapasite gibi özellikleri otomatik
-açıp kapatan bir yetenek-algılama katmanı.
+**Frontend:** Vue 3 + TypeScript, real wallet connection through the Stellar Wallets Kit,
+and a capability-detection layer that reads the contract's on-chain interface and turns
+features such as draw and capacity on and off automatically.
 
 ---
 
-## 6. Stellar ekosistem uyumu
+## 6. Stellar ecosystem fit
 
-- **Entegrasyon partneri:** Stellar Wallets Kit (cüzdan bağlantısı, uygulamanın
-  her işleminde çekirdek bir parça).
-- **Anchor / yerel ödeme:** kendi SEP-1/10/24 servisimiz, gerçek protokol akışı
-  (test varlığıyla — gerçek TRY/banka entegrasyonu değil, bu açıkça belirtiliyor).
-- **Kullanılan Stellar Skills** *(tam liste ve gerekçeleri: `docs/STELLAR_SKILLS_USED.md`)*:
+- **Integration partner:** Stellar Wallets Kit (wallet connection, a core part of every
+  action in the app).
+- **Anchor / local payments:** our own SEP-1/10/24 service, a real protocol flow (with a
+  test asset — not a real TRY/bank integration, and this is stated explicitly).
+- **Stellar Skills used** *(full list and rationale: `docs/STELLAR_SKILLS_USED.md`)*:
   - `skills.stellar.org/skills/smart-contracts/SKILL.md`
   - `skills.stellar.org/skills/dapp/SKILL.md`
   - `skills.stellar.org/skills/assets/SKILL.md`
-  - `skills.stellar.org/skills/standards/SKILL.md` (SEP seçimi)
+  - `skills.stellar.org/skills/standards/SKILL.md` (SEP selection)
   - `skills.stellar.org/skills/data/SKILL.md`
-  - Anchors skill (SEP-1/6/10/12/24/31/38) — SEP-10/24 sunucu implementasyonunun
-    doğrudan referansı.
+  - The Anchors skill (SEP-1/6/10/12/24/31/38) — the direct reference for the SEP-10/24
+    server implementation.
 
 ---
 
-## 7. Bilinen sınırlar (dürüstçe söylenmeli)
+## 7. Known limits (to be stated honestly)
 
-- Gerçek, lisanslı bir TRY anchor'ı henüz yok — bu bilinçli bir kapsam kararı,
-  sonraki adımın ne olduğu net (bkz. madde 8).
-- Erken alıcının (sıra ya da kurayla) sonraki turda ödemeyi bırakması, önceki
-  turun katkılarını geri getirmez — bu, ürünün kabul ettiği bir ekonomik risk,
-  grup büyüklüğü bunu çözmüyor. Şeffaf şekilde belgelendi (`docs/plan.md`).
-- Kura modunda zincir üstü rastgelelik hackathon düzeyinde (Soroban PRNG,
-  validator etkisine açık) — gerçek kullanım için commit-reveal gerekir.
-
----
-
-## 8. Traction & sonraki adım (roadmap)
-
-- 4 fazlık gerçek iterasyon: sponsor modelden sponsorsuz modele, kuraya ve
-  30 üyeye — her biri canlı Testnet kanıtıyla belgelendi.
-- Kendi anchor'ımızı kurup uçtan uca doğrulamak, "gerçek TL girişi" hedefine
-  somut bir adım attı (test varlığıyla, ama gerçek protokolle).
-- **Sonraki adım:** gerçek, lisanslı bir TRY anchor sağlayıcısıyla görüşmek (SEP-24
-  uyumlu), KYC/AML entegrasyonu, mainnet'e geçiş, SCF/InstaAward başvurusu.
+- There is not yet a real, licensed TRY anchor — this is a deliberate scope decision, and
+  the next step is clear (see item 8).
+- If an early recipient (by order or by draw) stops paying in a later round, the
+  contributions of the earlier round do not come back — this is an economic risk the
+  product accepts, and group size does not solve it. It is documented transparently
+  (`docs/plan.md`).
+- On-chain randomness in draw mode is hackathon-grade (the Soroban PRNG, open to
+  validator influence) — commit-reveal would be needed for real use.
 
 ---
 
-## 8b. Anchor hakkında olası jüri soruları (hazırlık notu, sunuma girmez)
+## 8. Traction & next step (roadmap)
 
-⚠️ **Sunumdan hemen önce kontrol edin**: canlı site (`stellerpool.arslanyusuf.com`)
-şu an kendi backend'imize mi bağlı, yoksa hâlâ SDF'in genel test anchor'ına mı
-düşüyor (`frontend/src/lib/anchor.ts`'deki `usingTestAnchor` bayrağı bunu söyler —
-arayüzde muhtemelen bir rozet/uyarı olarak görünür). Bu belgenin yazıldığı an
-Yusuf'un sunucu deploy'u (`backend/DEPLOY.md`) henüz tamamlanmamıştı; tamamlandıysa
-aşağıdaki "kısa cevap" kullanılabilir, tamamlanmadıysa "henüz bağlanmadı" cevabını
-kullanın — ikisi de dürüst ve savunulabilir, önemli olan hangisinin doğru olduğunu
-bilip söylemek.
+- Several phases of real iteration: from the sponsor model to the sponsor-free model, to
+  the draw and 30 members, to the down payment and verifier-free purchase — each
+  documented with live Testnet proof.
+- Building our own anchor and verifying it end-to-end took a concrete step toward the
+  "real TRY deposit" goal (with a test asset, but a real protocol).
+- **Next step:** talk to a real, licensed TRY anchor provider (SEP-24 compatible),
+  KYC/AML integration, the move to mainnet, and an SCF/InstaAward application.
 
-**Kısa cevap (backend canlı siteye bağlandıysa):**
-> Kendi SEP-1/10/24 anchor sunucumuzu yazdık — SDF'in genel test anchor'ına bağımlı
-> kalmak yerine. Gerçek protokol akışı çalışıyor: SEP-10 girişi, SEP-24 interaktif
-> yatırma, TRY'yi temsil eden kendi test varlığımız (`TRYT`) gerçek on-chain
-> işlemlerle kullanıcıya ulaşıyor. Bunu hem kendi başına hem kontratımızla (gerçek
-> bir havuz üzerinden) uçtan uca, gerçek Testnet işlemleriyle doğruladık. Gerçek
-> olmayan tek kısım: "TRY yatırdım" onayı bir bankadan gelmiyor, sunucumuzun kendi
-> test onayı — gerçek banka entegrasyonu bilinçli olarak kapsam dışı, yol
-> haritamızın ilk adımı bu.
+---
 
-**Eğer backend henüz canlı siteye bağlanmadıysa:**
-> Backend kodu yazıldı ve gerçek Testnet işlemleriyle (iki ayrı uçtan uca akış,
-> ayrıca kontratımızla birlikte) doğrulandı — [tx hash göster]. Canlı siteye
-> bağlanması operasyonel son adım, üzerinde çalışıyoruz.
+## 8b. Likely jury questions about the anchor (preparation note, not part of the pitch)
 
-**Olası takip soruları:**
+⚠️ **Check right before the presentation**: is the live site (`stellerpool.arslanyusuf.com`)
+currently connected to our own backend, or does it still fall back to the SDF's public
+test anchor (the `usingTestAnchor` flag in `frontend/src/lib/anchor.ts` says so — it
+likely shows in the interface as a badge/warning). At the time this document was written,
+Yusuf's server deployment (`backend/DEPLOY.md`) was not yet complete; if it is complete,
+the "short answer" below can be used, and if not, use the "not connected yet" answer —
+both are honest and defensible; what matters is knowing which one is true and saying it.
 
-| Soru | Cevap |
+**Short answer (if the backend is connected to the live site):**
+> We wrote our own SEP-1/10/24 anchor server — instead of depending on the SDF's public
+> test anchor. The real protocol flow works: SEP-10 login, SEP-24 interactive deposit,
+> and our own test asset that represents TRY (`TRYT`) reaches the user through real
+> on-chain transactions. We verified this both on its own and with our contract (through
+> a real pool), end-to-end, with real Testnet transactions. The only non-real part: the
+> "I deposited TRY" confirmation does not come from a bank, it is our server's own test
+> confirmation — a real bank integration is deliberately out of scope, and it is the
+> first step of our roadmap.
+
+**If the backend is not yet connected to the live site:**
+> The backend code is written and was verified with real Testnet transactions (two
+> separate end-to-end flows, and together with our contract) — [show tx hash]. Connecting
+> it to the live site is the last operational step, and we are working on it.
+
+**Likely follow-up questions:**
+
+| Question | Answer |
 |---|---|
-| Bu gerçek TL mi? | Hayır. `TRYT` TRY'yi temsil eden bir test varlığı. Gerçek TL, lisanslı bir anchor/banka entegrasyonu gerektirir — bilinçli olarak kapsam dışı, sonraki adımımız bu. |
-| Neden SDF'in test anchor'ını kullanmadınız? | El kitabı Anchor'ın ürünün çekirdeğinde olmasını ve en ağırlıklı kriter olduğunu belirtiyor. Genel bir üçüncü taraf test anchor'ına bağlanmak bunu göstermiyordu; kendi SEP altyapımızı kurup uçtan uca kanıtlamak daha güçlü bir teknik kanıt. |
-| Hangi SEP'leri destekliyor? | SEP-1 (stellar.toml), SEP-10 (kimlik doğrulama), SEP-24 (interaktif yatırma). SEP-12/KYC ve withdraw kapsam dışı, yol haritasında. |
-| Kontratla nasıl bağlanıyor? | Anchor'dan gelen bakiye havuzun kullandığı varlığın aynısı (kod + ihraççı eşleşmesi kontrol edilir) — kullanıcı önce yatırır, sonra o bakiyeyle doğrudan havuza katkı sağlar; ayrı bir vitrin değil, katkı adımının içinde. |
-| Hangi Stellar Skill'i kullandınız? | Anchors skill (SEP-1/6/10/12/24/31/38) — SEP-10/24 sunucu implementasyonumuzun doğrudan referansı; tam liste `docs/STELLAR_SKILLS_USED.md`'de. |
+| Is this real TRY? | No. `TRYT` is a test asset that represents TRY. Real TRY requires a licensed anchor/bank integration — deliberately out of scope, and our next step. |
+| Why didn't you use the SDF's test anchor? | The handbook says the anchor should be at the core of the product and is the most heavily weighted criterion. Connecting to a generic third-party test anchor did not show that; building our own SEP infrastructure and proving it end-to-end is stronger technical evidence. |
+| Which SEPs does it support? | SEP-1 (stellar.toml), SEP-10 (authentication), SEP-24 (interactive deposit). SEP-12/KYC and withdrawal are out of scope and on the roadmap. |
+| How does it connect to the contract? | The balance coming from the anchor is the same asset the pool uses (the code + issuer match is checked) — the user deposits first, then contributes to the pool directly with that balance; it is not a separate showcase, it sits inside the contribution step. |
+| Which Stellar Skill did you use? | The Anchors skill (SEP-1/6/10/12/24/31/38) — the direct reference for our SEP-10/24 server implementation; the full list is in `docs/STELLAR_SKILLS_USED.md`. |
 
-## 9. Takım
+## 9. Team
 
-*(İsimler, roller, iletişim bilgileri — submission formuyla aynı olmalı.)*
+*(Names, roles, contact details — must match the submission form.)*
 
 ---
 
-## 10. Kapanış / Sorular
+## 10. Closing / Questions
 
-**Stellarpool: "güvenmen gerekmiyor, doğrulayabiliyorsun."**
+**Stellarpool: "you don't have to trust, you can verify."**

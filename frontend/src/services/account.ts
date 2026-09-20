@@ -7,7 +7,7 @@ export interface AccountInfo {
   exists: boolean
   /** XLM balance, the decimal string Horizon returns ("9999.9999900"). */
   xlm: string
-  /** Havuz asset'inin (USDC) bakiyesi; trustline yoksa null. */
+  /** Balance of the pool asset (USDC); null if there is no trustline. */
   asset: string | null
   hasTrustline: boolean
 }

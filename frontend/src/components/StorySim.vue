@@ -327,7 +327,7 @@ function statusOf(id: string): { label: string; cls: string } {
         </div>
       </div>
 
-      <!-- Kurallar + ortak havuz -->
+      <!-- Rules + shared pool -->
       <div class="order-1 flex flex-row items-center justify-around gap-3 md:order-2 md:flex-col md:justify-between">
         <div class="flex flex-col items-center">
           <span class="relative grid size-20 place-items-center rounded-3xl bg-gold-100">

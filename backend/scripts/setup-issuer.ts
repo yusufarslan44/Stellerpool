@@ -62,7 +62,7 @@ async function main() {
   console.log(`ASSET_CODE=${ASSET_CODE}`)
   console.log(`\nVarlık kodu: ${ASSET_CODE}  ·  issuer: ${issuer.publicKey()}`)
   console.log(
-    `Frontend tarafında havuz varlığı olarak kullanmak için (frontend/.env):\n` +
+    `To use it as the pool asset on the frontend (frontend/.env):\n` +
       `VITE_POOL_ASSET_CODE=${ASSET_CODE}\nVITE_POOL_ASSET_ISSUER=${issuer.publicKey()}`,
   )
 }

@@ -154,7 +154,7 @@ const plan = computed<PoolPlan | null>(() => {
   }
 })
 
-// --- Uygun havuzu bulma --------------------------------------------------------------------
+// --- Finding a matching pool ---------------------------------------------------------------
 const allPools = ref<PoolInfo[] | null>(null)
 const poolsLoading = ref(false)
 const poolsFailed = ref(false)
