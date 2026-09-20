@@ -4,11 +4,11 @@ import { createGoalModels, type SceneGoal } from '@/lib/goal-models'
 import Illo from './Illo.vue'
 
 /**
- * Üç boyutlu altın para sahnesi (three.js, yalnızca bu bileşen açıldığında yüklenir).
- * Ortadaki büyük para "havuzu", çevresinde dönen paralar üyeleri temsil eder.
- *  - coins: yörüngedeki para sayısı (üye sayısı)
- *  - filled: kaç tanesi altın (ödemiş/katılmış); geri kalanı soluk. -1 = hepsi altın.
- * Hareket azaltma tercihinde animasyon döngüsü çalışmaz, yalnızca tek kare çizilir.
+ * Three-dimensional gold coin scene (three.js, loaded only when this component is opened).
+ * The large middle coin is the "pool"; the coins orbiting it represent the members.
+ *  - coins: number of coins in orbit (member count)
+ *  - filled: how many are gold (paid/joined); the rest are faded. -1 = all gold.
+ * With reduced motion the animation loop does not run; only a single frame is drawn.
  */
 const props = withDefaults(defineProps<{ coins?: number; filled?: number; label?: string; goal?: SceneGoal; paused?: boolean }>(), {
   coins: 4,
@@ -154,7 +154,7 @@ async function init() {
     return { group, mats: [rimMat, faceMat, starMat] }
   }
 
-  // --- Sahne düzeni ------------------------------------------------------------------------
+  // --- Scene layout ------------------------------------------------------------------------
   const root = new THREE.Group()
   scene.add(root)
 
@@ -181,7 +181,7 @@ async function init() {
   ring.add(orbitLine)
   allMats.push(orbitLine.material as import('three').Material)
 
-  // Yıldız tozu: derinlik hissi için küçük altın noktalar.
+  // Stardust: small gold dots for a sense of depth.
   const dustCount = 70
   const dustPos = new Float32Array(dustCount * 3)
   for (let i = 0; i < dustCount; i++) {
@@ -253,7 +253,7 @@ async function init() {
   ro.observe(el)
   resize()
 
-  // --- Etkileşim ---------------------------------------------------------------------------
+  // --- Interaction ---------------------------------------------------------------------------
   let tx = 0
   let ty = 0
   const onPointer = (e: PointerEvent) => {
@@ -266,7 +266,7 @@ async function init() {
   el.addEventListener('pointermove', onPointer, { passive: true })
   el.addEventListener('pointerleave', resetPointer)
 
-  // --- Çizim döngüsü -----------------------------------------------------------------------
+  // --- Render loop -----------------------------------------------------------------------
   const tmp = new THREE.Color()
   let time = 0
   let last = performance.now()
@@ -389,7 +389,7 @@ onMounted(() => {
   lazyObserver = new IntersectionObserver(([entry]) => {
     if (!entry?.isIntersecting) return
     lazyObserver?.disconnect()
-    // Ağır kurulum (shader derleme, ortam haritası) kaydırmayı dondurmasın: tarayıcı boştayken başlat.
+    // Heavy setup (shader compilation, environment map) must not freeze scrolling: start when the browser is idle.
     whenIdle(() => { void init().catch(() => { failed.value = true; cleanup?.() }) })
   }, { rootMargin: '220px' })
   if (host.value) lazyObserver.observe(host.value)
@@ -417,7 +417,7 @@ onBeforeUnmount(() => {
       aria-hidden="true"
     />
     <div v-if="failed && goal" class="absolute inset-0 grid place-items-center" aria-hidden="true"><Illo :name="goal" :size="180" /></div>
-    <!-- WebGL yoksa veya yüklenemezse: durağan çizim. -->
+    <!-- If WebGL is missing or fails to load: a static illustration. -->
     <svg
       v-if="failed && !goal"
       viewBox="0 0 200 200"

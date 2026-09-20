@@ -33,7 +33,7 @@ const wallet = useWalletStore()
 const router = useRouter()
 const token = poolAsset.getCode()
 
-// --- Başlangıç sihirbazı: hesap durumu -----------------------------------------------------
+// --- Getting-started wizard: account state -----------------------------------------------------
 const account = ref<AccountInfo | null>(null)
 const loading = ref(false)
 const busy = ref<'fund' | 'trust' | null>(null)
@@ -121,7 +121,7 @@ const setupIndex = computed(() => {
 })
 const setupKey = computed(() => SETUP.value[setupIndex.value]?.key ?? 'ready')
 
-// Test varlığı adımında bakiye otomatik kontrol edilir (kullanıcı Circle sayfasından dönünce görünsün).
+// On the test-asset step the balance is checked automatically (so it shows up when the user returns from the Circle page).
 let poll: ReturnType<typeof setInterval> | undefined
 watch(
   setupKey,
@@ -249,7 +249,7 @@ const FAQ = [
 
     <HowItWorks />
 
-    <!-- 2b · HİKÂYE: kendiliğinden oynayan örnek tur -->
+    <!-- 2b · STORY: a sample round that plays by itself -->
     <section id="hikaye" class="home-story scroll-mt-28 space-y-8" aria-labelledby="hikaye-baslik">
       <div v-reveal class="mx-auto max-w-2xl text-center">
         <p class="eyebrow text-brand-700">Watch</p>
@@ -261,7 +261,7 @@ const FAQ = [
       <div v-reveal><StorySim /></div>
     </section>
 
-    <!-- 3 · BAŞLA (hesap hazırlama sihirbazı) -->
+    <!-- 3 · GET STARTED (account setup wizard) -->
     <section id="basla" class="home-setup scroll-mt-28 space-y-8" aria-labelledby="basla-baslik">
       <div v-reveal class="mx-auto max-w-2xl text-center">
         <p class="eyebrow text-brand-700">Get started</p>
@@ -274,7 +274,7 @@ const FAQ = [
 
         <Transition name="step-next" mode="out-in">
           <div :key="setupKey" class="min-h-56">
-            <!-- 1 · Cüzdan -->
+            <!-- 1 · Wallet -->
             <div v-if="setupKey === 'wallet'" class="space-y-4">
               <div class="flex items-center gap-4">
                 <span class="grid size-14 shrink-0 place-items-center rounded-2xl bg-brand-100 text-brand-700">
@@ -303,7 +303,7 @@ const FAQ = [
               </div>
             </div>
 
-            <!-- 2 · Hesabı etkinleştir -->
+            <!-- 2 · Activate the account -->
             <div v-else-if="setupKey === 'activate'" class="space-y-4">
               <div class="flex items-center gap-4">
                 <span class="grid size-14 shrink-0 place-items-center rounded-2xl bg-gold-100 text-amber-800">
@@ -322,7 +322,7 @@ const FAQ = [
               </button>
             </div>
 
-            <!-- 3 · Kabul aç -->
+            <!-- 3 · Enable acceptance -->
             <div v-else-if="setupKey === 'trust'" class="space-y-4">
               <div class="flex items-center gap-4">
                 <span class="grid size-14 shrink-0 place-items-center rounded-2xl bg-sage-100 text-sage-700">
@@ -341,7 +341,7 @@ const FAQ = [
               </button>
             </div>
 
-            <!-- 4 · Test varlığı al -->
+            <!-- 4 · Get the test asset -->
             <div v-else-if="setupKey === 'faucet'" class="space-y-4">
               <div class="flex items-center gap-4">
                 <span class="grid size-14 shrink-0 place-items-center rounded-2xl bg-brand-100 text-brand-700">
@@ -376,7 +376,7 @@ const FAQ = [
               <p class="text-sm text-stone-600">This screen moves to the next step automatically once the balance arrives.</p>
             </div>
 
-            <!-- Hazır -->
+            <!-- Ready -->
             <div v-else class="flex flex-col items-center gap-4 py-4 text-center">
               <Illo name="party" :size="84" class="pop" />
               <h3 class="text-3xl font-extrabold">You're all set!</h3>
@@ -390,7 +390,7 @@ const FAQ = [
           </div>
         </Transition>
 
-        <!-- Hesap özeti -->
+        <!-- Account summary -->
         <dl v-if="account && wallet.address" class="grid gap-3 border-t border-stone-100 pt-5 sm:grid-cols-3">
           <div class="rounded-2xl bg-sand/60 p-3.5">
             <dt class="text-xs text-stone-600">Address</dt>
@@ -451,7 +451,7 @@ const FAQ = [
       </form>
     </section>
 
-    <!-- 4 · KİM NE YAPAR -->
+    <!-- 4 · WHO DOES WHAT -->
     <section class="home-roles space-y-8" aria-labelledby="roller-baslik">
       <div v-reveal class="mx-auto max-w-2xl text-center">
         <p class="eyebrow text-brand-700">Roles</p>
@@ -481,7 +481,7 @@ const FAQ = [
       </div>
     </section>
 
-    <!-- 6 · GÜVEN -->
+    <!-- 6 · TRUST -->
     <section class="home-trust espresso relative overflow-hidden rounded-[2.25rem] px-5 py-12 text-white sm:px-10 sm:py-16" aria-labelledby="guven-baslik">
       <div class="trust-intro">
         <div v-reveal>
@@ -533,7 +533,7 @@ const FAQ = [
       </p>
     </section>
 
-    <!-- 6b · ÜCRETLER -->
+    <!-- 6b · FEES -->
     <section id="ucretler" class="home-fees scroll-mt-28 space-y-8" aria-labelledby="ucret-baslik">
       <div v-reveal class="mx-auto max-w-2xl text-center">
         <p class="eyebrow text-brand-700">Fees</p>
@@ -545,7 +545,7 @@ const FAQ = [
       <div v-reveal><FeesTable /></div>
     </section>
 
-    <!-- 7 · ANCHOR SİMÜLASYONU -->
+    <!-- 7 · ANCHOR SIMULATION -->
     <div v-reveal><AnchorDemo /></div>
 
     <!-- 8 · SSS -->

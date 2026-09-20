@@ -9,9 +9,9 @@ import { xBullModule } from '@creit-tech/stellar-wallets-kit/modules/xbull'
 let initialized = false
 
 /**
- * Stellar Wallets Kit'i bir kez başlatır. `defaultModules()` yerine yalnızca
- * Stellar cüzdanlarını içe aktarıyoruz: NEAR/Solana gibi ek modüller paketlenmez,
- * hem paket boyutu hem bağımlılık yüzeyi küçülür.
+ * Initializes the Stellar Wallets Kit once. Instead of `defaultModules()` we import only
+ * the Stellar wallets: extra modules such as NEAR/Solana are not bundled,
+ * which shrinks both the bundle size and the dependency surface.
  */
 export function initWalletKit() {
   if (initialized) return

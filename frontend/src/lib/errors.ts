@@ -1,4 +1,4 @@
-/** Cüzdan, SDK ve RPC hatalarını kullanıcıya gösterilecek tek bir metne çevirir. */
+/** Turns wallet, SDK and RPC errors into a single text to show the user. */
 export function errorMessage(e: unknown): string {
   if (typeof e === 'string') return e
   if (e instanceof Error) return e.message
@@ -10,7 +10,7 @@ export function errorMessage(e: unknown): string {
   return 'An unknown error occurred.'
 }
 
-/** Kullanıcı cüzdan penceresini kapattıysa veya imzayı reddettiyse true. */
+/** True if the user closed the wallet window or rejected the signature. */
 export function isUserRejection(e: unknown): boolean {
   const msg = errorMessage(e).toLowerCase()
   return (

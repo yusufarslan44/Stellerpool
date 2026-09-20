@@ -2,7 +2,7 @@ import '@fontsource/ibm-plex-sans/latin-400.css'
 import '@fontsource/ibm-plex-sans/latin-500.css'
 import '@fontsource/ibm-plex-sans/latin-600.css'
 import '@fontsource/ibm-plex-sans/latin-700.css'
-// Türkçe karakterler (ğ, ş, İ, ı) latin-ext alt kümesinde.
+// Turkish characters (ğ, ş, İ, ı) are in the latin-ext subset.
 import '@fontsource/ibm-plex-sans/latin-ext-400.css'
 import '@fontsource/ibm-plex-sans/latin-ext-500.css'
 import '@fontsource/ibm-plex-sans/latin-ext-600.css'
@@ -29,7 +29,7 @@ async function start() {
       import('./stores/wallet'),
     ])
     initWalletKit()
-    // Önceki cüzdan bağlantısını geri yükle (kit adresi localStorage'da tutar).
+    // Restore the previous wallet connection (the kit keeps the address in localStorage).
     void useWalletStore().restore()
   }
   app.mount('#app')

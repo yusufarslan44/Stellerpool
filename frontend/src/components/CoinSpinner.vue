@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
- * Saf CSS ile üç boyutlu dönen altın para (yükleniyor ve başarı göstergesi).
- * Kalınlık, birbirine yakın z konumlarındaki katmanlarla oluşturulur.
+ * A three-dimensional spinning gold coin in pure CSS (loading and success indicator).
+ * The thickness is built from layers at closely spaced z positions.
  */
 withDefaults(defineProps<{ size?: number }>(), { size: 56 })
 const LAYERS = 8

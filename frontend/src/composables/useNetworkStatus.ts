@@ -2,8 +2,8 @@ import { onMounted, onUnmounted, ref } from 'vue'
 import { config, rpcServer } from '@/lib/stellar'
 
 /**
- * Seçilen Stellar ağının son defter numarası. RPC'nin ağ kimliği ilk okumada doğrulanır;
- * yanlış ağa yönlendiren bir URL, Mainnet verisi gibi gösterilmez.
+ * The latest ledger number of the selected Stellar network. The RPC's network identity is verified on the first read;
+ * a URL that points to the wrong network is not shown as if it were Mainnet data.
  */
 export function useNetworkStatus() {
   const ledger = ref<number | null>(null)

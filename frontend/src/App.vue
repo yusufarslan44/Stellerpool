@@ -10,7 +10,7 @@ const NetworkWarning = defineAsyncComponent(() => import('@/components/NetworkWa
 
 <template>
   <div class="relative flex min-h-dvh flex-col">
-    <!-- Arka plan: yumuşak, sıcak ışık lekeleri -->
+    <!-- Background: soft, warm patches of light -->
     <div class="pointer-events-none fixed inset-0 -z-10 overflow-hidden" aria-hidden="true">
       <div class="drift absolute -top-40 -left-32 size-[34rem] rounded-full bg-brand-200/40 blur-3xl" />
       <div class="drift absolute top-1/3 -right-40 size-[30rem] rounded-full bg-gold-300/25 blur-3xl [animation-delay:-6s]" />

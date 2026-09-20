@@ -5,7 +5,7 @@ if (network !== 'testnet' && network !== 'mainnet') {
   throw new Error('VITE_STELLAR_NETWORK must be either testnet or mainnet.')
 }
 
-/** Mainnet yalnızca tanıtım ve ağ okuması içindir; fon işlemleri Testnet'e özgüdür. */
+/** Mainnet is for the showcase and network reads only; funds actions are specific to Testnet. */
 export const mainnetShowcase = network === 'mainnet'
 
 export const config = mainnetShowcase
@@ -36,34 +36,34 @@ export function requireTestnetDemo(): void {
 export const rpcServer = new rpc.Server(config.rpcUrl)
 export const horizonServer = new Horizon.Server(config.horizonUrl)
 
-/** Testnet havuz demosunda kullanılan varlık. Mainnet tanıtımı havuz varlığı kullanmaz. */
+/** The asset used in the Testnet pool demo. The Mainnet showcase uses no pool asset. */
 export const poolAsset = new Asset(
   import.meta.env.VITE_POOL_ASSET_CODE?.trim() || 'USDC',
   import.meta.env.VITE_POOL_ASSET_ISSUER?.trim() ||
     'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5',
 )
 
-/** Circle'ın Testnet USDC ihraççısı: bu varlığın test bakiyesi Circle faucet'inden alınır. */
+/** Circle's Testnet USDC issuer: test balances of this asset come from the Circle faucet. */
 export const CIRCLE_TESTNET_USDC_ISSUER = 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5'
 export const poolAssetFromCircleFaucet =
   poolAsset.getCode() === 'USDC' && poolAsset.getIssuer() === CIRCLE_TESTNET_USDC_ISSUER
 
-/** Havuz asset'inin Stellar Asset Contract (SAC) adresi. Kontrat token olarak bunu alır. */
+/** The Stellar Asset Contract (SAC) address of the pool asset. The contract takes this as its token. */
 export const poolTokenContractId = poolAsset.contractId(config.passphrase)
 
-/** Deploy edilmiş RotatingPool kontratı. Boşsa arayüz "yapılandırılmadı" durumunu gösterir. */
+/** The deployed RotatingPool contract. If empty, the interface shows the "not configured" state. */
 export const poolContractId: string | null =
   mainnetShowcase ? null : import.meta.env.VITE_ROTATING_POOL_CONTRACT_ID?.trim() || null
 
 /**
- * Herkesin kullanabileceği hazır Testnet demo satıcısı: yalnızca ödeme alır (TRYT ve Circle USDC güven hattı
- * açık), gizli anahtarı saklanmaz, gerçek bir satıcı değildir. Oluşturma formunda hazır gelir, isteyen kendi
- * adresini yazabilir. `VITE_DEMO_SELLER` ile değiştirilebilir.
+ * A ready-made Testnet demo seller anyone can use: it only receives payments (TRYT and Circle USDC trustlines
+ * are open), its secret key is not stored, and it is not a real seller. It comes pre-filled in the creation form; you can type your own
+ * address. Can be changed with `VITE_DEMO_SELLER`.
  */
 export const demoSellerAddress: string =
   import.meta.env.VITE_DEMO_SELLER?.trim() || 'GBSYVBANLBFLTUNHLTYNCYQUI4LPBP4YEIPOLONUT3OEATONSLP57QTG'
 
-/** Anchor'ın home domain'i (stellar.toml burada yayınlanır). Workshop'ta netleşecek. */
+/** The anchor's home domain (stellar.toml is published there). To be settled at the workshop. */
 export const anchorHomeDomain: string | null =
   import.meta.env.VITE_ANCHOR_HOME_DOMAIN?.trim() || null
 

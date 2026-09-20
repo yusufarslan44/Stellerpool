@@ -8,9 +8,9 @@ import { sha256, toHex } from '@/lib/hash'
 import { illoUrl } from '@/lib/illo'
 import type { IlloName } from '@/lib/icon-data'
 
-/** Normal akışın görsel anlatımı: dört katkı, alım kaydı ve satıcıya ödeme.
- * Kişiler ve tutarlar örnektir; zincire işlem gönderilmez.
- * Her sahne kendi durumunu taşır; ileri/geri ve bölüm seçimi aynı sonucu verir.
+/** A visual narration of the normal flow: four contributions, the purchase record and payment to the seller.
+ * The people and amounts are examples; no transaction is sent to the chain.
+ * Each scene carries its own state; forward/back and chapter selection give the same result.
  */
 type Phase = 'intro' | 'collect' | 'funded' | 'purchase' | 'pay' | 'done'
 
@@ -30,7 +30,7 @@ const PEOPLE: Person[] = [
 const ALL = PEOPLE.map((p) => p.id)
 const AMOUNT = 10
 const POT = AMOUNT * PEOPLE.length
-// Plan: peşinat katılırken kontrata yatar; sıra gelince yalnızca kendi alımına eklenir (alım = havuz + alıcının peşinatı).
+// Plan: the down payment goes into the contract when joining; when the turn comes it is added only to the member's own purchase (purchase = pool + recipient's down payment).
 const DOWN = 2
 const PAYOUT = POT + DOWN
 const DOC = `Sample purchase document: car, ${PAYOUT} units, Sample Gallery`
@@ -42,9 +42,9 @@ const reduced =
 interface Step {
   phase: Phase
   paid?: string[]
-  /** Bu sahneye girilirken oynatılan para animasyonu. */
+  /** Coin animation played when entering this scene. */
   fly?: { kind: 'in' | 'send'; ids?: string[] }
-  /** Sahnenin ekranda kalma süresi (ms); anlatı metninin okunma süresine göre. */
+  /** How long the scene stays on screen (ms), based on the reading time of the narration. */
   hold: number
 }
 const A_M_Z = ['ayse', 'mehmet', 'zeynep']
@@ -63,7 +63,7 @@ const STEPS: Step[] = [
 
 // --- Durum ---------------------------------------------------------------------------------
 const index = ref(0)
-/** Geçerli sahnede geçen süre (ms). Elle seçimden sonra negatif başlar: sahne biraz daha bekler. */
+/** Time elapsed in the current scene (ms). After a manual selection it starts negative: the scene waits a bit longer. */
 const elapsed = ref(0)
 const autoplay = ref(!reduced)
 const visible = ref(false)
@@ -98,7 +98,7 @@ function chapterOf(p: Phase): number {
   }
 }
 const chapter = computed(() => chapterOf(phase.value))
-/** Bölüm çubuğundan seçilince ilk tur içindeki ilk sahneye gidilir. */
+/** Choosing from the chapter bar goes to the first scene of that chapter. */
 const chapterStart = (c: number) => STEPS.findIndex((s) => chapterOf(s.phase) === c)
 
 const flights = new Map<Animation, HTMLImageElement>()
@@ -107,7 +107,7 @@ function clearFlights() {
   flights.clear()
 }
 
-// --- Uçan para animasyonu ------------------------------------------------------------------
+// --- Flying coin animation ------------------------------------------------------------------
 function flyCoin(from: HTMLElement | null, to: HTMLElement | null, delay = 0) {
   if (reduced || !from || !to || !stage.value) return
   const s = stage.value.getBoundingClientRect()
@@ -146,7 +146,7 @@ function playFx(s: Step) {
   else for (let i = 0; i < PEOPLE.length; i++) flyCoin(jarEl.value, storeEl.value, i * 150)
 }
 
-// --- Oynatıcı ------------------------------------------------------------------------------
+// --- Player ------------------------------------------------------------------------------
 const playing = computed(() => autoplay.value && visible.value && pageVisible.value && !reduced)
 let raf = 0
 let last = 0
@@ -219,7 +219,7 @@ onBeforeUnmount(() => {
   document.removeEventListener('visibilitychange', updatePageVisible)
 })
 
-// --- Anlatım -------------------------------------------------------------------------------
+// --- Narration -------------------------------------------------------------------------------
 const story = computed<{ title: string; text: string }>(() => {
   switch (phase.value) {
     case 'intro':
@@ -255,7 +255,7 @@ function statusOf(id: string): { label: string; cls: string } {
 
 <template>
   <div class="story-board card overflow-hidden !p-0" :class="{ 'story-complete': sent, 'story-paused': !playing }">
-    <!-- Başlık: bölüm çubuğu + dürüstlük etiketi -->
+    <!-- Header: chapter bar + honesty label -->
     <div class="flex flex-wrap items-center justify-between gap-3 border-b border-stone-100 px-5 py-4 sm:px-7">
       <ol class="flex flex-wrap items-center gap-1.5 text-xs font-semibold" aria-label="Story chapters">
         <li v-for="(c, i) in CHAPTERS" :key="c" class="flex items-center gap-1.5">
@@ -277,7 +277,7 @@ function statusOf(id: string): { label: string; cls: string } {
       </div>
     </div>
 
-    <!-- Anlatıcı -->
+    <!-- Narrator -->
     <div class="flex items-start gap-3 bg-sand/50 px-5 py-4 sm:gap-4 sm:px-7">
       <div class="story-chapter-token" aria-hidden="true"><span>0{{ chapter + 1 }}</span><small>{{ CHAPTERS[chapter] }}</small></div>
       <div
@@ -300,7 +300,7 @@ function statusOf(id: string): { label: string; cls: string } {
 
     <!-- Sahne -->
     <div ref="stage" class="story-stage relative grid gap-5 px-5 py-6 sm:px-7 md:grid-cols-[1.25fr_1fr_1fr]">
-      <!-- Arkadaşlar -->
+      <!-- Friends -->
       <div class="order-2 md:order-1">
         <p class="eyebrow mb-2 text-stone-600">Friends</p>
         <div class="grid grid-cols-2 gap-2.5">
@@ -359,7 +359,7 @@ function statusOf(id: string): { label: string; cls: string } {
         </div>
       </div>
 
-      <!-- Alım kaydı ve kayıtlı demo satıcısı -->
+      <!-- Purchase record and the registered demo seller -->
       <div class="order-3 flex flex-col gap-4">
         <div class="rounded-2xl border border-stone-200 bg-white p-3">
           <p class="eyebrow mb-2 text-stone-600">Purchase record</p>
@@ -386,7 +386,7 @@ function statusOf(id: string): { label: string; cls: string } {
       </div>
     </Transition>
 
-    <!-- Oynatıcı -->
+    <!-- Player -->
     <div class="space-y-3 border-t border-stone-100 bg-white px-5 py-4 sm:px-7">
       <div
         class="h-1.5 overflow-hidden rounded-full bg-stone-200"

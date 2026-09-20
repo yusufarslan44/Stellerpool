@@ -4,15 +4,15 @@ import Illo from '@/components/Illo.vue'
 import { shortAddress } from '@/lib/format'
 
 /**
- * Kura sahnesi: her üye bir çip. `spinning` iken vurgu adaylar arasında döner (yalnızca görsel),
- * kazanan belli olunca çip büyür. Sonucu her zaman kontrat belirler; bu bileşen sonucu üretmez.
+ * Draw stage: each member is a chip. While `spinning`, the highlight cycles among the candidates (visual only);
+ * when the winner is known, its chip grows. The contract always decides the result; this component does not produce it.
  */
 const props = defineProps<{
-  /** Kurada olan (henüz teslim almamış) üyeler. */
+  /** Members in the draw (who have not yet received). */
   candidates: string[]
-  /** Daha önce teslim almış, kura dışı üyeler. */
+  /** Members who already received and are out of the draw. */
   excluded: string[]
-  /** Kontratın seçtiği kazanan; henüz çekilmediyse null. */
+  /** The winner chosen by the contract; null if not drawn yet. */
   winner: string | null
   spinning: boolean
   me: string | null
@@ -35,7 +35,7 @@ function tone(address: string): string {
 }
 const initials = (address: string) => address.slice(1, 3)
 
-// Dönen vurgu: yalnızca kura çekilirken ve hareket azaltma kapalıyken.
+// Spinning highlight: only while the draw is being held and reduced motion is off.
 const reduced =
   typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 const cursor = ref(-1)

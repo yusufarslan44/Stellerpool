@@ -20,26 +20,26 @@ import { explorerAccount, mainnetShowcase, poolAsset } from '@/lib/stellar'
 import { useWalletStore } from '@/stores/wallet'
 
 /**
- * Anchor akışı. Testnet'te gerçek SEP-1 (stellar.toml) → SEP-10 (cüzdan imzalı giriş) → SEP-24
- * (interaktif yatırma) protokolünü çalıştırır. Varsayılan sağlayıcı SDF test anchor'ıdır: test
- * varlığı üretir, Türk lirası DEĞİLDİR. Mainnet tanıtımı imza kabul etmez, yalnızca anlatım
- * simülasyonu gösterir. Çekme (Stellar → TRY) canlı akışta henüz yoktur.
+ * Anchor flow. On Testnet it runs the real SEP-1 (stellar.toml) → SEP-10 (wallet-signed login) → SEP-24
+ * (interactive deposit) protocol. The default provider is the SDF test anchor: it issues a test
+ * asset and is NOT Turkish lira. The Mainnet showcase accepts no signatures and only shows an illustrative
+ * simulation. Withdrawal (Stellar → TRY) is not in the live flow yet.
  */
 const props = defineProps<{
-  /** Havuz sayfası içinde: yalnızca havuz varlığının yatırılması, başlık ve simülasyon olmadan. */
+  /** Inside the pool page: only depositing the pool asset, without the heading and simulation. */
   compact?: boolean
 }>()
 const emit = defineEmits<{ completed: [] }>()
 
 const live = !mainnetShowcase
-/** Sayfada birden fazla örnek olabilir (ana sayfada kompakt + tam); id'ler benzersiz olmalı. */
+/** A page can hold several instances (compact + full on the home page); ids must be unique. */
 const uid = useId()
 const titleId = `anchor-title-${uid}`
 const assetSelectId = `anchor-asset-${uid}`
 const poolCode = poolAsset.getCode()
 const wallet = useWalletStore()
 
-// --- Canlı akış --------------------------------------------------------------------------
+// --- Live flow ------------------------------------------------------------------------
 const anchor = ref<AnchorInfo | null>(null)
 const anchorError = ref<string | null>(null)
 const loadingAnchor = ref(false)
@@ -48,19 +48,19 @@ const busy = ref<'auth' | null>(null)
 const error = ref<string | null>(null)
 const session = ref<InteractiveSession | null>(null)
 const tx = ref<AnchorTransaction | null>(null)
-/** SEP-10 oturum anahtarı yalnızca bellekte tutulur; sayfa yenilenince silinir. */
+/** The SEP-10 session key is kept only in memory; it is erased when the page is refreshed. */
 let token: string | null = null
 let poll: ReturnType<typeof setInterval> | undefined
 
 const depositAssets = computed(() =>
   Object.entries(anchor.value?.deposit ?? {})
     .filter(([, v]) => v.enabled)
-    // Havuz içinde yalnızca havuzun kendi varlığı (kod + ihraççı) sunulur.
+    // Inside a pool, only the pool's own asset (code + issuer) is offered.
     .filter(([code]) => !props.compact || (anchor.value && supportsPoolAsset(anchor.value, code, poolAsset.getIssuer() ?? '')))
     .map(([code, v]) => ({ code, ...v })),
 )
 const selected = computed(() => depositAssets.value.find((a) => a.code === asset.value) ?? null)
-/** Anchor gerçek bir TRY varlığı sunuyorsa (TRY/TRYB); aksi halde test anchor'ı olarak etiketlenir. */
+/** If the anchor offers a real TRY asset (TRY/TRYB); otherwise it is labeled as a test anchor. */
 const realTryAnchor = computed(() => !usingTestAnchor && !!anchor.value?.supportsTry)
 const finished = computed(() => (tx.value ? TERMINAL_STATUSES.has(tx.value.status) : false))
 watch(
@@ -102,7 +102,7 @@ async function begin() {
   }
 }
 
-/** Popup engelleyicilere takılmamak için pencere, kullanıcının tıklamasıyla açılır. */
+/** The window opens on the user's click so popup blockers do not stop it. */
 function openWindow() {
   if (!session.value) return
   window.open(session.value.url, 'stellerpool-anchor', 'popup,width=480,height=760,noopener=no')
@@ -128,7 +128,7 @@ function stopPolling() {
   poll = undefined
 }
 
-/** Anchor penceresi bitince `postMessage` ile bildirir; yalnızca açtığımız pencerenin kökeni dinlenir. */
+/** The anchor window reports completion via `postMessage`; only the origin of the window we opened is listened to. */
 function onMessage(event: MessageEvent) {
   if (!session.value || event.origin !== new URL(session.value.url).origin) return
   const t = (event.data as { transaction?: { status?: string } } | null)?.transaction
@@ -193,7 +193,7 @@ function advance() {
       <span v-else class="badge bg-amber-100 text-amber-900">Simulation only</span>
     </div>
 
-    <!-- CANLI AKIŞ -->
+    <!-- LIVE FLOW -->
     <template v-if="live">
       <p v-if="compact" :id="titleId" class="text-sm leading-relaxed text-stone-600">
         Load your balance as {{ poolCode }} through <strong>{{ anchorDomain }}</strong>: you sign in with your wallet, the deposit happens in the anchor's
@@ -216,7 +216,7 @@ function advance() {
 
       <div v-else-if="anchorError" role="alert" class="space-y-2 rounded-2xl bg-rose-50 p-4 text-sm text-rose-800">
         <p>The anchor could not be reached: {{ anchorError }}</p>
-        <button type="button" class="btn-secondary !min-h-10" @click="loadAnchor">Tekrar dene</button>
+        <button type="button" class="btn-secondary !min-h-10" @click="loadAnchor">Try again</button>
       </div>
 
       <template v-else-if="anchor">
@@ -280,7 +280,7 @@ function advance() {
         <div v-else-if="session" class="pop space-y-3 rounded-2xl border-2 border-brand-200 bg-brand-50/60 p-4" aria-live="polite">
           <div class="flex items-center gap-2">
             <Illo :name="tx?.status === 'completed' ? 'party' : 'hourglass'" :size="30" />
-            <p class="font-display font-bold">{{ tx ? (STATUS_LABELS[tx.status] ?? tx.status) : 'Durum okunuyor…' }}</p>
+            <p class="font-display font-bold">{{ tx ? (STATUS_LABELS[tx.status] ?? tx.status) : 'Reading status…' }}</p>
           </div>
           <p v-if="tx" class="text-xs text-stone-600">
             Transaction no.: <span class="font-mono">{{ tx.id.slice(0, 8) }}…</span>
@@ -312,7 +312,7 @@ function advance() {
       </template>
     </template>
 
-    <!-- ANLATIM SİMÜLASYONU -->
+    <!-- ILLUSTRATIVE SIMULATION -->
     <component :is="live ? 'details' : 'div'" v-if="!compact" class="group space-y-4 rounded-2xl" :class="live ? 'border border-stone-200 p-4' : ''">
       <summary v-if="live" class="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 font-display font-bold marker:hidden [&::-webkit-details-marker]:hidden">
         Illustrative simulation (offline)

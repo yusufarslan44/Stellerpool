@@ -4,8 +4,8 @@ import { illoUrl } from '@/lib/illo'
 import type { IlloName } from '@/lib/icon-data'
 
 /**
- * Renkli 3B tarzı çizim (Microsoft Fluent Emoji, MIT). Dosyalar src/assets/illo altında,
- * <img> olarak yalnızca kullanıldığında yüklenir. Süs amaçlıdır; anlam metinde verilir (alt="").
+ * Colorful 3D-style illustration (Microsoft Fluent Emoji, MIT). Files live under src/assets/illo and are
+ * loaded as <img> only when used. Decorative only; the meaning is given in text (alt="").
  */
 const props = withDefaults(defineProps<{ name: IlloName; size?: number }>(), { size: 40 })
 

@@ -3,9 +3,9 @@ import { config, friendbotUrl, horizonServer, poolAsset, poolTokenContractId, re
 import type { SignOptions } from '@/stores/wallet'
 
 export interface AccountInfo {
-  /** Hesap Testnet'te aktif mi? (Friendbot ile fonlanmamışsa false) */
+  /** Is the account active on Testnet? (false if not funded via Friendbot) */
   exists: boolean
-  /** XLM bakiyesi, Horizon'un verdiği ondalıklı string ("9999.9999900"). */
+  /** XLM balance, the decimal string Horizon returns ("9999.9999900"). */
   xlm: string
   /** Havuz asset'inin (USDC) bakiyesi; trustline yoksa null. */
   asset: string | null
@@ -19,7 +19,7 @@ function isNotFound(e: unknown): boolean {
   return err?.name === 'NotFoundError' || err?.response?.status === 404 || err?.status === 404
 }
 
-/** Hesabı gerçek Horizon Testnet'ten okur. */
+/** Reads the account from the real Horizon Testnet. */
 export async function loadAccount(address: string): Promise<AccountInfo> {
   try {
     const account = await horizonServer.loadAccount(address)
@@ -44,10 +44,10 @@ export async function loadAccount(address: string): Promise<AccountInfo> {
 }
 
 /**
- * Bir adresin bir token'daki bakiyesini SAC (Stellar Asset Contract) üzerinden okur; hem G-hesaplarını
- * hem de kontrat adreslerini destekler. `tokenId` verilmezse arayüzün varsayılan havuz varlığı
- * kullanılır; bir havuzun bakiyesi için o havuzun kendi `token` adresi verilmelidir (havuzlar farklı
- * varlıklarla kurulabilir). Stroop cinsinden bigint döner.
+ * Reads an address's balance in a token through the SAC (Stellar Asset Contract); supports both G-accounts
+ * and contract addresses. If `tokenId` is not given, the interface's default pool asset
+ * is used; for a pool's balance, that pool's own `token` address must be passed (pools can be created with different
+ * assets). Returns a bigint in stroops.
  */
 export async function getTokenBalance(holder: string, tokenId: string = poolTokenContractId): Promise<bigint> {
   const client = await contract.Client.from({
@@ -63,7 +63,7 @@ export async function getTokenBalance(holder: string, tokenId: string = poolToke
   return BigInt(tx.result)
 }
 
-/** Friendbot: Testnet hesabını oluşturur ve XLM yükler. */
+/** Friendbot: creates the Testnet account and loads XLM. */
 export async function fundWithFriendbot(address: string): Promise<void> {
   requireTestnetDemo()
   const res = await fetch(`${friendbotUrl}?addr=${encodeURIComponent(address)}`)
@@ -73,7 +73,7 @@ export async function fundWithFriendbot(address: string): Promise<void> {
   }
 }
 
-/** Havuz asset'i (USDC) için trustline ekler. Yoksa asset alınamaz, payout başarısız olur. */
+/** Adds a trustline for the pool asset (USDC). Without it the asset cannot be received and the payout fails. */
 export async function addTrustline(address: string, sign: Signer): Promise<string> {
   requireTestnetDemo()
   const account = await horizonServer.loadAccount(address)
@@ -93,7 +93,7 @@ export async function addTrustline(address: string, sign: Signer): Promise<strin
 
 const symbolCache = new Map<string, string>()
 
-/** Bir SAC token'ının sembolünü (varlık kodu) zincirden okur; sonuç önbelleğe alınır. */
+/** Reads the symbol (asset code) of a SAC token from the chain; the result is cached. */
 export async function getTokenSymbol(tokenId: string): Promise<string> {
   const cached = symbolCache.get(tokenId)
   if (cached) return cached

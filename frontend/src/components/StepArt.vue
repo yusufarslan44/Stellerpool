@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * "Nasıl çalışır" adımlarının küçük hareketli çizimleri (saf SVG + CSS).
+ * Small animated illustrations for the "How it works" steps (pure SVG + CSS).
  * Hareket azaltma tercihinde animasyonlar tek kareye iner (style.css).
  */
 defineProps<{ kind: 1 | 2 | 3 | 4 | 5 }>()
@@ -38,7 +38,7 @@ defineProps<{ kind: 1 | 2 | 3 | 4 | 5 }>()
       <path d="M36 58h70" stroke="#2b1a12" stroke-width="3" stroke-linecap="round" opacity="0.25" />
     </g>
 
-    <!-- 2: grup kurallarına ortak onay -->
+    <!-- 2: shared approval of the group rules -->
     <g v-else-if="kind === 2">
       <circle cx="120" cy="92" r="38" fill="none" stroke="#14805a" stroke-width="2" style="transform-origin:120px 92px;animation:ring-ping 2.4s ease-out infinite" />
       <path
@@ -83,7 +83,7 @@ defineProps<{ kind: 1 | 2 | 3 | 4 | 5 }>()
       </g>
     </g>
 
-    <!-- 4: herkes öder -->
+    <!-- 4: everyone pays -->
     <g v-else-if="kind === 4">
       <path d="M84 84h72l-6 66a8 8 0 0 1-8 7H98a8 8 0 0 1-8-7Z" fill="#fffaf2" stroke="#2b1a12" stroke-width="3" stroke-linejoin="round" />
       <path d="M92 118h56l-3 32a6 6 0 0 1-6 5H101a6 6 0 0 1-6-5Z" fill="#f2b134" opacity="0.85" />
@@ -96,7 +96,7 @@ defineProps<{ kind: 1 | 2 | 3 | 4 | 5 }>()
       </g>
     </g>
 
-    <!-- 5: satıcıya ödenir -->
+    <!-- 5: the seller is paid -->
     <g v-else>
       <path d="M30 84h56l-5 60a7 7 0 0 1-7 6H42a7 7 0 0 1-7-6Z" fill="#fffaf2" stroke="#2b1a12" stroke-width="3" stroke-linejoin="round" />
       <path d="M40 112h40l-2 30a5 5 0 0 1-5 4H47a5 5 0 0 1-5-4Z" fill="#f2b134" opacity="0.85" />

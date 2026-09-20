@@ -1,19 +1,19 @@
 /**
- * Kontrat modeli, docs/plan.md bölüm 5'teki sponsorsuz havuz tasarımına göre yazılmıştır
- * (Testnet'te yayındaki API v10 ile alan alan doğrulandı: canlı okuma ve simülasyon).
- * Tutarlar stroop (7 ondalık) cinsinden bigint, zamanlar unix saniyesidir.
+ * The contract model is written for the sponsor-free pool design in docs/plan.md section 5
+ * (verified field by field against API v10 published on Testnet: live reads and simulation).
+ * Amounts are bigint in stroops (7 decimals); times are unix seconds.
  */
 
-/** Üye sayısı sınırları (yayındaki kontrat API v10: 2–30). */
+/** Member count limits (published contract API v10: 2–30). */
 export const MIN_MEMBERS = 2
-/** Arayüzün ve yayındaki kontratın (API v10) desteklediği en büyük grup. */
+/** The largest group supported by the interface and the published contract (API v10). */
 export const UI_MAX_MEMBERS = 30
-/** Varsayılan üst sınır: API v10 kontratının kabul ettiği 30. */
+/** Default upper limit: the 30 accepted by the API v10 contract. */
 const DEFAULT_MAX_MEMBERS = 30
 const configuredMax = Number.parseInt(String(import.meta.env.VITE_MAX_MEMBERS ?? ''), 10)
 /**
- * Formun izin verdiği üst sınır. Varsayılan 30'dur (API v10). Eski bir kontrata (v9, en çok 12 üye)
- * bağlanılıyorsa `VITE_MAX_MEMBERS=12` yazın; aksi halde 13–30 üyeli bir havuz zincirde reddedilir.
+ * The upper limit the form allows. The default is 30 (API v10). If you connect to an old contract (v9, at most 12 members),
+ * set `VITE_MAX_MEMBERS=12`; otherwise a pool of 13–30 members is rejected on-chain.
  */
 export const MAX_MEMBERS =
   Number.isInteger(configuredMax) && configuredMax >= MIN_MEMBERS && configuredMax <= UI_MAX_MEMBERS
@@ -23,15 +23,15 @@ export const MAX_MEMBERS =
 export type PoolStatus = 'Filling' | 'Active' | 'Completed' | 'Aborted'
 
 /**
- * Alıcı nasıl belirlenir: `Fixed` = üyelerin onayladığı sabit sıra,
- * `Draw` = her tur, henüz teslim almamış üyeler arasından kura.
+ * How the recipient is chosen: `Fixed` = the fixed order approved by the members,
+ * `Draw` = a draw each round among members who have not yet received.
  */
 export type OrderMode = 'Fixed' | 'Draw'
 
 /**
- * Tur: Collecting → AwaitingPurchase → Settled. Ödeme gecikirse
- * Collecting → Grace → AwaitingPurchase. Kura modunda tüm katkılar tamamlanınca
- * önce AwaitingDraw gelir; kura çekilince AwaitingPurchase'a geçer.
+ * Round: Collecting → AwaitingPurchase → Settled. If a payment is late,
+ * Collecting → Grace → AwaitingPurchase. In draw mode, once all contributions are complete,
+ * AwaitingDraw comes first; after the draw it moves to AwaitingPurchase.
  */
 export type RoundPhase = 'Collecting' | 'Grace' | 'AwaitingDraw' | 'AwaitingPurchase' | 'Settled'
 
@@ -43,56 +43,56 @@ export interface PoolInfo {
   contributionAmount: bigint
   memberLimit: number
   members: string[]
-  /** Sıralı mı, kura mı. Eski (v8) kontratta alan yoksa 'Fixed' sayılır. */
+  /** Ordered or draw. If the field is missing in an old (v8) contract, 'Fixed' is assumed. */
   orderMode: OrderMode
-  /** Üye başına peşinat (katılırken kontrata yatırılır, sıra gelince o üyenin alımına eklenir). 0 = yok. */
+  /** Down payment per member (paid into the contract when joining; added to that member's purchase when their turn comes). 0 = none. */
   downPayment: bigint
-  /** Önerilen veya başlatılınca kilitlenen tahsisat sırası. Kura modunda boştur. */
+  /** The allocation order proposed or locked when started. Empty in draw mode. */
   recipientOrder: string[]
-  /** Koşul sürümü; havuz dolduğunda 1 olur. */
+  /** Terms version; becomes 1 when the pool fills. */
   termsVersion: number
-  /** Geçerli koşul sürümünü onaylayan üyeler. */
+  /** Members who approved the current terms version. */
   termsApprovals: string[]
-  /** 1'den başlar. */
+  /** Starts from 1. */
   currentRound: number
   status: PoolStatus
-  /** Süreler (saniye): katkı, ek süre, alım. */
+  /** Durations (seconds): contribution, grace, purchase. */
   roundDuration: number
   graceDuration: number
   purchaseDuration: number
-  /** Kuruluş son tarihi: başlamazsa herkes iptal edebilir. */
+  /** Setup deadline: if it does not start, anyone can cancel. */
   setupDeadline: number
-  /** Demo için önceden belirlenmiş izinli test satıcısı. */
+  /** The allowed test seller predefined for the demo. */
   demoSeller: string
 }
 
 export interface RoundInfo {
   round: number
   phase: RoundPhase
-  /** Bu turun alıcısı. Kura modunda kura çekilene kadar null. */
+  /** This round's recipient. In draw mode null until the draw is held. */
   recipient: string | null
   startedAt: number
-  /** Katkı son tarihi; geçince herkes turu Grace yapabilir. */
+  /** Contribution deadline; after it, anyone can move the round to Grace. */
   collectDeadline: number
-  /** Ek sürenin sonu (ilk katkı son tarihinden hesaplanır); 0 = henüz yok. */
+  /** End of the grace period (computed from the first contribution deadline); 0 = not yet. */
   graceDeadline: number
-  /** Alım için ayrı süre sonu; 0 = alım süresi henüz başlamadı. */
+  /** Separate end time for the purchase; 0 = the purchase period has not started yet. */
   purchaseDeadline: number
-  /** Katkısını kendi cüzdanından yatıranlar (deposit veya cure_payment). */
+  /** Those who paid their contribution from their own wallet (deposit or cure_payment). */
   paid: string[]
-  /** Bu turda satıcıya gidecek toplam tutar (katkı × üye sayısı). */
+  /** The total going to the seller in this round (contribution × member count). */
   pot: bigint
-  /** Alıcının kaydettiği satıcı; henüz önerilmediyse null. */
+  /** The seller recorded by the recipient; null if not yet proposed. */
   seller: string | null
-  /** Zincir dışı alım belgesinin SHA-256 özeti (hex); yoksa null. */
+  /** SHA-256 digest (hex) of the off-chain purchase document; null if none. */
   docHash: string | null
 }
 
 export interface MemberStatus {
   address: string
-  /** İptalde geri alabileceği tutar: yalnızca henüz ödenmemiş turun kendi katkısı. */
+  /** What they can recover on cancellation: only their own contribution for the round not yet paid out. */
   refundable: bigint
-  /** Tahsisatını (kendi sırasını) aldı mı? */
+  /** Have they received their allocation (their own turn)? */
   received: boolean
 }
 

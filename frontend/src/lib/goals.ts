@@ -6,16 +6,16 @@ export interface Goal {
   id: string
   label: string
   icon: IlloName
-  /** Örnek hedef tutar (bir turda satıcıya giden). Yalnızca başlangıç değeridir. */
+  /** Sample target amount (what goes to the seller in one round). Only an initial value. */
   pot: string
   members: number
-  /** Alıcı belirleme yöntemi: ev/arabada kura, diğer planda katılım sırası. */
+  /** How the recipient is chosen: draw for home/car, join order for the other plan. */
   mode: OrderMode
-  /** Normal planlar aylık; hızlı demo formda ayrı seçilir. */
+  /** Normal plans are monthly; the quick demo is chosen separately in the form. */
   interval: 'month' | 'week' | 'day' | 'demo'
   /**
-   * Önerilen peşinat oranı (% olarak, toplam bedelin). Peşinat alıcının satıcıya havuz dışında öderdiği
-   * kısımdır; `pot` havuzun karşıladığı kısımdır (bedel − peşinat).
+   * Suggested down payment ratio (as a % of the total price). The down payment is the part the buyer pays the seller outside the pool;
+   * `pot` is the part the pool covers (price − down payment).
    */
   down: number
 }

@@ -1,13 +1,13 @@
 import type { OrderMode, PoolInfo } from '@/types/pool'
 
-/** Kullanıcının seçtiği planın havuz eşleştirmesinde önemli olan alanları. */
+/** The fields of the plan the user chose that matter for pool matching. */
 export interface PoolPlan {
   token: string
   demoSeller: string
   contributionAmount: bigint
   memberLimit: number
   orderMode: OrderMode
-  /** Zincirde tutulan peşinat; kontrat peşinatı desteklemiyorsa 0n. */
+  /** The down payment held on-chain; 0n if the contract does not support a down payment. */
   downPayment: bigint
   roundDuration: number
   graceDuration: number
@@ -15,8 +15,8 @@ export interface PoolPlan {
 }
 
 /**
- * Bir havuzun bu plana ve bu kullanıcıya uyup uymadığı. Katılım zincirde reddedilecek hiçbir havuz
- * önerilmez: dolu, başlamış, kuruluş süresi geçmiş, kullanıcı zaten üye ya da satıcı.
+ * Whether a pool fits this plan and this user. No pool that the chain would reject on joining is suggested:
+ * full, already started, setup period over, the user is already a member or the seller.
  */
 export function poolMatches(pool: PoolInfo, plan: PoolPlan, me: string | null, nowSeconds: number): boolean {
   if (pool.status !== 'Filling') return false
@@ -38,14 +38,14 @@ export function poolMatches(pool: PoolInfo, plan: PoolPlan, me: string | null, n
   return true
 }
 
-/** Uyan havuzlar, en dolu olan başta (daha çabuk başlar), eşitlikte en eski. */
+/** Matching pools, the fullest first (it starts sooner), the oldest on a tie. */
 export function findMatches(pools: PoolInfo[], plan: PoolPlan, me: string | null, nowSeconds: number): PoolInfo[] {
   return pools
     .filter((p) => poolMatches(p, plan, me, nowSeconds))
     .sort((a, b) => b.members.length - a.members.length || a.id - b.id)
 }
 
-/** Aynı plana uyan ama kullanıcının zaten üye olduğu bir havuz (yeniden katılma yerine oraya yönlendirmek için). */
+/** A pool that fits the same plan but that the user already belongs to (to route there instead of joining again). */
 export function findOwnPool(pools: PoolInfo[], plan: PoolPlan, me: string | null, nowSeconds: number): PoolInfo | null {
   if (me === null) return null
   return (

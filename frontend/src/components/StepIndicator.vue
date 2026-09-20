@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import AppIcon from '@/components/AppIcon.vue'
 
-/** Sihirbaz adım göstergesi. Tamamlanan adımlara geri dönülebilir, ilerisine atlanamaz. */
+/** Wizard step indicator. Completed steps can be returned to; later steps cannot be skipped to. */
 defineProps<{ steps: { label: string }[]; current: number }>()
 const emit = defineEmits<{ goto: [index: number] }>()
 </script>

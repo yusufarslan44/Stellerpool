@@ -13,7 +13,7 @@ export const useWalletStore = defineStore('wallet', () => {
   const address = ref<string | null>(null)
   const busy = ref(false)
   const error = ref<string | null>(null)
-  /** Cüzdan başka bir ağdaysa (örn. mainnet) kullanıcıyı uyarmak için. */
+  /** To warn the user if the wallet is on another network (e.g. mainnet). */
   const networkWarning = ref<string | null>(null)
 
   const isConnected = computed(() => address.value !== null)
@@ -26,11 +26,11 @@ export const useWalletStore = defineStore('wallet', () => {
         networkWarning.value = `Your wallet is not on ${config.label}. Switch your wallet to ${config.label} before transacting.`
       }
     } catch {
-      // Bazı cüzdanlar ağ bilgisini vermez; imza sırasında zaten ağ parolası gönderiyoruz.
+      // Some wallets do not provide network information; we already send the network passphrase when signing.
     }
   }
 
-  /** Sayfa yenilenince önceki bağlantıyı geri yükler (kit adresi localStorage'da tutar). */
+  /** After a page refresh, restores the previous connection (the kit keeps the address in localStorage). */
   async function restore() {
     try {
       const { address: saved } = await StellarWalletsKit.getAddress()
@@ -49,7 +49,7 @@ export const useWalletStore = defineStore('wallet', () => {
       address.value = connected
       await checkNetwork()
     } catch (e) {
-      // Pencereyi kapatmak hata sayılmaz.
+      // Closing the window is not treated as an error.
       if (!isUserRejection(e)) error.value = errorMessage(e)
     } finally {
       busy.value = false
@@ -62,7 +62,7 @@ export const useWalletStore = defineStore('wallet', () => {
     networkWarning.value = null
   }
 
-  /** `contract.Client` ve trustline işlemleri için imza fonksiyonu. */
+  /** Signing function for `contract.Client` and trustline transactions. */
   async function signTransaction(xdr: string, opts?: SignOptions) {
     requireTestnetDemo()
     if (!address.value) throw new Error('Connect your wallet first.')

@@ -2,14 +2,14 @@ import { StellarToml, WebAuth } from '@stellar/stellar-sdk'
 import { anchorHomeDomain, config } from '@/lib/stellar'
 
 /**
- * Anchor istemcisi: SEP-1 (stellar.toml) → SEP-10 (web auth) → SEP-24 (interaktif yatırma/çekme).
+ * Anchor client: SEP-1 (stellar.toml) → SEP-10 (web auth) → SEP-24 (interactive deposit/withdrawal).
  *
- * Varsayılan sağlayıcı SDF'nin referans TEST anchor'ıdır: gerçek protokol akışını çalıştırır ama
- * test varlığı üretir, Türk lirası DEĞİLDİR. Gerçek bir TRY sağlayıcısı doğrulanınca yalnızca
- * `VITE_ANCHOR_HOME_DOMAIN` değişir (docs/altin-gunu-legal-boundary.md "Anchor seçim kapısı").
- * Anchor'ın interaktif pencere adresi yalnızca https ise kabul edilir, kullanıcıya alan adıyla
- * gösterilir ve pencere ancak kullanıcı tıklayınca açılır (SDF test anchor'ı arayüzü kardeş bir
- * alt alan adında sunar, bu yüzden home domain eşleşmesi zorunlu tutulmaz).
+ * The default provider is the SDF reference TEST anchor: it runs the real protocol flow but
+ * issues a test asset and is NOT Turkish lira. Once a real TRY provider is verified, only
+ * `VITE_ANCHOR_HOME_DOMAIN` changes (docs/altin-gunu-legal-boundary.md "Anchor selection gate").
+ * The anchor's interactive window address is accepted only if it is https, is shown to the user by domain,
+ * and the window opens only when the user clicks (the SDF test anchor serves its interface on a sibling
+ * subdomain, so a home-domain match is not required).
  */
 
 export const TEST_ANCHOR_DOMAIN = 'testanchor.stellar.org'
@@ -31,13 +31,13 @@ export interface AnchorInfo {
   signingKey: string
   deposit: Record<string, AssetSupport>
   withdraw: Record<string, AssetSupport>
-  /** stellar.toml'da ve SEP-24 bilgisinde geçen tüm varlık kodları. */
+  /** All asset codes that appear in stellar.toml and in the SEP-24 info. */
   assetCodes: string[]
-  /** Anchor gerçek bir TRY varlığı (TRY / TRYB) sunuyor mu? Sunmuyorsa arayüz "TRY değil" der. */
+  /** Does the anchor offer a real TRY asset (TRY / TRYB)? If not, the interface says "not TRY". */
   supportsTry: boolean
-  /** TRY'yi yalnızca TEMSİL eden bir test varlığı (örn. TRYT) var mı? Bu gerçek Türk lirası değildir. */
+  /** Is there a test asset that merely REPRESENTS TRY (e.g. TRYT)? This is not real Turkish lira. */
   representsTry: boolean
-  /** stellar.toml [[CURRENCIES]] kayıtlarındaki varlık kodu → ihraççı eşlemesi (native'in ihraççısı yoktur). */
+  /** Asset code → issuer mapping from the stellar.toml [[CURRENCIES]] entries (native has no issuer). */
   issuers: Record<string, string>
 }
 
@@ -59,7 +59,7 @@ function requireHttps(url: string, what: string): URL {
   return parsed
 }
 
-/** Adres anchor'ın home domain'i (veya alt alan adı) altında ve https mi? */
+/** Is the address under the anchor's home domain (or a subdomain) and https? */
 export function isAnchorUrl(url: string, domain: string): boolean {
   try {
     const u = new URL(url)
@@ -80,7 +80,7 @@ async function requestJson<T>(url: string, init: RequestInit = {}): Promise<T> {
   try {
     body = JSON.parse(text)
   } catch {
-    /* JSON değil; aşağıda hata olarak ele alınır */
+    /* Not JSON; handled as an error below */
   }
   if (!res.ok) {
     const detail = (body as { error?: string } | null)?.error ?? text.slice(0, 140)
@@ -104,7 +104,7 @@ function mapSupport(raw: Record<string, RawSupport> | undefined): Record<string,
   return out
 }
 
-/** SEP-1: stellar.toml'dan uç noktaları, ardından SEP-24 /info ile desteklenen varlıkları okur. */
+/** SEP-1: reads the endpoints from stellar.toml, then the supported assets from SEP-24 /info. */
 export async function resolveAnchor(domain: string = anchorDomain): Promise<AnchorInfo> {
   const toml = await StellarToml.Resolver.resolve(domain, { timeout: TIMEOUT_MS })
   const { WEB_AUTH_ENDPOINT, TRANSFER_SERVER_SEP0024, SIGNING_KEY } = toml
@@ -144,16 +144,16 @@ export async function resolveAnchor(domain: string = anchorDomain): Promise<Anch
 }
 
 /**
- * Anchor, havuzun kullandığı varlığı (kod VE ihraççı aynı) yatırma için sunuyor mu? Yalnızca kod
- * eşleşmesi yetmez: aynı kodlu başka ihraççının varlığı havuzda geçmez.
+ * Does the anchor offer the asset the pool uses (same code AND issuer) for deposit? Matching the code
+ * alone is not enough: an asset with the same code from another issuer is not valid in the pool.
  */
 export function supportsPoolAsset(anchor: AnchorInfo, code: string, issuer: string): boolean {
   return anchor.deposit[code]?.enabled === true && anchor.issuers[code] === issuer
 }
 
 /**
- * SEP-10: anchor'ın challenge işlemini alır, sunucu imzasını ve alan adlarını DOĞRULAR,
- * cüzdanla imzalatır ve JWT döndürür. Token yalnızca bellekte tutulur.
+ * SEP-10: takes the anchor's challenge transaction, VERIFIES the server signature and domains,
+ * has the wallet sign it and returns the JWT. The token is kept only in memory.
  */
 export async function authenticate(anchor: AnchorInfo, account: string, sign: Signer): Promise<string> {
   const challengeUrl = new URL(anchor.webAuthEndpoint)
@@ -165,7 +165,7 @@ export async function authenticate(anchor: AnchorInfo, account: string, sign: Si
     throw new Error('The anchor challenge was prepared for a different network.')
   }
 
-  // Sunucu imzası, home domain ve web_auth_domain kontrolü (SEP-10 istemci doğrulaması).
+  // Server signature, home domain and web_auth_domain checks (SEP-10 client verification).
   const { clientAccountID } = WebAuth.readChallengeTx(
     challenge.transaction,
     anchor.signingKey,
@@ -188,13 +188,13 @@ export async function authenticate(anchor: AnchorInfo, account: string, sign: Si
 export interface InteractiveSession {
   url: string
   id: string
-  /** Pencerenin açılacağı alan adı; kullanıcıya gösterilir. */
+  /** The domain the window will open on; shown to the user. */
   host: string
-  /** Adres anchor'ın home domain'i (veya alt alan adı) altında mı? */
+  /** Is the address under the anchor's home domain (or a subdomain)? */
   sameDomain: boolean
 }
 
-/** SEP-24: interaktif yatırma veya çekme oturumu başlatır. */
+/** SEP-24: starts an interactive deposit or withdrawal session. */
 export async function startInteractive(
   anchor: AnchorInfo,
   token: string,
@@ -239,9 +239,9 @@ export async function getTransaction(anchor: AnchorInfo, token: string, id: stri
   }
 }
 
-/** SEP-24 durum kodlarının Türkçe karşılıkları. */
+/** Human-readable labels for the SEP-24 status codes. */
 export const STATUS_LABELS: Record<string, string> = {
-  incomplete: 'Anchor formu bekleniyor',
+  incomplete: 'Waiting for the anchor form',
   pending_user_transfer_start: 'Waiting for your payment',
   pending_user_transfer_complete: 'Your payment is being processed',
   pending_external: 'Processing in an external system',

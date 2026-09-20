@@ -39,9 +39,9 @@ import type { MemberStatus, PoolInfo, RoundInfo, TxResult } from '@/types/pool'
 const route = useRoute()
 const wallet = useWalletStore()
 const now = useNow()
-/** Havuzun kendi varlığının kodu. Havuzlar farklı varlıklarla kurulabildiğinden zincirden okunur. */
+/** Code of the pool's own asset. Read from the chain because pools can be created with different assets. */
 const token = ref(poolAsset.getCode())
-/** Havuz, arayüzün varsayılan varlığıyla (USDC) mı kurulmuş? Anchor yüklemesi yalnızca o durumda anlamlı. */
+/** Was the pool created with the interface's default asset (USDC)? Loading through the anchor only makes sense in that case. */
 const usesPoolAsset = computed(() => !pool.value || pool.value.token === poolTokenContractId)
 
 async function resolveToken(tokenId: string) {
@@ -58,14 +58,14 @@ const pool = ref<PoolInfo | null>(null)
 const round = ref<RoundInfo | null>(null)
 const members = ref<MemberStatus[]>([])
 const contractBalance = ref<bigint | null>(null)
-/** Bağlı cüzdanın havuz varlığı bakiyesi; katkıya yetip yetmediğini göstermek için. */
+/** The connected wallet's balance of the pool asset; to show whether it is enough for the contribution. */
 const myBalance = ref<bigint | null>(null)
 const loading = ref(true)
 const loadError = ref<string | null>(null)
 const actionBusy = ref<string | null>(null)
 const actionError = ref<string | null>(null)
 const lastTx = ref<string | null>(null)
-/** Önceki sürüme bağlanıldığında yeni akışın yazma adımları yalnız v12 ile yapılır. */
+/** When connected to an earlier version, the write steps of the new flow are done only with v12. */
 const simpleTerms = ref<boolean | null>(null)
 const sellerInput = ref('')
 const docInput = ref('')
@@ -148,13 +148,13 @@ const myFunded = computed(() => !!me.value && isFunded(me.value))
 const lowBalance = computed(() => myBalance.value !== null && !!pool.value && myBalance.value < pool.value.contributionAmount)
 const recipientPaid = computed(() => !!round.value?.recipient && paid.value.has(round.value.recipient))
 const myOwnPaid = computed(() => !!me.value && paid.value.has(me.value))
-/** Bütün üyeler kendi katkısını yatırmadan tahsisat açılmaz. */
+/** No allocation is opened until all members have paid their own contribution. */
 const recipientBlock = computed<string | null>(() => {
   if (!pool.value || pool.value.status !== 'Active' || !round.value) return null
   const phase = round.value.phase
   if (phase === 'Settled') return null
   if (!round.value.recipient) {
-    // Kura modu: alıcı henüz belli değil; herkesin katkısı tamamlanmadan kura çekilmez.
+    // Draw mode: the recipient is not known yet; the draw is not held until everyone's contribution is complete.
     if (!allFunded.value && (phase === 'Grace' || deadlinePassed.value)) {
       return 'A contribution is missing. When the grace period ends the round stops and no draw is held; only contributions paid in this round can be refunded.'
     }
@@ -192,22 +192,22 @@ const showDrawStage = computed(
     (round.value.phase === 'AwaitingDraw' || !!round.value.recipient),
 )
 /**
- * Kontratın `get_member_status.refundable` değeri havuz durumuna bakmadan "mevcut turda yatırdıysa
- * katkı" döndürür; tamamlanmış havuzun son turunda da (para satıcıya gitmiş olsa bile) dolu gelir
- * (canlı Testnet verisiyle görüldü). İade yalnızca ödenmemiş tur için anlamlıdır, o yüzden
- * tamamlanmış havuzda ve ödenmiş (Settled) turda sıfır gösterilir.
+ * The contract's `get_member_status.refundable` value returns "the contribution if paid in the current round" without looking at the pool status;
+ * it also comes back full in the last round of a completed pool (even though the money went to the seller)
+ * (seen with live Testnet data). A refund only makes sense for a round that has not been paid, so
+ * it is shown as zero in a completed pool and in a paid (Settled) round.
  */
 const refundableOf = (address: string): bigint => {
-  // İade yalnızca iptal edilmiş havuzda anlamlıdır (peşinat da dahil: kontrat, henüz almamış üyenin
-  // harcanmamış peşinatını da bu değere ekler). Aktif ya da tamamlanmış havuzda gösterilmez.
+  // A refund only makes sense in a cancelled pool (including the down payment: the contract also adds a member who has not
+  // received yet's unspent down payment to this value). It is not shown in an active or completed pool.
   if (pool.value?.status !== 'Aborted') return 0n
   return memberByAddress.value.get(address)?.refundable ?? 0n
 }
-/** Bir turda satıcıya giden toplam: tur katkıları + alıcının kendi peşinatı. */
+/** The total going to the seller in one round: the round contributions + the recipient's own down payment. */
 const purchaseAmount = computed(() =>
   pool.value ? pool.value.contributionAmount * BigInt(pool.value.memberLimit) + pool.value.downPayment : 0n,
 )
-// Alım öneri formu hazır gelsin: satıcı havuzda kayıtlı tek adrestir, belge için düzenlenebilir bir taslak doldurulur.
+// Let the purchase proposal form come ready: the seller is the only address registered in the pool, and an editable draft is filled in for the document.
 watch(
   () => [pool.value?.id, pool.value?.demoSeller, round.value?.round, round.value?.phase] as const,
   () => {
@@ -260,7 +260,7 @@ const statusLabel = computed(() => {
       if (round.value?.phase === 'AwaitingDraw') return { text: 'Waiting for the draw', cls: 'bg-gold-100 text-amber-900' }
       return round.value?.phase === 'Grace'
         ? { text: 'In grace period', cls: 'bg-gold-100 text-amber-900' }
-        : { text: 'Devam ediyor', cls: 'bg-brand-100 text-brand-800' }
+        : { text: 'In progress', cls: 'bg-brand-100 text-brand-800' }
     case 'Completed':
       return { text: 'Completed', cls: 'bg-sage-100 text-sage-800' }
     case 'Aborted':
@@ -270,7 +270,7 @@ const statusLabel = computed(() => {
   }
 })
 
-// --- İşlemler ----------------------------------------------------------------------------
+// --- Actions ----------------------------------------------------------------------------
 const signer = computed<Signer | null>(() =>
   me.value ? { address: me.value, signTransaction: wallet.signTransaction } : null,
 )
@@ -318,7 +318,7 @@ async function copyLink() {
 const listedMembers = computed(() =>
   isDraw.value ? (pool.value?.members ?? []) : (pool.value?.recipientOrder.length ? pool.value.recipientOrder : (pool.value?.members ?? [])),
 )
-/** Büyük gruplarda liste varsayılan olarak kısaltılır. */
+/** In large groups the list is shortened by default. */
 const COMPACT_LIST = 12
 const showAllMembers = ref(false)
 const visibleMembers = computed(() =>
@@ -327,7 +327,7 @@ const visibleMembers = computed(() =>
     : listedMembers.value.slice(0, COMPACT_LIST),
 )
 
-// --- Adım adım rehber ----------------------------------------------------------------------
+// --- Step-by-step guide ----------------------------------------------------------------------
 interface GuideStep {
   key: string
   title: string
@@ -347,7 +347,7 @@ const setupSteps = computed<GuideStep[]>(() => {
       key: 'approve',
       title: 'Everyone approves the terms',
       who: 'Members',
-      detail: `${p.termsApprovals.length} / ${p.members.length} onay`,
+      detail: `${p.termsApprovals.length} / ${p.members.length} approvals`,
       done: termsReady.value,
     },
     { key: 'start', title: 'The pool starts', who: 'Anyone can start it', detail: 'One click once the terms are complete', done: false },
@@ -377,7 +377,7 @@ const roundSteps = computed<GuideStep[]>(() => {
       key: 'collect',
       title: 'Contributions are collected',
       who: 'Members',
-      detail: `${fundedCount.value} / ${p.members.length} tamam`,
+      detail: `${fundedCount.value} / ${p.members.length} done`,
       done: settled || allFunded.value,
     },
     ...draw,
@@ -397,7 +397,7 @@ const guideSteps = computed<GuideStep[]>(() =>
 )
 const currentStepKey = computed(() => guideSteps.value.find((s) => !s.done)?.key ?? null)
 
-/** Bağlı cüzdanın şu an yapabileceği bir işlem olan adımlar. */
+/** Steps that are an action the connected wallet can take right now. */
 const stepMine = computed<Record<string, boolean | undefined>>(() => {
   const p = pool.value
   const r = round.value
@@ -481,10 +481,10 @@ const roleChips = computed(() => {
   return chips
 })
 
-/** 3B sahne en fazla 12 para gösterir; büyük gruplarda para sayısı ve dolu oranı ölçeklenir. */
+/** The 3D scene shows at most 12 coins; in large groups the coin count and fill ratio are scaled. */
 const SCENE_MAX = 12
 const sceneCoins = computed(() => Math.min(SCENE_MAX, pool.value?.memberLimit ?? 4))
-/** 3B sahnede altın görünen para sayısı: katılan / bu tur ödeyen üye sayısı (ölçekli). */
+/** Number of coins that look gold in the 3D scene: joined / paid-this-round members (scaled). */
 const sceneFilled = computed(() => {
   const p = pool.value
   if (!p) return -1
@@ -511,7 +511,7 @@ const countdownLabel = computed(() =>
 <template>
   <div class="space-y-6">
     <RouterLink to="/" class="inline-flex min-h-11 items-center gap-1 text-sm font-medium text-brand-700 hover:underline">
-      <AppIcon name="back" class="!size-4" /> Ana sayfa
+      <AppIcon name="back" class="!size-4" /> Home
     </RouterLink>
 
     <p
@@ -547,7 +547,7 @@ const countdownLabel = computed(() =>
     </div>
 
     <template v-else-if="pool">
-      <!-- BAŞLIK + 3B SAHNE -->
+      <!-- HEADER + 3D SCENE -->
       <header class="sunrise relative overflow-hidden rounded-[2rem] p-5 sm:p-8">
         <div class="grid items-center gap-4 md:grid-cols-[1.3fr_1fr]">
           <div>
@@ -556,7 +556,7 @@ const countdownLabel = computed(() =>
               <span class="badge bg-gold-100 text-amber-900">{{ isDraw ? 'Draw' : 'Fixed order' }}</span>
               <span v-for="c in roleChips" :key="c" class="badge bg-ink text-cream">Sen: {{ c }}</span>
             </div>
-            <h1 class="mt-3 text-4xl font-extrabold sm:text-5xl">Havuz #{{ pool.id }}</h1>
+            <h1 class="mt-3 text-4xl font-extrabold sm:text-5xl">Pool #{{ pool.id }}</h1>
             <p class="mt-2 text-stone-700">
               {{ pool.members.length }} / {{ pool.memberLimit }} members · every round
               <strong>{{ formatStroops(pool.contributionAmount) }} {{ token }}</strong>
@@ -599,7 +599,7 @@ const countdownLabel = computed(() =>
             <span>Round {{ pool.currentRound }} / {{ pool.memberLimit }}</span>
             <span class="tabular-nums">{{ progressPercent }}% complete</span>
           </div>
-          <div class="h-2.5 overflow-hidden rounded-full bg-white/70" role="progressbar" :aria-valuenow="progressPercent" aria-valuemin="0" aria-valuemax="100" aria-label="Havuz ilerlemesi">
+          <div class="h-2.5 overflow-hidden rounded-full bg-white/70" role="progressbar" :aria-valuenow="progressPercent" aria-valuemin="0" aria-valuemax="100" aria-label="Pool progress">
             <div class="h-full rounded-full bg-gradient-to-r from-brand-500 to-gold-400 transition-[width] duration-700" :style="{ width: `${progressPercent}%` }" />
           </div>
         </div>
@@ -620,7 +620,7 @@ const countdownLabel = computed(() =>
           </span>
         </div>
 
-        <!-- Şimdi ne yapmalı? -->
+        <!-- What should I do now? -->
         <div
           v-if="banner"
           class="pop flex items-start gap-3 rounded-2xl border-2 p-4"
@@ -640,7 +640,7 @@ const countdownLabel = computed(() =>
           </button>
         </div>
 
-        <!-- Adım listesi: her adımın kendi işlemi kendi içinde -->
+        <!-- Step list: each step's own action sits inside the step itself -->
         <ol v-if="guideSteps.length" class="space-y-0" aria-label="Steps">
           <li v-for="(s, i) in guideSteps" :key="s.key" class="grid grid-cols-[2.5rem_1fr] gap-x-3">
             <div class="flex flex-col items-center">
@@ -696,7 +696,7 @@ const countdownLabel = computed(() =>
                 <p class="mt-1 text-xs text-stone-600">{{ fundedCount }} / {{ pool.members.length }} members paid</p>
               </div>
 
-              <!-- Kura sahnesi (izleyenler de görür) -->
+              <!-- Draw stage (spectators can see it too) -->
               <div v-if="s.key === 'draw' && showDrawStage" class="mt-3 rounded-2xl bg-sand/60 p-4">
                 <DrawStage
                   :candidates="drawCandidates"
@@ -707,7 +707,7 @@ const countdownLabel = computed(() =>
                 />
               </div>
 
-              <!-- Adıma özel işlemler -->
+              <!-- Step-specific actions -->
               <div v-if="wallet.isConnected" class="mt-3 space-y-3 empty:hidden">
                 <!-- KURULUM -->
                 <template v-if="pool.status === 'Filling'">
@@ -762,7 +762,7 @@ const countdownLabel = computed(() =>
                   </button>
                 </template>
 
-                <!-- AKTİF TUR -->
+                <!-- ACTIVE ROUND -->
                 <template v-else-if="pool.status === 'Active' && round">
                   <template v-if="s.key === 'collect'">
                     <p v-if="round.phase === 'Grace'" role="status" class="rounded-2xl bg-gold-100/80 p-3 text-sm text-amber-950">
@@ -798,7 +798,7 @@ const countdownLabel = computed(() =>
                       Anyone in the pool can call this; no administrator is needed.
                     </p>
 
-                    <!-- Anchor ile bakiye yükleme: katkıdan önceki gerçek fiat-kapısı adımı -->
+                    <!-- Loading balance through the anchor: the real fiat-gateway step before the contribution -->
                     <details
                       v-if="usesPoolAsset && isMember && !myFunded && (round.phase === 'Collecting' || round.phase === 'Grace')"
                       class="group rounded-2xl border border-stone-200 bg-white p-4"
@@ -890,7 +890,7 @@ const countdownLabel = computed(() =>
           </li>
         </ol>
 
-        <!-- Kuruluş süresi dolduysa iptal -->
+        <!-- Cancel if the setup period has ended -->
         <div v-if="wallet.isConnected && simpleTerms === true && pool.status === 'Filling' && setupExpired" class="flex flex-wrap items-center gap-3">
           <button type="button" class="btn-danger" :disabled="actionBusy !== null" @click="run('cancel', (sg) => cancelUnstartedPool(sg, pool!.id))">
             {{ actionBusy === 'cancel' ? 'Confirm in wallet…' : 'Setup period ended: cancel' }}
@@ -900,7 +900,7 @@ const countdownLabel = computed(() =>
           Setup deadline: {{ new Date(pool.setupDeadline * 1000).toLocaleString('en-US') }}
         </p>
 
-        <!-- Süre sonunda iptal -->
+        <!-- Cancel at the end of the period -->
         <div v-if="wallet.isConnected && simpleTerms === true && pool.status === 'Active' && canAbort" class="flex flex-wrap items-center gap-3">
           <button type="button" class="btn-danger" :disabled="actionBusy !== null" @click="run('abort', (sg) => abortPool(sg, pool!.id))">
             {{ actionBusy === 'abort' ? 'Confirm in wallet…' : 'End the pool and open this round’s refunds' }}
@@ -908,7 +908,7 @@ const countdownLabel = computed(() =>
           <p class="text-sm text-stone-600">The contract checks the cancellation conditions; a deadline passing does not by itself start any asset transfer.</p>
         </div>
 
-        <!-- İptal / Tamamlanma -->
+        <!-- Cancel / Completion -->
         <div v-if="wallet.isConnected && simpleTerms === true && (pool.status === 'Aborted' || pool.status === 'Completed')" class="flex flex-wrap items-center gap-3">
           <button
             v-if="isMember && pool.status === 'Aborted' && myRefundable > 0n"
@@ -932,7 +932,7 @@ const countdownLabel = computed(() =>
       <!-- PARA NEREDE? -->
       <section class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4" aria-label="Financial summary">
         <div v-reveal class="bento">
-          <p class="text-xs font-semibold text-stone-600">Kontrattaki toplam {{ token }}</p>
+          <p class="text-xs font-semibold text-stone-600">Total {{ token }} in the contract</p>
           <p class="mt-1 font-display text-2xl font-extrabold tabular-nums">{{ contractBalance === null ? '—' : formatStroops(contractBalance) }}</p>
           <p class="mt-1 text-xs text-stone-500">All pools; read directly from the chain</p>
         </div>
@@ -942,7 +942,7 @@ const countdownLabel = computed(() =>
           <p class="mt-1 text-xs text-stone-500">No allocation is made until all are in</p>
         </div>
         <div v-reveal="2" class="bento">
-          <p class="text-xs font-semibold text-stone-600">Bu turdaki toplam iade</p>
+          <p class="text-xs font-semibold text-stone-600">Total refund in this round</p>
           <p class="mt-1 font-display text-2xl font-extrabold tabular-nums">{{ formatStroops(totalRefundable) }}</p>
           <p class="mt-1 text-xs text-stone-500">Payments from earlier rounds are not included</p>
         </div>
@@ -965,7 +965,7 @@ const countdownLabel = computed(() =>
             <dt class="text-xs text-stone-600">This round’s recipient</dt>
             <dd class="mt-0.5 font-mono text-sm font-semibold" :title="round.recipient ?? ''">
               <template v-if="round.recipient">{{ shortAddress(round.recipient, 6) }}</template>
-              <span v-else class="font-sans">Kura bekleniyor</span>
+              <span v-else class="font-sans">Waiting for the draw</span>
               <span v-if="isRecipient" class="badge bg-brand-100 text-brand-800">Sen</span>
             </dd>
           </div>
@@ -990,7 +990,7 @@ const countdownLabel = computed(() =>
         </div>
       </section>
 
-      <!-- ÜYELER -->
+      <!-- MEMBERS -->
       <section class="card" aria-labelledby="uyeler">
         <h2 id="uyeler" class="text-xl font-extrabold">{{ isDraw ? 'Members' : 'Members and order' }}</h2>
         <p v-if="isDraw && pool.status === 'Active'" class="mt-1 text-sm text-stone-600">
@@ -1036,7 +1036,7 @@ const countdownLabel = computed(() =>
         </p>
       </section>
 
-      <!-- KELİMELER -->
+      <!-- WORDS -->
       <details class="card group cursor-pointer !p-0">
         <summary class="flex min-h-14 list-none items-center justify-between gap-3 px-5 py-3 font-display font-bold marker:hidden [&::-webkit-details-marker]:hidden">
           What do the terms mean?

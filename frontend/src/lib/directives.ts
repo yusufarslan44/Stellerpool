@@ -21,8 +21,8 @@ function getObserver(): IntersectionObserver | null {
 }
 
 /**
- * Kaydırınca beliren öğe. Değer: kademe sırası (0, 1, 2…), gecikme = sıra × 80 ms.
- * IntersectionObserver yoksa veya hareket azaltılmışsa öğe hemen görünür.
+ * An element that appears on scroll. Value: stagger index (0, 1, 2…), delay = index × 80 ms.
+ * If IntersectionObserver is missing or motion is reduced, the element is shown immediately.
  */
 export const vReveal: Directive<HTMLElement, number | undefined> = {
   mounted(el, binding) {
@@ -40,7 +40,7 @@ export const vReveal: Directive<HTMLElement, number | undefined> = {
   },
 }
 
-/** Fare hareketiyle hafifçe eğilen kart (yalnızca fare ve hareket açıkken). */
+/** A card that tilts slightly with mouse movement (only with a mouse and when motion is on). */
 export const vTilt: Directive<HTMLElement, number | undefined> = {
   mounted(el, binding) {
     if (reducedMotion() || !window.matchMedia('(hover: hover)').matches) return

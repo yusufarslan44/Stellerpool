@@ -1,6 +1,6 @@
 import { onMounted, onUnmounted, ref } from 'vue'
 
-/** Unix saniyesi olarak "şimdi", her saniye güncellenir (geri sayımlar için). */
+/** "Now" as unix seconds, updated every second (for countdowns). */
 export function useNow() {
   const now = ref(Math.floor(Date.now() / 1000))
   let timer: ReturnType<typeof setInterval> | undefined

@@ -22,7 +22,7 @@ const router = useRouter()
 const token = poolAsset.getCode()
 
 const DAY = 24 * 60 * 60
-/** Takvim: hedefler aylık, demolar dakikalar içinde denenebilsin diye hızlı. Süreler eşleşme anahtarının parçasıdır. */
+/** Calendar: goals are monthly, demos are fast so they can be tried within minutes. The durations are part of the matching key. */
 const CALENDARS = {
   month: { unit: 'months', round: 30 * DAY, grace: 7 * DAY, purchase: 7 * DAY, setup: 7 * DAY },
   demo: { unit: 'rounds', round: 3 * 60, grace: 10 * 60, purchase: 30 * 60, setup: 60 * 60 },
@@ -32,7 +32,7 @@ type CalendarId = keyof typeof CALENDARS
 const DOWN_OPTIONS = [0, 10, 20, 30] as const
 const CENT = 100_000n // 0.01 unit (7 decimals)
 
-// Ana sayfadaki hesaplama aracından gelen plan değerleri.
+// Plan values coming from the calculator on the home page.
 const route = useRoute()
 const queryAmount = typeof route.query.amount === 'string' ? route.query.amount : ''
 const queryMembers = Number.parseInt(String(route.query.members ?? ''), 10)
@@ -64,7 +64,7 @@ const orderMode = computed<OrderMode>(() => {
 const caps = ref<ContractCapabilities | null>(null)
 const legacyContract = computed(() => caps.value?.legacySponsor === true)
 const oldFlow = computed(() => caps.value !== null && !caps.value.simpleTerms)
-/** Kontrat peşinatı zincirde tutuyor mu (v11+)? */
+/** Does the contract hold the down payment on-chain (v11+)? */
 const downOnChain = computed(() => caps.value?.supportsDownPayment === true)
 
 function pickGoal(g: Goal) {
@@ -106,11 +106,11 @@ const priceStroops = computed(() => {
   const v = parseOrNull(price.value)
   return v !== null && v > 0n ? v : null
 })
-/** Peşinat: toplam bedelin yüzdesi, 0,01 birime aşağı yuvarlanır. */
+/** Down payment: a percentage of the total price, rounded down to 0.01 unit. */
 const downStroops = computed(() =>
   priceStroops.value === null ? null : ((priceStroops.value * BigInt(downPct.value)) / 100n / CENT) * CENT,
 )
-/** Havuzdan karşılanan tutar = toplam bedel − peşinat. */
+/** The amount covered by the pool = total price − down payment. */
 const targetStroops = computed(() =>
   priceStroops.value !== null && downStroops.value !== null ? priceStroops.value - downStroops.value : null,
 )
@@ -118,7 +118,7 @@ const requestedStroops = computed(() => {
   const value = parseOrNull(desiredInstallment.value)
   return value !== null && value > 0n ? value : null
 })
-/** Kullanıcının ödeyebileceği tutara göre vade ve kişi sayısı. */
+/** Term and number of people according to the amount the user can pay. */
 const neededMembers = computed(() =>
   targetStroops.value !== null && requestedStroops.value !== null
     ? (targetStroops.value + requestedStroops.value - 1n) / requestedStroops.value
@@ -138,7 +138,7 @@ const installmentLabel = computed(() => calendar.value === 'demo' ? 'Installment
 
 const sellerValid = computed(() => wallet.address !== demoSellerAddress)
 
-/** Kontrat yetenekleri okunmadan eşleştirme yapılmaz (peşinat zincirde mi bilinmiyor). */
+/** No matching is done until the contract capabilities are read (it is unknown whether the down payment is on-chain). */
 const plan = computed<PoolPlan | null>(() => {
   if (caps.value === null || installment.value === null || term.value === null || !caps.value.simpleTerms) return null
   return {
@@ -181,7 +181,7 @@ onMounted(() => {
       caps.value = c
     })
     .catch(() => {
-      /* okunamazsa form açık kalır; gönderimde gerçek hata gösterilir */
+      /* if it cannot be read the form stays open; the real error is shown on submit */
     })
   void loadPools()
 })
@@ -190,7 +190,7 @@ const matches = computed(() =>
   plan.value === null || allPools.value === null ? [] : findMatches(allPools.value, plan.value, wallet.address, nowSec.value),
 )
 const best = computed(() => matches.value[0] ?? null)
-/** Aynı plana uyan bir havuza zaten üyeysem yeni havuz açmak yerine oraya gidilir. */
+/** If I am already a member of a pool that fits the same plan, I am taken there instead of opening a new pool. */
 const ownPool = computed(() =>
   best.value !== null || plan.value === null || allPools.value === null
     ? null
@@ -211,15 +211,15 @@ const hint = computed(() => {
   return null
 })
 
-// --- Katıl ---------------------------------------------------------------------------------
+// --- Join ---------------------------------------------------------------------------------
 const busy = ref(false)
 const phase = ref<'idle' | 'creating' | 'joining'>('idle')
 const error = ref<string | null>(null)
 const txHash = ref<string | null>(null)
 
 /**
- * Uygun açık havuza katılır; yoksa önce yeni havuzu açar, sonra katılır (iki cüzdan onayı).
- * Liste gönderimden hemen önce yeniden okunur; bayat bir listeyle dolu havuza gidilmez.
+ * Joins a suitable open pool; if there is none, first opens a new pool, then joins (two wallet approvals).
+ * The list is re-read right before submitting; a full pool is not chosen from a stale list.
  */
 async function submit() {
   if (!wallet.address || !canSubmit.value || plan.value === null) return
@@ -235,7 +235,7 @@ async function submit() {
       allPools.value = pools
       nowSec.value = Math.floor(Date.now() / 1000)
     } catch {
-      /* elde tutulan listeyle devam; katılım zincirde zaten doğrulanır */
+      /* continue with the list in hand; joining is verified on-chain anyway */
     }
     let poolId = findMatches(pools, p, wallet.address, nowSec.value)[0]?.id ?? null
     if (poolId === null) {
@@ -285,7 +285,7 @@ const buttonText = computed(() => {
   <div class="mx-auto max-w-xl space-y-5">
     <div>
       <RouterLink to="/" class="inline-flex items-center gap-1 text-sm font-medium text-brand-700 hover:underline">
-        <AppIcon name="back" class="!size-4" /> Ana sayfa
+        <AppIcon name="back" class="!size-4" /> Home
       </RouterLink>
       <h1 class="mt-1 text-4xl font-extrabold sm:text-5xl">Join a pool</h1>
       <p class="mt-1 text-stone-600">Enter the total price and the {{ quickDemo ? 'per-round' : 'monthly' }} installment you can afford; the term and group size are calculated automatically.</p>

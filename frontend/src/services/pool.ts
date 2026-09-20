@@ -11,11 +11,11 @@ import type {
 } from '@/types/pool'
 
 /**
- * RotatingPool kontratı için istemci katmanı. Tüm çağrılar gerçek Soroban RPC'ye gider,
+ * Client layer for the RotatingPool contract. All calls go to the real Soroban RPC,
  * sahte veri yoktur.
  *
- * Yayımlı Testnet kontratı API v12'dir. Önceki kontratların havuzları zincirde kalır;
- * eski sürümde yeni akışın yazma işlemleri engellenir.
+ * The published Testnet contract is API v12. Pools of earlier contracts stay on-chain;
+ * writes of the new flow are blocked on an old version.
  */
 
 export class LegacyContractError extends Error {
@@ -47,7 +47,7 @@ interface PoolMethods {
       token: string
       contribution_amount: bigint
       member_limit: number
-      /** Yalnızca kura destekleyen kontratta vardır: 'Fixed' = sabit sıra, 'Draw' = kura (`{ tag, values }`). */
+      /** Present only in a contract that supports draw: 'Fixed' = fixed order, 'Draw' = draw (`{ tag, values }`). */
       order_mode?: { tag: OrderMode; values: void }
       round_duration: number
       grace_duration: number
@@ -74,7 +74,7 @@ interface PoolMethods {
     },
     null
   >
-  /** Kura modunda tüm katkılar tamamlanınca herkes çağırabilir; alıcıyı teslim almamışlar arasından seçer. */
+  /** In draw mode, anyone can call it once all contributions are complete; it picks the recipient among those who have not yet received. */
   draw_recipient: Method<{ pool_id: number; caller: string }, string>
   execute_round: Method<{ pool_id: number }, null>
   mark_overdue: Method<{ pool_id: number }, null>
@@ -88,7 +88,7 @@ interface PoolMethods {
 
 type PoolClient = contract.Client & PoolMethods
 
-/** İşlem imzalayacak kullanıcı (cüzdan). Okuma çağrıları için gerekmez. */
+/** The user (wallet) who will sign transactions. Not needed for read calls. */
 export interface Signer {
   address: string
   signTransaction: (
@@ -97,7 +97,7 @@ export interface Signer {
   ) => Promise<{ signedTxXdr: string; signerAddress?: string }>
 }
 
-/** Arayüzün çağırdığı kontrat fonksiyonları (docs/plan.md bölüm 5). */
+/** The contract functions the interface calls (docs/plan.md section 5). */
 const EXPECTED_METHODS = [
   'create_pool',
   'join_pool',
@@ -127,13 +127,13 @@ export class ContractInterfaceError extends Error {
   }
 }
 
-/** Kontratın sunduğu yetenekler (zincirdeki arayüzden okunur, sabit varsayım değildir). */
+/** The capabilities the contract exposes (read from the on-chain interface, not a fixed assumption). */
 export interface ContractCapabilities {
-  /** Eski sponsorlu (v8) kontrat: fund_guarantee gibi metotlar var. Arayüz bununla çalışmaz. */
+  /** Old sponsored (v8) contract: it has methods such as fund_guarantee. The interface does not work with it. */
   legacySponsor: boolean
   /** Kura (`draw_recipient`) destekleniyor mu? */
   supportsDraw: boolean
-  /** Peşinat (`create_pool` girdisi `down_payment`) destekleniyor mu? Sürüm numarasına değil zincirdeki arayüze bakılır. */
+  /** Is the down payment (the `create_pool` input `down_payment`) supported? The on-chain interface is checked, not the version number. */
   supportsDownPayment: boolean
   /** v12: order is finalized on the last join, with no verifier role or approval. */
   simpleTerms: boolean
@@ -155,9 +155,9 @@ const hasMethod = (client: unknown, name: string) =>
   typeof (client as Record<string, unknown>)[name] === 'function'
 
 /**
- * `contract.Client` oluşturulurken zincirden okunan arayüzde bir fonksiyonun girdi adı var mı?
- * SDK 17 `getFunc` için düz bir nesne (`inputs` dizi, `name` metin) döndürür; eski XDR nesnesi
- * biçimi (`inputs()` / `name()` fonksiyon) de desteklenir.
+ * Does a function have an input of that name in the interface read from the chain when building `contract.Client`?
+ * SDK 17 returns a plain object for `getFunc` (`inputs` is an array, `name` is a string); the old XDR object
+ * form (`inputs()` / `name()` functions) is supported as well.
  */
 function hasInput(client: unknown, fn: string, input: string): boolean {
   try {
@@ -194,7 +194,7 @@ async function getClient(signer?: Signer): Promise<PoolClient> {
 
 let capabilitiesCache: Promise<ContractCapabilities> | null = null
 
-/** Formu kontratın gerçek yeteneklerine göre açıp kapatmak için; sonuç oturum boyunca önbelleğe alınır. */
+/** To toggle the form according to the contract's real capabilities; the result is cached for the session. */
 export function getContractCapabilities(): Promise<ContractCapabilities> {
   capabilitiesCache ??= buildClient()
     .then(capabilitiesOf)
@@ -219,7 +219,7 @@ async function send(tx: contract.AssembledTransaction<unknown>): Promise<TxResul
   return { hash: hashOf((await tx.signAndSend()) as SentTx) }
 }
 
-// --- Kontrattan dönen değerleri arayüz tiplerine çevirir ---------------------------------
+// --- Converts values returned by the contract into interface types ---------------------------------
 
 const POOL_STATUSES: PoolStatus[] = ['Filling', 'Active', 'Completed', 'Aborted']
 const ROUND_PHASES: RoundPhase[] = ['Collecting', 'Grace', 'AwaitingDraw', 'AwaitingPurchase', 'Settled']
@@ -228,7 +228,7 @@ const toNumber = (v: unknown) => Number(v ?? 0)
 const toBigInt = (v: unknown) => BigInt((v ?? 0) as bigint | number | string)
 const toStringList = (v: unknown) => ((v as unknown[] | undefined) ?? []).map(String)
 const toOptionalString = (v: unknown) => (v === undefined || v === null ? null : String(v))
-/** Soroban enum'ları `{ tag: 'Active' }` veya düz string olarak gelebilir. */
+/** Soroban enums can arrive as `{ tag: 'Active' }` or as a plain string. */
 const toTag = (v: unknown) => (typeof v === 'string' ? v : ((v as { tag?: string })?.tag ?? ''))
 
 function toHexOrNull(v: unknown): string | null {
@@ -241,8 +241,8 @@ function toHexOrNull(v: unknown): string | null {
 }
 
 /**
- * Rust `Result` döndüren kontrat fonksiyonlarında SDK sonucu `Ok { value }` olarak sarmalar
- * (Testnet kontratıyla doğrulandı). Hata varsa fırlatır, yoksa düz değeri döndürür.
+ * For contract functions returning a Rust `Result`, the SDK wraps the result as `Ok { value }`
+ * (verified against the Testnet contract). It throws on an error, otherwise returns the plain value.
  */
 function unwrap(raw: unknown): unknown {
   const r = raw as { isErr?: () => boolean; unwrap?: () => unknown; unwrapErr?: () => { message?: string } } | null
@@ -259,9 +259,9 @@ function record(raw: unknown, what: string): Record<string, unknown> {
 }
 
 function mapPool(id: number, raw: unknown): PoolInfo {
-  const r = record(raw, 'havuz')
+  const r = record(raw, 'pool')
   const status = toTag(r.status) as PoolStatus
-  if (!POOL_STATUSES.includes(status)) throw new Error(`Bilinmeyen havuz durumu: "${status}".`)
+  if (!POOL_STATUSES.includes(status)) throw new Error(`Unknown pool status: "${status}".`)
   return {
     id,
     creator: String(r.creator),
@@ -285,9 +285,9 @@ function mapPool(id: number, raw: unknown): PoolInfo {
 }
 
 function mapRound(raw: unknown): RoundInfo {
-  const r = record(raw, 'tur')
+  const r = record(raw, 'round')
   const phase = toTag(r.phase) as RoundPhase
-  if (!ROUND_PHASES.includes(phase)) throw new Error(`Bilinmeyen tur evresi: "${phase}".`)
+  if (!ROUND_PHASES.includes(phase)) throw new Error(`Unknown round phase: "${phase}".`)
   return {
     round: toNumber(r.round),
     phase,
@@ -312,7 +312,7 @@ function mapMember(address: string, raw: unknown): MemberStatus {
   }
 }
 
-// --- Okuma (imza gerekmez, simülasyon) ---------------------------------------------------
+// --- Reads (no signature needed, simulation) ---------------------------------------------------
 
 export async function getPool(poolId: number): Promise<PoolInfo> {
   const c = await getClient()
@@ -321,8 +321,8 @@ export async function getPool(poolId: number): Promise<PoolInfo> {
 }
 
 /**
- * Yeni havuzlardan başlayarak en fazla `limit` havuzu okur (imza gerekmez). Kullanıcıyı planına uyan
- * açık bir havuza yönlendirmek için kullanılır; okunamayan tek bir havuz listeyi bozmaz.
+ * Starting from the newest pools, reads at most `limit` pools (no signature needed). Used to route the user to an
+ * open pool that fits their plan; a single unreadable pool does not break the list.
  */
 export async function listRecentPools(limit = 40): Promise<PoolInfo[]> {
   const c = await getClient()
@@ -346,7 +346,7 @@ export async function getMemberStatus(poolId: number, member: string): Promise<M
   return mapMember(member, unwrap(status.result))
 }
 
-// --- Yazma (cüzdan imzası gerekir) -------------------------------------------------------
+// --- Writes (wallet signature required) -------------------------------------------------------
 
 export async function createPool(
   signer: Signer,
@@ -355,18 +355,18 @@ export async function createPool(
     contributionAmount: bigint
     memberLimit: number
     orderMode: OrderMode
-    /** Üye başına peşinat (yalnızca kontrat destekliyorsa gönderilir). */
+    /** Down payment per member (sent only if the contract supports it). */
     downPayment?: bigint
     roundDuration: number
     graceDuration: number
     purchaseDuration: number
-    /** Kuruluş son tarihi, unix saniyesi. */
+    /** Setup deadline, unix seconds. */
     setupDeadline: number
     demoSeller: string
   },
 ): Promise<TxResult & { poolId: number | null }> {
   const c = await getClient(signer)
-  // Kura yoksa `order_mode` hiç gönderilmez; "Kura" seçili havuz sessizce sıralı kurulmasın diye reddedilir.
+  // If there is no draw, `order_mode` is never sent; a pool with "Draw" selected is rejected so it is not silently created as ordered.
   const caps = capabilitiesOf(c)
   const supportsDraw = caps.supportsDraw
   if ((params.downPayment ?? 0n) > 0n && !caps.supportsDownPayment) {
@@ -381,7 +381,7 @@ export async function createPool(
     contribution_amount: params.contributionAmount,
     member_limit: params.memberLimit,
     ...(supportsDraw ? { order_mode: { tag: params.orderMode, values: undefined } } : {}),
-    // v11+: `down_payment` zorunlu bir argümandır (0 = peşinatsız); eski kontrata hiç gönderilmez.
+    // v11+: `down_payment` is a required argument (0 = no down payment); it is never sent to an old contract.
     ...(caps.supportsDownPayment ? { down_payment: params.downPayment ?? 0n } : {}),
     round_duration: params.roundDuration,
     grace_duration: params.graceDuration,
@@ -399,19 +399,19 @@ export async function joinPool(signer: Signer, poolId: number) {
   return send(await c.join_pool({ pool_id: poolId, member: signer.address }))
 }
 
-/** Üye, geçerli koşul sürümünü cüzdanıyla onaylar. */
+/** The member approves the current terms version with their wallet. */
 export async function approveTerms(signer: Signer, poolId: number, version: number) {
   const c = await getClient(signer)
   return send(await c.approve_terms({ pool_id: poolId, approver: signer.address, version }))
 }
 
-/** Koşullar tamamsa herkes havuzu başlatabilir; kurucu çevrim dışı kalsa da fon kilitli kalmaz. */
+/** If the terms are complete, anyone can start the pool; funds do not stay locked even if the founder is offline. */
 export async function startPool(signer: Signer, poolId: number) {
   const c = await getClient(signer)
   return send(await c.start_pool({ pool_id: poolId }))
 }
 
-/** Kuruluş son tarihi geçip havuz başlamadıysa herkes iptal edebilir. */
+/** If the setup deadline has passed and the pool did not start, anyone can cancel it. */
 export async function cancelUnstartedPool(signer: Signer, poolId: number) {
   const c = await getClient(signer)
   return send(await c.cancel_unstarted_pool({ pool_id: poolId }))
@@ -422,15 +422,15 @@ export async function deposit(signer: Signer, poolId: number) {
   return send(await c.deposit({ pool_id: poolId, member: signer.address }))
 }
 
-/** Ek sürede üyenin kendi cüzdanından ödemesi; aynı borcu kapatır. */
+/** The member's own payment from their wallet during the grace period; it settles that same debt. */
 export async function curePayment(signer: Signer, poolId: number) {
   const c = await getClient(signer)
   return send(await c.cure_payment({ pool_id: poolId, member: signer.address }))
 }
 
 /**
- * Sıradaki üye satıcıyı, varlığı, tutarı ve belge özetini kaydeder. Demoda satıcı,
- * havuzun izinli test satıcısı olmalıdır.
+ * The next member records the seller, the asset, the amount and the document digest. In the demo the seller
+ * must be the pool's allowed test seller.
  */
 export async function proposePurchase(
   signer: Signer,
@@ -456,8 +456,8 @@ export async function proposePurchase(
 }
 
 /**
- * Kura modunda, tüm katkılar tamamlandıktan sonra alıcıyı henüz teslim almamış üyeler arasından
- * seçer. Herkes çağırabilir. Dönen değer kazanan adrestir. Rastgelelik hackathon düzeyindedir
+ * In draw mode, after all contributions are complete, picks the recipient among members who have not yet received
+ * . Anyone can call it. The return value is the winner's address. Randomness is hackathon-grade
  * (docs/CONTRACT_HANDOFF.md).
  */
 export async function drawRecipient(signer: Signer, poolId: number) {
@@ -465,19 +465,19 @@ export async function drawRecipient(signer: Signer, poolId: number) {
   return send(await c.draw_recipient({ pool_id: poolId, caller: signer.address }))
 }
 
-/** Koşullar tamamsa yalnızca o turun tutarını kayıtlı satıcıya gönderir. Herkes çağırabilir. */
+/** If the terms are met, sends only that round's amount to the registered seller. Anyone can call it. */
 export async function executeRound(signer: Signer, poolId: number) {
   const c = await getClient(signer)
   return send(await c.execute_round({ pool_id: poolId }))
 }
 
-/** Katkı son tarihi geçtiyse turu ek süreye (Grace) alır. Herkes çağırabilir. */
+/** If the contribution deadline has passed, moves the round into the grace period (Grace). Anyone can call it. */
 export async function markOverdue(signer: Signer, poolId: number) {
   const c = await getClient(signer)
   return send(await c.mark_overdue({ pool_id: poolId }))
 }
 
-/** Ek süre veya alım süresi sonunda koşullar sağlanmadıysa havuzu iptal eder. Herkes çağırabilir. */
+/** If the terms are not met at the end of the grace or purchase period, cancels the pool. Anyone can call it. */
 export async function abortPool(signer: Signer, poolId: number) {
   const c = await getClient(signer)
   return send(await c.abort_pool({ pool_id: poolId }))

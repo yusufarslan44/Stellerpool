@@ -4,7 +4,7 @@ import { UI_ICONS } from '@/lib/icon-data'
 import type { IconName } from '@/types/icons'
 
 /**
- * Arayüz simgeleri: Phosphor Icons (MIT). Denetim simgeleri kalın, içerik simgeleri çift tonlu;
+ * UI icons: Phosphor Icons (MIT). Control icons are bold, content icons are duotone;
  * renk currentColor'dan gelir. Kaynak: scripts/build-icons.mjs.
  */
 const props = defineProps<{ name: IconName }>()

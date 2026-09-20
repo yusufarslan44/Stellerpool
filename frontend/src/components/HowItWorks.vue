@@ -62,7 +62,7 @@ const stageNotes = [
 ]
 const section = ref<HTMLElement | null>(null)
 const active = ref(0)
-// Çubuk her karede güncellenir; reaktif tutulursa tüm bileşen saniyede 60 kez yeniden çizilir. DOM'a doğrudan yazılır.
+// The bar updates every frame; if it were reactive, the whole component would re-render 60 times per second. It is written straight to the DOM.
 let progress = 0
 const autoplay = ref(true)
 const reduced = ref(false)
@@ -70,10 +70,10 @@ const visible = ref(false)
 const pageVisible = ref(true)
 const focused = ref(false)
 const current = computed(() => steps[active.value]!)
-// Fare üstünde durmaz (kaydırırken imleç bölümün üstünde kalınca anlatım hiç ilerlemiyordu);
-// yalnızca klavye odağında, sekme/bölüm görünmezken ve duraklatılınca durur.
+// Hovering does not pause (the narration used to stall when the cursor stayed over the section while scrolling);
+// it pauses only on keyboard focus, while the tab/section is hidden, and when paused.
 const playing = computed(() => autoplay.value && visible.value && pageVisible.value && !reduced.value && !focused.value)
-// Her adım 16 sn; elle seçilen adım 2,5 sn daha bekler.
+// Each step lasts 16 s; a manually chosen step waits 2.5 s longer.
 const duration = 16000
 const HOLD = -2500 / duration
 let raf = 0
@@ -83,13 +83,13 @@ let motion: MediaQueryList | undefined
 
 function choose(index: number) {
   active.value = (index + steps.length) % steps.length
-  // Elle seçim anlatımı kapatmaz; adım biraz daha bekler, sonra otomatik devam eder.
+  // A manual choice does not switch off the narration; the step waits a little longer, then continues automatically.
   progress = HOLD
   paintProgress()
 }
 function togglePlay() {
   autoplay.value = !autoplay.value
-  // Açık bir oynat eylemi klavye odağında bile hemen sürdürür.
+  // An explicit play action resumes immediately, even with keyboard focus.
   focused.value = false
 }
 function paintProgress() {
@@ -106,7 +106,7 @@ function tick(now: number) {
   paintProgress()
   raf = requestAnimationFrame(tick)
 }
-// Adım değişince yeni çubuk DOM'a girer; ilk boyamayı güncel değerle yap.
+// When the step changes, a new bar enters the DOM; paint it first with the current value.
 watch(active, paintProgress, { flush: 'post' })
 watch(
   playing,
