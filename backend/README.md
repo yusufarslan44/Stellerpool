@@ -55,8 +55,7 @@ içindir: tünel geliştiricinin makinesi kapanınca ölür, adres her seferinde
 VITE_ANCHOR_HOME_DOMAIN=<PUBLIC_BASE_URL'in host'u, örn. abc123.ngrok-free.app>
 ```
 
-Havuz akışının da bu varlığı kullanması için (anchor'ı "core feature" yapan asıl adım —
-bkz. `docs/HACKATHON_SUBMISSION_TASKS.md` madde 3):
+Havuz akışının da bu varlığı kullanması için (anchor'ı "core feature" yapan asıl adım):
 
 ```bash
 VITE_POOL_ASSET_CODE=TRYT
@@ -94,7 +93,7 @@ para giriş noktasıdır.
 
 Uçtan uca gerçek bir doğrulama: `scripts/test-flow.mjs` (SEP-10 login → interactive deposit
 → onay → `pending_trust` → trustline aç → otomatik tamamlanma → bakiye kontrolü), gerçek
-Testnet işlemleriyle çalıştırılıp doğrulandı — bkz. `docs/IMPLEMENTATION_LOG.md` "Phase 14".
+Testnet işlemleriyle çalıştırılıp doğrulandı.
 
 ## Bilinçli basitleştirmeler (hackathon kapsamı)
 

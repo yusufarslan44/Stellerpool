@@ -82,7 +82,7 @@ a completed pool.)*
 - It evolved through several generations under real production pressure: from a sponsor
   model to a sponsor-free model, then draw mode + 30 members, then a down payment, then
   purchase without verifiers — at every step with a **live Testnet deployment and real
-  transaction proof** (`docs/IMPLEMENTATION_LOG.md`).
+  transaction proof** (see the README proof section).
 - **33 unit tests**, including the full 30-member draw flow; every invocation is
   automatically checked against Mainnet resource limits (`InvocationResourceLimits::mainnet()`).
 - Checks-effects-interactions pattern, role-based authorization with `require_auth`,

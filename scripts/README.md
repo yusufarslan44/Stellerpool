@@ -59,7 +59,7 @@ Testnet demo asset (`STLP`). It checks `version() == 12` before creating pools.
 All pools genuinely wait out real deadlines where relevant (Soroban
 deadlines are wall-clock, not simulatable) — the whole run takes a few
 minutes. Every ID, event, and transaction hash the script prints is real
-Testnet evidence for `docs/IMPLEMENTATION_LOG.md`.
+Testnet evidence for the README proof section.
 
 Secret keys are never printed; they stay in the Stellar CLI's local
 identity store (`stellar keys ls` / `stellar keys address <name>`).

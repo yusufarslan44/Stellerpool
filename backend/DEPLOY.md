@@ -8,8 +8,8 @@ ayağa kaldırmak için gereken adımları listeler.
 ## ⚠️ En kritik kural: issuer/distribution anahtarlarını YENİDEN ÜRETME
 
 `TRYT` varlığı ve içindeki arz zaten Testnet'te var (`npm run setup-issuer` bu oturumda
-çalıştırıldı, gerçek işlemlerle uçtan uca test edildi — bkz.
-`docs/IMPLEMENTATION_LOG.md` "Phase 14"). Sunucuda **tekrar `npm run setup-issuer`
+çalıştırıldı, gerçek işlemlerle uçtan uca test edildi).
+Sunucuda **tekrar `npm run setup-issuer`
 çalıştırmayın** — bu, farklı bir issuer'la tamamen YENİ bir varlık üretir ve şimdiye
 kadarki testler/dokümandaki adresler geçersiz kalır.
 
@@ -123,8 +123,7 @@ node scripts/test-flow.mjs https://anchor.stellerpool.<domain>
 
 Çıktının sonunda gerçek bir Stellar işlem hash'i ve `250.0000000 TRYT` bakiyesiyle
 "✅ Uçtan uca SEP-1/10/24 akışı başarılı." görmelisiniz — geliştiricinin yerel makinesinde
-ve tünel üzerinden iki kez doğrulanmış aynı script (bkz. `docs/IMPLEMENTATION_LOG.md`
-"Phase 14").
+ve tünel üzerinden iki kez doğrulanmış aynı script.
 
 ### 7. Frontend'i buraya bağlamak
 
@@ -134,8 +133,7 @@ ve tünel üzerinden iki kez doğrulanmış aynı script (bkz. `docs/IMPLEMENTAT
 VITE_ANCHOR_HOME_DOMAIN=anchor.stellerpool.<domain>
 ```
 
-`docs/HACKATHON_SUBMISSION_TASKS.md`'deki frontend görevleriyle devam edin (anchor'ı
-havuz akışına bağlamak, `VITE_POOL_ASSET_CODE=TRYT` / `VITE_POOL_ASSET_ISSUER`).
+Ardından frontend'i anchor'a bağlayın (`VITE_POOL_ASSET_CODE=TRYT` / `VITE_POOL_ASSET_ISSUER`).
 
 ## Sonradan güncelleme
 

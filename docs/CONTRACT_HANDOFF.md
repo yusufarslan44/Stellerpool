@@ -1,6 +1,6 @@
 # Kontrat ekibi görev listesi — API v10 (kura + 30 üye)
 
-**Durum (19 Eylül 2026, gece):** Faz 13 tamamlandı — bu belgedeki iş uygulandı. Testnet'te **kura + 30 üye destekleyen kontrat (API v10)** yayında: `CC7W3SKQHBLZ2JPTGSK42H6IAJQ22A4PUK6CSN2T4PUJRY4LQ445GYMB` ([IMPLEMENTATION_LOG.md](IMPLEMENTATION_LOG.md), "Phase 13"). `stellar contract info interface` ve `stellar contract bindings typescript` çıktısı `frontend/src/services/pool.ts` / `types/pool.ts` ile alan alan doğrulandı: `create_pool`'a `order_mode` (member_limit'ten sonra), `Pool.order_mode`, `RoundState.recipient: Option<Address>`, `RoundPhase::AwaitingDraw`, `draw_recipient(caller, pool_id) -> Address`. `frontend/.env`'e `VITE_MAX_MEMBERS=30` yazıldı (yerel, gitignore'lu). Aşağıdaki metin görev tanımı olarak olduğu gibi bırakıldı; ne yapıldığının tam dökümü `IMPLEMENTATION_LOG.md`'nin "Phase 13" bölümündedir.
+**Durum (19 Eylül 2026, gece):** Faz 13 tamamlandı — bu belgedeki iş uygulandı. Testnet'te **kura + 30 üye destekleyen kontrat (API v10)** yayında: `CC7W3SKQHBLZ2JPTGSK42H6IAJQ22A4PUK6CSN2T4PUJRY4LQ445GYMB` ([README](../README.md#contract-and-deployment-proof-testnet)). `stellar contract info interface` ve `stellar contract bindings typescript` çıktısı `frontend/src/services/pool.ts` / `types/pool.ts` ile alan alan doğrulandı: `create_pool`'a `order_mode` (member_limit'ten sonra), `Pool.order_mode`, `RoundState.recipient: Option<Address>`, `RoundPhase::AwaitingDraw`, `draw_recipient(caller, pool_id) -> Address`. `frontend/.env`'e `VITE_MAX_MEMBERS=30` yazıldı (yerel, gitignore'lu). Aşağıdaki metin görev tanımı olarak olduğu gibi bırakıldı.
 
 **Not:** `README.md`'nin "Kontrat ve dağıtım kanıtı" bölümü bu kontrat ID'siyle henüz güncellenmedi — bu oturumda README.md'ye dokunulmaması ayrıca istendi; bir sonraki README güncellemesinde eklenmeli.
 
@@ -47,7 +47,7 @@ Parametre/alan adları `stellar contract bindings typescript` ile karşılaştı
 ## 4. Yayın ve devir
 
 1. `scripts/deploy_testnet.sh` ile yeni örnek yayınlayın (yükseltme yok; yeni ID). Sürüm `10` olsun.
-2. Yeni kontrat ID'sini ve işlem bağlantılarını `IMPLEMENTATION_LOG.md` ile `README.md` "Kontrat ve dağıtım kanıtı" bölümüne yazın. Arayüz için `frontend/.env`: `VITE_ROTATING_POOL_CONTRACT_ID` ve `VITE_MAX_MEMBERS=30`.
+2. Yeni kontrat ID'sini ve işlem bağlantılarını `README.md` "Contract and deployment proof" bölümüne yazın. Arayüz için `frontend/.env`: `VITE_ROTATING_POOL_CONTRACT_ID` ve `VITE_MAX_MEMBERS=30`.
 3. Bindings çıktısındaki metot/alan adlarını arayüzle karşılaştırın.
 4. Eski örnekler (üç sponsorlu/sponsorsuz örnek) canlı kalır; teslim materyalinde yalnızca güncel olan anılmalı.
 

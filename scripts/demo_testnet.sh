@@ -170,4 +170,4 @@ echo "    Round 2 paid the demo seller; pool $POOL_C is Completed."
 
 echo
 echo "Done. Copy the pool IDs and transaction hashes printed above into"
-echo "docs/IMPLEMENTATION_LOG.md as this run's submission evidence."
+echo "the README proof section as this run's submission evidence."
