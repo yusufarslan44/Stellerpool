@@ -475,7 +475,7 @@ const bannerClass = {
 
 const roleChips = computed(() => {
   const chips: string[] = []
-  if (isCreator.value) chips.push('Kurucu')
+  if (isCreator.value) chips.push('Founder')
   if (isMember.value) chips.push('Member')
   if (isRecipient.value && pool.value?.status === 'Active') chips.push('This round’s recipient')
   return chips
@@ -554,7 +554,7 @@ const countdownLabel = computed(() =>
             <div class="flex flex-wrap items-center gap-2">
               <span class="badge" :class="statusLabel.cls">{{ statusLabel.text }}</span>
               <span class="badge bg-gold-100 text-amber-900">{{ isDraw ? 'Draw' : 'Fixed order' }}</span>
-              <span v-for="c in roleChips" :key="c" class="badge bg-ink text-cream">Sen: {{ c }}</span>
+              <span v-for="c in roleChips" :key="c" class="badge bg-ink text-cream">You: {{ c }}</span>
             </div>
             <h1 class="mt-3 text-4xl font-extrabold sm:text-5xl">Pool #{{ pool.id }}</h1>
             <p class="mt-2 text-stone-700">
@@ -966,7 +966,7 @@ const countdownLabel = computed(() =>
             <dd class="mt-0.5 font-mono text-sm font-semibold" :title="round.recipient ?? ''">
               <template v-if="round.recipient">{{ shortAddress(round.recipient, 6) }}</template>
               <span v-else class="font-sans">Waiting for the draw</span>
-              <span v-if="isRecipient" class="badge bg-brand-100 text-brand-800">Sen</span>
+              <span v-if="isRecipient" class="badge bg-brand-100 text-brand-800">You</span>
             </dd>
           </div>
           <div class="rounded-2xl bg-sand/60 p-3.5">
@@ -1006,8 +1006,8 @@ const countdownLabel = computed(() =>
             <div class="flex flex-wrap items-center gap-2.5">
               <span class="grid size-9 place-items-center rounded-full bg-sand text-sm font-extrabold text-ink-soft">{{ idx + 1 }}</span>
               <span class="font-mono text-sm" :title="addr">{{ shortAddress(addr, 6) }}</span>
-              <span v-if="addr === me" class="badge bg-brand-100 text-brand-800">Sen</span>
-              <span v-if="addr === pool.creator" class="badge bg-stone-100 text-stone-700">Kurucu</span>
+              <span v-if="addr === me" class="badge bg-brand-100 text-brand-800">You</span>
+              <span v-if="addr === pool.creator" class="badge bg-stone-100 text-stone-700">Founder</span>
               <span v-if="round && addr === round.recipient && pool.status === 'Active'" class="badge bg-sage-100 text-sage-800">This round’s recipient</span>
               <span v-if="memberByAddress.get(addr)?.received" class="badge bg-stone-100 text-stone-700">Received their share</span>
               <span

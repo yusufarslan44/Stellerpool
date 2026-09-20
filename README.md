@@ -44,6 +44,16 @@ Everything below can be checked on Stellar Expert. This is the live v12 contract
 
 *The v12 contract on Stellar Expert (Testnet): WASM hash `aa6e0070…7c76692c` (the same hash listed under [Contract and deployment proof](#contract-and-deployment-proof-testnet)), the `join_pool`, `propose_purchase` and `execute_round` calls, and the contract's STLP and TRYT balances at 0.*
 
+### The app after a completed pool
+
+The same flow seen from the interface: a two-member pool on Testnet after both rounds were paid. The status card reads "Pool completed", all contributions of the round are in (2 / 2), the contract holds **0** of the pool asset (`TRYT`), and both members are marked as having received their share. The transaction link opens the last payment on Stellar Expert.
+
+![Stellarpool pool page showing the Pool completed status, a completed transaction link, 2/2 contributions and 0.00 held in the contract](docs/images/pool-completed-status.webp)
+
+![Stellarpool members and order list showing both members marked as having received their share](docs/images/pool-completed-members.webp)
+
+*Screenshots of the Testnet demo (no real money). Some labels in these captures were taken before the interface was fully translated to English; the live site now uses English throughout.*
+
 More proofs (cancel + refund, draw with a down payment, a pool that could not be set up, and the older v10/v11 contracts) are listed in [Contract and deployment proof](#contract-and-deployment-proof-testnet) below.
 
 ## Status
