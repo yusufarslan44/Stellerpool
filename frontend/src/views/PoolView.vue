@@ -211,9 +211,15 @@ const showDrawStage = computed(
  * tamamlanmış havuzda ve ödenmiş (Settled) turda sıfır gösterilir.
  */
 const refundableOf = (address: string): bigint => {
-  if (pool.value?.status === 'Completed' || round.value?.phase === 'Settled') return 0n
+  // İade yalnızca iptal edilmiş havuzda anlamlıdır (peşinat da dahil: kontrat, henüz almamış üyenin
+  // harcanmamış peşinatını da bu değere ekler). Aktif ya da tamamlanmış havuzda gösterilmez.
+  if (pool.value?.status !== 'Aborted') return 0n
   return memberByAddress.value.get(address)?.refundable ?? 0n
 }
+/** Bir turda satıcıya giden toplam: tur katkıları + alıcının kendi peşinatı. */
+const purchaseAmount = computed(() =>
+  pool.value ? pool.value.contributionAmount * BigInt(pool.value.memberLimit) + pool.value.downPayment : 0n,
+)
 const totalRefundable = computed(() => members.value.reduce((sum, m) => sum + refundableOf(m.address), 0n))
 const myRefundable = computed(() => (me.value ? refundableOf(me.value) : 0n))
 
@@ -299,7 +305,7 @@ async function propose() {
     poolId: pool.value!.id,
     seller,
     asset: pool.value!.token,
-    amount: round.value!.pot,
+    amount: purchaseAmount.value,
     docHash: hash,
   }))
 }
@@ -411,7 +417,7 @@ const roundSteps = computed<GuideStep[]>(() => {
       detail: `${approvalsCount.value} / ${p.approvalThreshold} onay`,
       done: settled || approvalsOk.value,
     },
-    { key: 'pay', title: 'Tutar satıcıya gider', who: 'Herkes çağırabilir', detail: `${formatStroops(r.pot)} ${token.value}`, done: settled },
+    { key: 'pay', title: 'Tutar satıcıya gider', who: 'Herkes çağırabilir', detail: `${formatStroops(purchaseAmount.value)} ${token.value}`, done: settled },
   ]
 })
 
@@ -587,6 +593,10 @@ const countdownLabel = computed(() =>
               {{ pool.members.length }} / {{ pool.memberLimit }} üye · her tur
               <strong>{{ formatStroops(pool.contributionAmount) }} {{ token }}</strong>
             </p>
+            <p v-if="pool.downPayment > 0n" class="mt-1 text-sm text-stone-700">
+              Peşinat: <strong>{{ formatStroops(pool.downPayment) }} {{ token }}</strong> (katılırken kontrata yatırılır,
+              sıran gelince alımına eklenir)
+            </p>
             <p class="mt-1 text-sm text-stone-600">
               Her tur herkes kendi katkısını yatırır. Ödeme eksikse tahsisat yapılmaz.
               {{ isDraw ? 'Alıcı, tüm katkılar gelince kura ile belirlenir.' : '' }}
@@ -740,8 +750,24 @@ const countdownLabel = computed(() =>
                     :disabled="actionBusy !== null"
                     @click="run('join', (sg) => joinPool(sg, pool!.id))"
                   >
-                    {{ actionBusy === 'join' ? 'Cüzdanı onayla…' : 'Havuza katıl' }}
+                    {{ actionBusy === 'join' ? 'Cüzdanı onayla…' : pool.downPayment > 0n ? `Havuza katıl (${formatStroops(pool.downPayment)} ${token} peşinat yatırılır)` : 'Havuza katıl' }}
                   </button>
+                  <details
+                    v-if="s.key === 'join' && !isMember && !isFull && pool.downPayment > 0n && usesPoolAsset"
+                    class="group rounded-2xl border border-stone-200 bg-white p-4"
+                    :open="myBalance !== null && myBalance < pool.downPayment"
+                  >
+                    <summary class="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 font-display font-bold marker:hidden [&::-webkit-details-marker]:hidden">
+                      <span>
+                        Peşinat için bakiyen yetmiyor mu? Anchor ile {{ token }} yükle
+                        <span v-if="myBalance !== null" class="ml-1 text-xs font-normal text-stone-600">
+                          (bakiyen {{ formatStroops(myBalance) }} {{ token }})
+                        </span>
+                      </span>
+                      <AppIcon name="chevron" class="text-brand-600 transition-transform duration-300 group-open:rotate-180" />
+                    </summary>
+                    <div class="mt-3"><AnchorDemo compact @completed="loadMyBalance" /></div>
+                  </details>
                   <p v-if="s.key === 'join' && isMember" class="text-sm font-medium text-sage-800">
                     ✓ Katıldın.
                     <template v-if="!isFull">Kalan {{ pool.memberLimit - pool.members.length }} üye bekleniyor.</template>
@@ -877,7 +903,7 @@ const countdownLabel = computed(() =>
                       </div>
                       <div>
                         <label class="label" for="doc">Alım belgesi (fatura veya sözleşme özeti)</label>
-                        <textarea id="doc" v-model="docInput" class="input min-h-20" placeholder="Örn. araç/ev, satıcı, tutar, tarih, belge numarası" required />
+                        <textarea id="doc" v-model="docInput" class="input min-h-20" placeholder="Örn. araç/ev, satıcı, toplam bedel, varsa peşinat ve kim ödedi, tarih, belge numarası" required />
                         <p class="mt-1 text-xs text-stone-600">
                           Belgenin kendisi zincire yazılmaz, yalnızca SHA-256 özeti kaydedilir. Doğrulayıcılar belgeyi
                           zincir dışında kontrol eder.
@@ -1003,7 +1029,12 @@ const countdownLabel = computed(() =>
           </div>
           <div class="rounded-2xl bg-sand/60 p-3.5">
             <dt class="text-xs text-stone-600">Satıcıya gidecek tutar</dt>
-            <dd class="mt-0.5 text-sm font-semibold">{{ formatStroops(round.pot) }} {{ token }}</dd>
+            <dd class="mt-0.5 text-sm font-semibold">
+              {{ formatStroops(purchaseAmount) }} {{ token }}
+              <span v-if="pool.downPayment > 0n" class="block text-xs font-normal text-stone-600">
+                havuz {{ formatStroops(purchaseAmount - pool.downPayment) }} + alıcının peşinatı {{ formatStroops(pool.downPayment) }}
+              </span>
+            </dd>
           </div>
           <div class="rounded-2xl bg-sand/60 p-3.5">
             <dt class="text-xs text-stone-600">Satıcı</dt>
@@ -1058,7 +1089,7 @@ const countdownLabel = computed(() =>
               >Kurada</span>
             </div>
             <div class="flex flex-wrap items-center gap-3">
-              <span class="text-xs text-stone-600">Bu turdaki iade: {{ formatStroops(refundableOf(addr)) }} {{ token }}</span>
+              <span v-if="pool.status === 'Aborted'" class="text-xs text-stone-600">İade hakkı: {{ formatStroops(refundableOf(addr)) }} {{ token }}</span>
               <span class="badge" :class="toneClass[memberState(addr).tone]">{{ memberState(addr).label }}</span>
               <span v-if="pool.status === 'Filling' && isCreator && !isDraw" class="flex gap-1">
                 <button type="button" class="btn-secondary !min-h-9 !min-w-9 !px-2 !py-1" :disabled="idx === 0" :aria-label="`${shortAddress(addr)} adresini yukarı taşı`" @click="move(idx, -1)">↑</button>

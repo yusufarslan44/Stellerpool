@@ -49,6 +49,8 @@ export interface PoolInfo {
   members: string[]
   /** Sıralı mı, kura mı. Eski (v8) kontratta alan yoksa 'Fixed' sayılır. */
   orderMode: OrderMode
+  /** Üye başına peşinat (katılırken kontrata yatırılır, sıra gelince o üyenin alımına eklenir). 0 = yok. */
+  downPayment: bigint
   /** Önerilen veya başlatılınca kilitlenen tahsisat sırası. Kura modunda boştur. */
   recipientOrder: string[]
   /** Önerilen doğrulayıcılar (creator ve üyelerden farklı adresler). */

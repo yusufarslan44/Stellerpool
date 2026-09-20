@@ -191,6 +191,14 @@ const FAQ = [
     a: 'Kura modunda önceden sıra yoktur. Her tur herkes kendi katkısını yatırır; hepsi tamamlanınca herkesin çağırabileceği bir işlemle, henüz teslim almamış üyeler arasından alıcıyı kontrat seçer. Kazanan zaten payını ödemiştir. Zincir üstü rastgelelik hackathon düzeyindedir, yüksek tutarlı gerçek kullanım için yetmez. Kura Testnet kontratında canlı denendi; oluşturma formunda “Kura” seçilebilir.',
   },
   {
+    q: 'Peşinat veya organizasyon ücreti var mı?',
+    a: 'Organizasyon ücreti yok: şirketler tek seferlik yaklaşık %7–14 alır, burada kimseye ücret ayrılmaz. Peşinat var ve kontratta tutulur: havuz kurulurken üye başına bir peşinat belirlenir, herkes katılırken yatırır. Sıran gelince o tutar alımına eklenip satıcıya gider; havuz iptal olursa henüz almadıysan iade edilir. Şirketlerdeki gibi peşinat yükseldikçe hedef küçülür, verdiğin taksitle daha az kişi ve daha kısa vade çıkar. Fark: peşinat şirkete değil kontrata yatar ve yalnızca kendi alımına gider, birikime sayılmaz.',
+  },
+  {
+    q: 'Kura ne zaman çekilir?',
+    a: 'Şirketlerde çekiliş genelde her ay noter kontrolünde yapılır. Burada kura tarihi sabit değildir: her turda herkes taksidini yatırır yatırmaz çekilebilir. Katkı süresi (aylık planda 30 gün) içinde herkes öderse hemen; ödemeyen olursa ek süre gelir, o da biterse tur durur ve iade başlar. Kura herkesin çağırabileceği bir işlemle zincirde yapılır, sonucu kontrat belirler ve herkes doğrulayabilir. Noter veya canlı yayın yoktur.',
+  },
+  {
     q: 'Fuzul Ev veya Eminevim ile aynı mı?',
     a: 'Hayır. Onlar lisanslı tasarruf finansman şirketleridir: ayrılmış fon havuzu, sözleşme, ipotek/rehin ve şirket taahhüdüyle çalışırlar. Stellerpool bir Testnet prototipidir. Ortak yanı grup katkısı, sıra ya da kura ve ödeme aksayınca durmadır; katkılar tur bazında kontratta kilitli kalır ve kurallar herkese görünür. Farkı ise ipotek, şirket garantisi, gerçek ev/araç teslimi ve tahsilat olmamasıdır.',
   },

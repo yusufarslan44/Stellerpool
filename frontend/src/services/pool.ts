@@ -145,6 +145,8 @@ export interface ContractCapabilities {
   legacySponsor: boolean
   /** Kura (`draw_recipient`) destekleniyor mu? */
   supportsDraw: boolean
+  /** Peşinat (`create_pool` girdisi `down_payment`) destekleniyor mu? Sürüm numarasına değil zincirdeki arayüze bakılır. */
+  supportsDownPayment: boolean
 }
 
 async function buildClient(signer?: Signer): Promise<PoolClient> {
@@ -162,10 +164,30 @@ async function buildClient(signer?: Signer): Promise<PoolClient> {
 const hasMethod = (client: unknown, name: string) =>
   typeof (client as Record<string, unknown>)[name] === 'function'
 
+/**
+ * `contract.Client` oluşturulurken zincirden okunan arayüzde bir fonksiyonun girdi adı var mı?
+ * SDK 17 `getFunc` için düz bir nesne (`inputs` dizi, `name` metin) döndürür; eski XDR nesnesi
+ * biçimi (`inputs()` / `name()` fonksiyon) de desteklenir.
+ */
+function hasInput(client: unknown, fn: string, input: string): boolean {
+  try {
+    const spec = (client as { spec?: { getFunc: (n: string) => unknown } }).spec
+    const func = spec?.getFunc(fn) as { inputs?: unknown } | undefined
+    const inputs = typeof func?.inputs === 'function' ? (func.inputs as () => unknown)() : func?.inputs
+    return (
+      Array.isArray(inputs) &&
+      inputs.some((i: { name?: unknown }) => String(typeof i.name === 'function' ? (i.name as () => unknown)() : i.name) === input)
+    )
+  } catch {
+    return false
+  }
+}
+
 function capabilitiesOf(client: unknown): ContractCapabilities {
   return {
     legacySponsor: hasMethod(client, 'fund_guarantee') || hasMethod(client, 'top_up'),
     supportsDraw: hasMethod(client, 'draw_recipient'),
+    supportsDownPayment: hasInput(client, 'create_pool', 'down_payment'),
   }
 }
 
@@ -255,6 +277,7 @@ function mapPool(id: number, raw: unknown): PoolInfo {
     memberLimit: toNumber(r.member_limit),
     members: toStringList(r.members),
     orderMode: toTag(r.order_mode) === 'Draw' ? 'Draw' : 'Fixed',
+    downPayment: toBigInt(r.down_payment),
     recipientOrder: toStringList(r.recipient_order),
     verifiers: toStringList(r.verifiers),
     approvalThreshold: toNumber(r.approval_threshold),
@@ -329,6 +352,8 @@ export async function createPool(
     contributionAmount: bigint
     memberLimit: number
     orderMode: OrderMode
+    /** Üye başına peşinat (yalnızca kontrat destekliyorsa gönderilir). */
+    downPayment?: bigint
     roundDuration: number
     graceDuration: number
     purchaseDuration: number
@@ -339,7 +364,11 @@ export async function createPool(
 ): Promise<TxResult & { poolId: number | null }> {
   const c = await getClient(signer)
   // Kura yoksa `order_mode` hiç gönderilmez; "Kura" seçili havuz sessizce sıralı kurulmasın diye reddedilir.
-  const supportsDraw = capabilitiesOf(c).supportsDraw
+  const caps = capabilitiesOf(c)
+  const supportsDraw = caps.supportsDraw
+  if ((params.downPayment ?? 0n) > 0n && !caps.supportsDownPayment) {
+    throw new Error('Yapılandırılan kontrat peşinatı desteklemiyor; peşinatı 0 yap.')
+  }
   if (params.orderMode === 'Draw' && !supportsDraw) {
     throw new Error('Yapılandırılan kontrat henüz kura desteklemiyor; sabit sıra seç.')
   }
@@ -349,6 +378,8 @@ export async function createPool(
     contribution_amount: params.contributionAmount,
     member_limit: params.memberLimit,
     ...(supportsDraw ? { order_mode: { tag: params.orderMode, values: undefined } } : {}),
+    // v11+: `down_payment` zorunlu bir argümandır (0 = peşinatsız); eski kontrata hiç gönderilmez.
+    ...(caps.supportsDownPayment ? { down_payment: params.downPayment ?? 0n } : {}),
     round_duration: params.roundDuration,
     grace_duration: params.graceDuration,
     purchase_duration: params.purchaseDuration,
