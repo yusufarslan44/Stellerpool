@@ -63,8 +63,10 @@ const NetworkWarning = defineAsyncComponent(() => import('@/components/NetworkWa
 .footer-brand { font: 750 29px var(--font-display); color: #264b34; letter-spacing: -1px; }
 .footer-brand span { color: #b99a50; }
 .footer-top p { color: #77816b; font-size: 12px; line-height: 1.8; margin-top: 13px; }
-.footer-top nav { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; font-size: 12px; color: #4b5e43; }
+.footer-top nav { display: flex; flex-direction: column; align-items: flex-start; gap: 0; font-size: 12px; color: #4b5e43; }
+.footer-top nav a { display: inline-flex; align-items: center; min-height: 44px; }
 .footer-top nav > span, .footer-network > span { font-size: 9px; letter-spacing: .14em; color: #89937b; margin-bottom: 5px; }
+.footer-top nav > span { margin-bottom: 0; }
 .footer-top nav a:hover { color: #14805a; text-decoration: underline; text-underline-offset: 4px; }
 .footer-network { border-left: 1px solid #d6deca; padding-left: 30px; }
 .footer-network strong { display: block; margin-top: 8px; font: 600 23px var(--font-display); color: #3a5b3d; }

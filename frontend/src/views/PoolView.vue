@@ -537,7 +537,7 @@ const countdownLabel = computed(() =>
 
 <template>
   <div class="space-y-6">
-    <RouterLink to="/" class="inline-flex items-center gap-1 text-sm font-medium text-brand-700 hover:underline">
+    <RouterLink to="/" class="inline-flex min-h-11 items-center gap-1 text-sm font-medium text-brand-700 hover:underline">
       <AppIcon name="back" class="!size-4" /> Ana sayfa
     </RouterLink>
 

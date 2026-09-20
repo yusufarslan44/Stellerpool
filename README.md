@@ -33,6 +33,10 @@ Stellerpool bu koordinasyonu **Soroban akıllı sözleşmesine** taşır. Katkı
 - Canlı havuzlar #1–#3 kontrat ekibinin bastığı `STLP` demo varlığıyla kuruldu (SAC `CAOV35NPIJXHWA7QPXXERRJQ4ZTDUGAEHA7FKB6QIOTIOTI62B35ZNWI`). Canlı sitede yeni havuzlar anchor'ın `TRYT` varlığıyla kurulur; arayüz her havuzun kendi token'ını okur, etiket ve bakiye buna göre gösterilir.
 - Önceki üç kontrat örneği (iki sponsorlu, bir v9 sponsorsuz) zincirde durur; **teslimde yalnızca yukarıdaki güncel kontrat geçerlidir.** Ayrıntı ve karar gerekçeleri: [IMPLEMENTATION_LOG.md](docs/IMPLEMENTATION_LOG.md) "Phase 12" ve "Phase 13".
 - **Demo URL:** https://stellerpool.arslanyusuf.com (Testnet, canlı kontrata bağlı; havuz #3 için `/pool/3`). Yalnızca Testnet, gerçek para yok.
+- **Uçtan uca arayüz doğrulaması (20 Eylül 2026, `TRYT` ile, canlı Testnet kontratı):** Arayüzün kendi butonları ve servis katmanı, cüzdan uzantısı yerine **tek kullanımlık test anahtarlarıyla imzalatılarak** koşturuldu (gerçek Freighter ile deneme henüz yapılmadı):
+  - [Havuz #5](https://stellerpool.arslanyusuf.com/pool/5): 3 üyeli **kura** havuzu, oluşturma formundan kuruldu. Katıl → şartlar → onay → başlat → katkı → **kura** → alım önerisi → 2 doğrulayıcı onayı → tutar satıcıya. Kazananlar sırayla M1, M3, M2: her tur yalnızca henüz almamışlar arasından çıktı, tekrar yok. Üye M3'ün bakiyesi arayüzdeki anchor akışıyla (SEP-10 girişi + SEP-24 yatırma) 0'dan 40 TRYT'ye yüklendi. Sonda satıcı 90 TRYT aldı, kontrat bakiyesi 0.
+  - [Havuz #6](https://stellerpool.arslanyusuf.com/pool/6): 2 üyeli **sabit sıra** havuzu, onaylanan sıra birebir uygulandı, iki tur ödendi.
+  - [Havuz #7](https://stellerpool.arslanyusuf.com/pool/7): **iptal + iade**. Ödemeyen üye yüzünden katkı süresi doldu → ek süre → iptal; yalnızca ödeyen üye katkısını geri aldı, ödemeyen üyenin ve ikinci iade denemesi reddedildi, kontrat bakiyesi 0.
 
 ## Havuz kuralı
 
