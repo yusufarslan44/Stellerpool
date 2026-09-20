@@ -199,10 +199,6 @@ const FAQ = [
     a: 'Şirketlerde çekiliş genelde her ay noter kontrolünde yapılır. Burada kura tarihi sabit değildir: her turda herkes taksidini yatırır yatırmaz çekilebilir. Katkı süresi (aylık planda 30 gün) içinde herkes öderse hemen; ödemeyen olursa ek süre gelir, o da biterse tur durur ve iade başlar. Kura herkesin çağırabileceği bir işlemle zincirde yapılır, sonucu kontrat belirler ve herkes doğrulayabilir. Noter veya canlı yayın yoktur.',
   },
   {
-    q: 'Fuzul Ev veya Eminevim ile aynı mı?',
-    a: 'Hayır. Onlar lisanslı tasarruf finansman şirketleridir: ayrılmış fon havuzu, sözleşme, ipotek/rehin ve şirket taahhüdüyle çalışırlar. Stellerpool bir Testnet prototipidir. Ortak yanı grup katkısı, sıra ya da kura ve ödeme aksayınca durmadır; katkılar tur bazında kontratta kilitli kalır ve kurallar herkese görünür. Farkı ise ipotek, şirket garantisi, gerçek ev/araç teslimi ve tahsilat olmamasıdır.',
-  },
-  {
     q: 'Kaç kişilik grup kurulabilir?',
     a: 'Yayındaki Testnet kontratı 2 ile 30 üyeyi destekliyor. Büyük grupta bir turda satıcıya giden tutar da büyür; erken teslim alan sonraki katkıyı bırakırsa açık da büyür. Grubu büyütmek bu riski ortadan kaldırmaz.',
   },
@@ -390,10 +386,10 @@ const FAQ = [
               <Illo name="party" :size="84" class="pop" />
               <h3 class="text-3xl font-extrabold">Hazırsın!</h3>
               <p class="max-w-md text-stone-600">
-                Cüzdanın bağlı, hesabın etkin ve test {{ token }} elinde. Şimdi ilk havuzunu kurabilirsin.
+                Cüzdanın bağlı, hesabın etkin ve test {{ token }} elinde. Şimdi bir havuza katılabilirsin.
               </p>
-              <RouterLink to="/create" class="btn-primary btn-lg">
-                Havuz oluştur <AppIcon name="arrow" class="!size-4" />
+              <RouterLink to="/join" class="btn-primary btn-lg">
+                Havuza katıl <AppIcon name="arrow" class="!size-4" />
               </RouterLink>
             </div>
           </div>

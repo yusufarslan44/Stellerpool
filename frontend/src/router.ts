@@ -10,7 +10,8 @@ export const router = createRouter({
       ]
     : [
         { path: '/', name: 'home', component: () => import('@/views/HomeView.vue') },
-        { path: '/create', name: 'create', component: () => import('@/views/CreateView.vue') },
+        { path: '/join', name: 'join', component: () => import('@/views/JoinView.vue') },
+        { path: '/create', redirect: (to) => ({ path: '/join', query: to.query }) },
         { path: '/pool/:id(\\d+)', name: 'pool', component: () => import('@/views/PoolView.vue') },
         { path: '/:pathMatch(.*)*', redirect: '/' },
       ],

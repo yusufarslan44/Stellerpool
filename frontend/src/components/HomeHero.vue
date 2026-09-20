@@ -24,7 +24,7 @@ const selected = computed(() => options.find(option => option.id === goal.value)
       <div class="hero-copy">
         <div class="hero-kicker"><span class="hero-kicker-line" /> ORTAK HEDEFLER, AÇIK KURALLAR</div>
         <h1 id="hero-title">Birlikte <br />biriktir.<br /><span>Her adımı gör.</span></h1>
-        <p class="hero-description">Bir ev, bir araç ya da yeni bir başlangıç. Arkadaşlarınla bir havuz kur; katkıları, sırayı ve ödemeleri birlikte takip et.</p>
+        <p class="hero-description">Bir ev, bir araç ya da yeni bir başlangıç. Tutarını ve taksidini söyle, sana uygun havuza katıl; katkıları, sırayı ve ödemeleri birlikte takip et.</p>
         <div class="hero-actions"><a href="#basla" class="hero-primary">Birlikte başlayalım <span><AppIcon name="arrow" /></span></a><a href="#hikaye" class="hero-secondary"><span class="hero-play-icon" aria-hidden="true">▷</span> Hikâyeyi izle</a></div>
         <div class="hero-proof"><span class="hero-avatars" aria-hidden="true"><i>A</i><i>M</i><i>Z</i><i>C</i></span><p><strong>Senin grubun. Ortak kurallarınız.</strong><span>Testnet’te keşfet · Gerçek para kullanılmaz</span></p></div>
       </div>

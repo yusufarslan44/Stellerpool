@@ -31,7 +31,7 @@ const NetworkWarning = defineAsyncComponent(() => import('@/components/NetworkWa
       <div class="footer-top">
         <div><RouterLink to="/" class="footer-brand">Stellerpool<span>.</span></RouterLink><p>Ortak hedefler.<br />Herkese açık kurallar.</p></div>
         <nav v-if="!mainnetShowcase" aria-label="Alt menü"><span>KEŞFET</span><RouterLink to="/#nasil">Nasıl çalışır?</RouterLink><RouterLink to="/#hikaye">Hikâyeyi izle</RouterLink><RouterLink to="/#sss">Sık sorulan sorular</RouterLink></nav>
-        <nav v-if="!mainnetShowcase" aria-label="Başlangıç bağlantıları"><span>İLK ADIM</span><RouterLink to="/#hesapla">Planını hesapla</RouterLink><RouterLink to="/#basla">Cüzdanını hazırla</RouterLink><RouterLink to="/create">Havuz oluştur ↗</RouterLink></nav>
+        <nav v-if="!mainnetShowcase" aria-label="Başlangıç bağlantıları"><span>İLK ADIM</span><RouterLink to="/#hesapla">Planını hesapla</RouterLink><RouterLink to="/#basla">Cüzdanını hazırla</RouterLink><RouterLink to="/join">Havuza katıl ↗</RouterLink></nav>
         <div class="footer-network"><span class="eyebrow">STELLAR ÜZERİNDE</span><strong>{{ config.label }}</strong><p>{{ mainnetShowcase ? 'Salt okunur tanıtım.' : 'Birlikte dene, akışı keşfet.' }}<br />Gerçek para kullanılmaz.</p></div>
       </div>
       <div class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-4 py-5 text-xs text-stone-600">

@@ -91,6 +91,7 @@ interface PoolMethods {
   mark_overdue: Method<{ pool_id: number }, null>
   abort_pool: Method<{ pool_id: number }, null>
   claim_refund: Method<{ pool_id: number; member: string }, null>
+  next_pool_id: Method<Record<string, never>, bigint>
   get_pool: Method<{ pool_id: number }, unknown>
   get_round: Method<{ pool_id: number; round: number }, unknown>
   get_member_status: Method<{ pool_id: number; member: string }, unknown>
@@ -329,6 +330,20 @@ export async function getPool(poolId: number): Promise<PoolInfo> {
   const c = await getClient()
   const tx = await c.get_pool({ pool_id: poolId })
   return mapPool(poolId, unwrap(tx.result))
+}
+
+/**
+ * Yeni havuzlardan başlayarak en fazla `limit` havuzu okur (imza gerekmez). Kullanıcıyı planına uyan
+ * açık bir havuza yönlendirmek için kullanılır; okunamayan tek bir havuz listeyi bozmaz.
+ */
+export async function listRecentPools(limit = 40): Promise<PoolInfo[]> {
+  const c = await getClient()
+  const next = Number(unwrap((await c.next_pool_id({})).result))
+  if (!Number.isFinite(next) || next <= 1) return []
+  const ids: number[] = []
+  for (let id = next - 1; id >= 1 && ids.length < limit; id--) ids.push(id)
+  const pools = await Promise.all(ids.map((id) => getPool(id).catch(() => null)))
+  return pools.filter((p): p is PoolInfo => p !== null)
 }
 
 export async function getRound(poolId: number, round: number): Promise<RoundInfo> {

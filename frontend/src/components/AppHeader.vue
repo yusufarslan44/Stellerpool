@@ -82,7 +82,7 @@ onBeforeUnmount(() => {
       <nav v-if="menuOpen && !mainnetShowcase" id="mobile-navigation" class="mobile-navigation" aria-label="Mobil menü">
         <div class="mobile-nav-heading">BİRLİKTE KEŞFEDELİM <span>01 — 05</span></div>
         <RouterLink v-for="(item, index) in items" :key="item.id" :to="`/#${item.id}`" :aria-current="active === index ? 'location' : undefined" @click="close()"><span class="mobile-nav-number">0{{ index + 1 }}</span><span><strong>{{ item.label }}</strong><small>{{ item.hint }}</small></span><AppIcon name="arrow" /></RouterLink>
-        <div class="mobile-nav-bottom"><WalletButton /><RouterLink to="/create" class="mobile-create" @click="close()">Havuz oluştur <AppIcon name="arrow" /></RouterLink></div>
+        <div class="mobile-nav-bottom"><WalletButton /><RouterLink to="/join" class="mobile-create" @click="close()">Havuza katıl <AppIcon name="arrow" /></RouterLink></div>
         <p>Stellar {{ config.label }} · Gerçek para kullanılmaz.</p>
       </nav>
     </Transition>

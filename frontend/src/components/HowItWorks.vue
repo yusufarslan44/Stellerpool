@@ -13,18 +13,18 @@ interface HowStep {
 const steps: HowStep[] = [
   {
     icon: 'users',
-    title: 'Havuzu kur',
-    short: 'Tutarı, kişi sayısını ve süreleri seç.',
+    title: 'Havuza katıl',
+    short: 'Tutarı ve taksidi söyle, uygun havuza yönlendirilirsin.',
     detail:
-      'Kurucu, kişi başı katkıyı, üye sayısını ve süreleri seçer. Herkes aynı tutarı öder ve herkes sırası geldiğinde bir kez alır.',
-    who: 'Kurucu',
+      'Toplam bedeli, peşinatı ve ödeyebileceğin taksidi girersin; kişi sayısı ve vade otomatik çıkar. Aynı plandaki açık bir havuza katılırsın, yoksa senin için yeni bir havuz açılır. Herkes aynı tutarı öder ve herkes bir kez alır.',
+    who: 'Sen',
   },
   {
     icon: 'users',
-    title: 'Üyeler katılır',
+    title: 'Grup dolar',
     short: 'Kapalı grup birlikte karar verir.',
     detail:
-      'Üyeler cüzdanlarıyla katılır. Herkes sırayı, katkı tutarını, gecikme ve durma kurallarını görür.',
+      'Aynı plandaki üyeler cüzdanlarıyla katılır. Herkes sırayı, katkı tutarını, gecikme ve durma kurallarını görür.',
     who: 'Üyeler',
   },
   {

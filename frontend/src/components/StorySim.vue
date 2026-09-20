@@ -428,8 +428,8 @@ function statusOf(id: string): { label: string; cls: string } {
           <AppIcon name="refresh" class="!size-4" /> Baştan
         </button>
         <span class="text-xs tabular-nums text-stone-500">Sahne {{ index + 1 }} / {{ STEPS.length }}</span>
-        <RouterLink to="/create" class="btn-secondary !min-h-10 ml-auto">
-          Kendi havuzunu kur <AppIcon name="arrow" class="!size-4" />
+        <RouterLink to="/join" class="btn-secondary !min-h-10 ml-auto">
+          Havuza katıl <AppIcon name="arrow" class="!size-4" />
         </RouterLink>
       </div>
     </div>

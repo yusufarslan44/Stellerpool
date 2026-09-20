@@ -44,7 +44,7 @@ const effectivePot = computed(() =>
 )
 
 const createLink = computed(() => ({
-  path: '/create',
+  path: '/join',
   query: {
     amount: contribution.value === null ? '' : toPlainAmount(contribution.value),
     members: String(members.value),
@@ -143,7 +143,7 @@ const createLink = computed(() => ({
             :class="contribution === null ? 'pointer-events-none opacity-50' : ''"
             :aria-disabled="contribution === null"
           >
-            {{ poolContractId ? 'Bu planla havuz oluştur' : 'Planı incele' }}
+            {{ poolContractId ? 'Bu planla havuza katıl' : 'Planı incele' }}
             <AppIcon name="arrow" class="!size-4" />
           </RouterLink>
           <p class="mt-3 text-xs leading-relaxed text-stone-600">

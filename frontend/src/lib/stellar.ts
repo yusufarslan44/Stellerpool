@@ -55,6 +55,14 @@ export const poolTokenContractId = poolAsset.contractId(config.passphrase)
 export const poolContractId: string | null =
   mainnetShowcase ? null : import.meta.env.VITE_ROTATING_POOL_CONTRACT_ID?.trim() || null
 
+/**
+ * Herkesin kullanabileceği hazır Testnet demo satıcısı: yalnızca ödeme alır (TRYT ve Circle USDC güven hattı
+ * açık), gizli anahtarı saklanmaz, gerçek bir satıcı değildir. Oluşturma formunda hazır gelir, isteyen kendi
+ * adresini yazabilir. `VITE_DEMO_SELLER` ile değiştirilebilir.
+ */
+export const demoSellerAddress: string =
+  import.meta.env.VITE_DEMO_SELLER?.trim() || 'GBSYVBANLBFLTUNHLTYNCYQUI4LPBP4YEIPOLONUT3OEATONSLP57QTG'
+
 /** Anchor'ın home domain'i (stellar.toml burada yayınlanır). Workshop'ta netleşecek. */
 export const anchorHomeDomain: string | null =
   import.meta.env.VITE_ANCHOR_HOME_DOMAIN?.trim() || null
