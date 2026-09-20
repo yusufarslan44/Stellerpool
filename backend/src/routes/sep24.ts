@@ -32,11 +32,11 @@ sep24Router.post('/sep24/transactions/deposit/interactive', requireBearer, (req:
   const assetCode = String(req.body?.asset_code ?? '')
   const account = String(req.body?.account ?? req.account ?? '')
   if (assetCode !== config.assetCode) {
-    res.status(400).json({ error: `Yalnızca ${config.assetCode} destekleniyor.`, type: 'unsupported_asset' })
+    res.status(400).json({ error: `Only ${config.assetCode} is supported.`, type: 'unsupported_asset' })
     return
   }
   if (account !== req.account) {
-    res.status(403).json({ error: 'account, oturum sahibiyle eşleşmiyor.' })
+    res.status(403).json({ error: 'account does not match the session owner.' })
     return
   }
   const tx = createDepositTx(account, assetCode, '', '')
@@ -57,7 +57,7 @@ sep24Router.get('/sep24/transaction', requireBearer, async (req: AuthedRequest, 
   const id = String(req.query.id ?? '')
   const tx = getTx(id)
   if (!tx || tx.account !== req.account) {
-    res.status(404).json({ error: 'İşlem bulunamadı.' })
+    res.status(404).json({ error: 'Transaction not found.' })
     return
   }
   if (tx.status === 'pending_trust') {
@@ -68,7 +68,7 @@ sep24Router.get('/sep24/transaction', requireBearer, async (req: AuthedRequest, 
     } catch (err) {
       if (!(err instanceof NoTrustlineError)) {
         tx.status = 'error'
-        tx.message = err instanceof Error ? err.message : 'Ödeme başarısız.'
+        tx.message = err instanceof Error ? err.message : 'Payment failed.'
       }
     }
   }

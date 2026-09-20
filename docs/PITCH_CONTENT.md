@@ -1,5 +1,7 @@
 # Sunum içeriği taslağı (Pro Hackathon 2026)
 
+**Sürüm notu:** Bu taslak tarihsel v10/v11 demo kanıtları içerir. Yeni doğrulayıcısız API v12 dağıtılana kadar canlı sitede yeni akış gösterilemez. Güncel ürün akışı için [plan](plan.md) esas alınır.
+
 Bu, resmi Stellar sunum şablonuna (kopyasını alıp doldurun — orijinali düzenlemeyin)
 yapıştırmaya hazır, slayt slayt içerik taslağıdır. Şablonun kendi slayt sırası/başlıkları
 bundan farklıysa, içeriği ona göre dağıtın — yapı değil, içerik önemli.
@@ -12,7 +14,7 @@ bu bir karar noktası, siz seçin.
 
 ## 1. Başlık / Takım
 
-**Stellerpool** — şeffaf, akıllı sözleşme tabanlı grup tasarruf havuzu (Stellar/Soroban)
+**Stellarpool** — şeffaf, akıllı sözleşme tabanlı grup tasarruf havuzu (Stellar/Soroban)
 
 > Birlikte biriktir. Her şeyi doğrula.
 
@@ -39,13 +41,12 @@ birikim yapmak isteyen küçük gruplar (arkadaş çevresi, aile, iş arkadaşla
 
 ## 3. Çözüm / Değer önerisi
 
-Stellerpool bu koordinasyonu bir kişiye ya da kuruma değil, **bir Soroban akıllı
+Stellarpool bu koordinasyonu bir kişiye ya da kuruma değil, **bir Soroban akıllı
 sözleşmesine** emanet eder:
 
 - Katkılar tur bazında doğrudan kontratta toplanır — kurucunun ortak parayı tek
   başına çekme yetkisi **hiçbir zaman** yoktur.
-- Ödeme, yalnızca **tüm üyelerin onayladığı kurallar** ve **bağımsız doğrulayıcı
-  onayı** sonrası, önceden belirlenmiş satıcıya gider — alıcının cebine değil.
+- API v12 akışında ödeme, **tüm üyelerin onayladığı kurallar**, eksiksiz tur katkıları ve alıcının alım kaydı sonrasında kayıtlı demo satıcısına gider — alıcının cebine değil.
 - Alıcı sırası ya da **kura** ile belirlenir (30 üyeye kadar grup desteklenir).
 - Bir ödeme aksarsa tur durur; yalnızca **o turun** katkıları sahiplerine iade
   edilir — kurallar kod içinde, herkes zincir üstünden doğrulayabilir.
@@ -60,9 +61,7 @@ birikimi) yaklaşırken, "güven bana" yerine "doğrula" diyen bir model sunuyor
 - **Demo URL:** https://stellerpool.arslanyusuf.com (Testnet, canlı kontrata bağlı)
 - **Kontrat:** `CC7W3SKQHBLZ2JPTGSK42H6IAJQ22A4PUK6CSN2T4PUJRY4LQ445GYMB` (API v10,
   Stellar Testnet)
-- Gösterilecek akış: havuz oluştur → üye katıl → şartları onayla → başlat → katkı
-  yatır (anchor ile veya doğrudan) → (kura modundaysa) kura çek → satın alma
-  onayı → tur tamamlanır.
+- V12 dağıtıldıktan sonra gösterilecek akış: plan gir → uygun havuza katıl veya aç → üyeler koşulları onaylar → başlat → katkı yatır → (kura varsa) kura çek → alımı kaydet → satıcıya öde.
 
 *(Buraya 2-3 ekran görüntüsü veya kısa bir GIF/video ekleyin: havuz oluşturma,
 kura çekme anı, tamamlanmış havuz.)*
@@ -182,4 +181,4 @@ bilip söylemek.
 
 ## 10. Kapanış / Sorular
 
-**Stellerpool: "güvenmen gerekmiyor, doğrulayabiliyorsun."**
+**Stellarpool: "güvenmen gerekmiyor, doğrulayabiliyorsun."**

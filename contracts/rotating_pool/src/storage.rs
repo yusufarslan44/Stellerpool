@@ -22,7 +22,6 @@ pub enum DataKey {
     Deposit(u64, u32, Address),
     PoolAssignedBalance(u64),
     TermsApproval(u64, u32, Address),
-    PurchaseApproval(u64, u32, u32, Address),
     RefundClaimed(u64, Address),
 }
 
@@ -141,33 +140,6 @@ pub(crate) fn has_terms_approval(
 
 pub(crate) fn write_terms_approval(env: &Env, pool_id: u64, version: u32, approver: &Address) {
     let key = DataKey::TermsApproval(pool_id, version, approver.clone());
-    env.storage().persistent().set(&key, &true);
-    extend_persistent_ttl(env, &key);
-}
-
-pub(crate) fn has_purchase_approval(
-    env: &Env,
-    pool_id: u64,
-    round: u32,
-    version: u32,
-    verifier: &Address,
-) -> bool {
-    let key = DataKey::PurchaseApproval(pool_id, round, version, verifier.clone());
-    let approved = env.storage().persistent().get(&key).unwrap_or(false);
-    if approved {
-        extend_persistent_ttl(env, &key);
-    }
-    approved
-}
-
-pub(crate) fn write_purchase_approval(
-    env: &Env,
-    pool_id: u64,
-    round: u32,
-    version: u32,
-    verifier: &Address,
-) {
-    let key = DataKey::PurchaseApproval(pool_id, round, version, verifier.clone());
     env.storage().persistent().set(&key, &true);
     extend_persistent_ttl(env, &key);
 }

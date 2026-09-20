@@ -8,8 +8,8 @@ name: Deploy frontend
 #   DEPLOY_HOST         sunucu adresi (repo herkese açık olduğundan dosyaya yazılmaz)
 #   DEPLOY_USER         SSH kullanıcısı
 #   DEPLOY_KNOWN_HOSTS  sunucunun host anahtarı satırı (MITM'e karşı sabitlenmiş)
-# İsteğe bağlı repo Variables (yoksa varsayılan davranış): VITE_ANCHOR_HOME_DOMAIN,
-#   VITE_POOL_ASSET_CODE, VITE_POOL_ASSET_ISSUER, VITE_ROTATING_POOL_CONTRACT_ID, VITE_MAX_MEMBERS.
+# İsteğe bağlı repo Variables: VITE_MAX_MEMBERS. Bu Testnet sitesi v12 / TRYT
+# yapılandırmasını burada sabitler; eski repo Variable'ı v11'e geri döndüremez.
 # Kurulum ayrıntısı: docs/DEPLOY_CI.md
 
 on:
@@ -52,11 +52,11 @@ jobs:
         working-directory: frontend
         env:
           VITE_STELLAR_NETWORK: testnet
-          VITE_ROTATING_POOL_CONTRACT_ID: ${{ vars.VITE_ROTATING_POOL_CONTRACT_ID || 'CD23I5ZNVHOUBJOHODHHEW6NH7NB3FDBQ2DE2C2TST5BZM4KTJLBPK33' }}
+          VITE_ROTATING_POOL_CONTRACT_ID: CB5O6WCGCSA5PKH5HXWKO3WFEDHNEKJ5ZNW6EMNSERYDK6J4VYKLG46O
           VITE_MAX_MEMBERS: ${{ vars.VITE_MAX_MEMBERS || '30' }}
-          VITE_ANCHOR_HOME_DOMAIN: ${{ vars.VITE_ANCHOR_HOME_DOMAIN }}
-          VITE_POOL_ASSET_CODE: ${{ vars.VITE_POOL_ASSET_CODE }}
-          VITE_POOL_ASSET_ISSUER: ${{ vars.VITE_POOL_ASSET_ISSUER }}
+          VITE_ANCHOR_HOME_DOMAIN: anchor-stellerpool.arslanyusuf.com
+          VITE_POOL_ASSET_CODE: TRYT
+          VITE_POOL_ASSET_ISSUER: GBM3V2AHDEF3APOIKRCXCKVNW3UA2VWMSLTGELWRLBLIFSV7OVME6HOC
         run: npm run build
 
       - name: Gizli anahtar sızıntısı taraması

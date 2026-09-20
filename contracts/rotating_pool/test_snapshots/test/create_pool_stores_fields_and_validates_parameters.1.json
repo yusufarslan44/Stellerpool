@@ -118,14 +118,6 @@
                 "map": [
                   {
                     "key": {
-                      "symbol": "approval_threshold"
-                    },
-                    "val": {
-                      "u32": 0
-                    }
-                  },
-                  {
-                    "key": {
                       "symbol": "contribution_amount"
                     },
                     "val": {
@@ -288,14 +280,6 @@
                     },
                     "val": {
                       "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
-                    }
-                  },
-                  {
-                    "key": {
-                      "symbol": "verifiers"
-                    },
-                    "val": {
-                      "vec": []
                     }
                   }
                 ]

@@ -1,4 +1,6 @@
-# Stellerpool Backend & Soroban Implementation Plan
+# Stellarpool Backend & Soroban Implementation Plan
+
+> **Arşiv notu (20 Eylül 2026):** Bu belge v8–v10 geliştirme geçmişini kaydeder. Güncel API v12 ürün ve sözleşme akışı için [plan.md](plan.md) ve [architecture.md](architecture/architecture.md) esas alınır; aşağıdaki doğrulayıcı ve `propose_terms` adımları v12 için geçerli değildir.
 
 Source of truth: `docs/plan.md` (sponsorless model, 19 Eylül 2026 revision). This implementation plan translates that product and economic model into phased contract/backend work. When older repository notes conflict with `docs/plan.md`, this plan follows `docs/plan.md`.
 

@@ -9,8 +9,8 @@ export const wellKnownRouter = Router()
  * WEB_AUTH_ENDPOINT, TRANSFER_SERVER_SEP0024, SIGNING_KEY, NETWORK_PASSPHRASE.
  */
 wellKnownRouter.get('/.well-known/stellar.toml', (_req, res) => {
-  const toml = `# Stellerpool anchor — Testnet, TEST amacıyla işletilir. Gerçek TRY / banka rayı DEĞİLDİR.
-# Bkz. backend/README.md "Bilinçli basitleştirmeler".
+  const toml = `# Stellarpool anchor — operated on Testnet for TEST purposes. It is NOT a real TRY / bank rail.
+# See "Deliberate simplifications" in backend/README.md.
 NETWORK_PASSPHRASE="${config.networkPassphrase}"
 WEB_AUTH_ENDPOINT="${webAuthEndpoint}"
 SIGNING_KEY="${config.issuerKeypair.publicKey()}"
@@ -20,14 +20,14 @@ ACCOUNTS=["${config.issuerKeypair.publicKey()}", "${config.distributionKeypair.p
 [DOCUMENTATION]
 ORG_NAME="Stellerpool (hackathon demo)"
 ORG_URL="${homeDomain}"
-ORG_DESCRIPTION="Rise In x Stellar Pro Hackathon 2026 demo anchor'ı. TRYT test varlığı gerçek Türk lirasını TEMSİL EDER, gerçek para veya banka entegrasyonu değildir."
+ORG_DESCRIPTION="Demo anchor for the Rise In x Stellar Pro Hackathon 2026. The TRYT test asset REPRESENTS Turkish lira; it is not real money or a bank integration."
 
 [[CURRENCIES]]
 code="${config.assetCode}"
 issuer="${config.issuerKeypair.publicKey()}"
 display_decimals=2
 name="Stellerpool Test TRY"
-desc="Testnet'te TRY'yi temsil eden demo varlığı. Gerçek Türk lirası DEĞİLDİR; gerçek banka/ödeme kuruluşu entegrasyonu yoktur."
+desc="A demo asset representing TRY on Testnet. It is NOT real Turkish lira; there is no real bank/payment-institution integration."
 is_asset_anchored=false
 anchor_asset_type="other"
 `

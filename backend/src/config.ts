@@ -4,7 +4,7 @@ import { Keypair } from '@stellar/stellar-sdk'
 function required(name: string): string {
   const value = process.env[name]
   if (!value || !value.trim()) {
-    throw new Error(`Eksik ortam değişkeni: ${name} (bkz. backend/.env.example)`)
+    throw new Error(`Missing environment variable: ${name} (see backend/.env.example)`)
   }
   return value.trim()
 }

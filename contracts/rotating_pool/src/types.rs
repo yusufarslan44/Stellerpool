@@ -9,7 +9,7 @@ pub enum PoolStatus {
     Aborted,
 }
 
-/// How a round's recipient is chosen. `Fixed` uses the order approved in `propose_terms`;
+/// How a round's recipient is chosen. `Fixed` uses the order in which members joined;
 /// `Draw` picks uniformly among members who have not received yet, once a round is fully
 /// funded (see `RoundPhase::AwaitingDraw`).
 #[contracttype]
@@ -37,7 +37,7 @@ pub enum AbortReason {
     /// A round's collect deadline plus grace period expired while still underfunded.
     SafetyRecovery,
     /// A round became fully funded (AwaitingPurchase, or AwaitingDraw in Draw mode) but no
-    /// approved purchase was executed (or no recipient was drawn) before the purchase deadline.
+    /// purchase was executed (or no recipient was drawn) before the purchase deadline.
     BlockedSettlement,
 }
 
@@ -55,8 +55,6 @@ pub struct Pool {
     pub down_payment: i128,
     pub members: Vec<Address>,
     pub recipient_order: Vec<Address>,
-    pub verifiers: Vec<Address>,
-    pub approval_threshold: u32,
     pub terms_version: u32,
     pub terms_approvals: Vec<Address>,
     pub current_round: u32,
@@ -93,8 +91,6 @@ pub struct RoundState {
     pub pot: i128,
     pub seller: Option<Address>,
     pub doc_hash: Option<BytesN<32>>,
-    pub purchase_version: u32,
-    pub approvals: Vec<Address>,
 }
 
 #[contracttype]

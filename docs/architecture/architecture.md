@@ -1,24 +1,24 @@
 # Mimari
 
-Stellerpool üç parçadan oluşur: **Soroban kontratı** (fon ve kurallar), **web arayüzü** (cüzdan imzalı işlemler ve okuma) ve **anchor** (fiat kapısı). Zincir dışı bir sunucuya (backend) şu an ihtiyaç yoktur: durum zincirden okunur, belge içeriği zincire yazılmaz, yalnızca SHA-256 özeti yazılır.
+Stellarpool üç parçadan oluşur: **Soroban kontratı** (fon ve kurallar), **web arayüzü** (cüzdan imzalı işlemler ve okuma) ve **anchor** (fiat kapısı). Zincir dışı bir sunucuya (backend) şu an ihtiyaç yoktur: durum zincirden okunur, belge içeriği zincire yazılmaz, yalnızca SHA-256 özeti yazılır.
 
 ## Bileşenler
 
 ~~~mermaid
 flowchart LR
   subgraph Browser["Tarayıcı (Vue 3 + TypeScript)"]
-    UI["Arayüz<br/>Home · Create · Pool"]
+    UI["Arayüz<br/>Home · Join · Pool"]
     SVC["services/pool.ts<br/>sözleşme istemcisi"]
     ANC["lib/anchor.ts<br/>SEP-1 · SEP-10 · SEP-24"]
     WK["Stellar Wallets Kit"]
   end
   subgraph Stellar["Stellar Testnet"]
     RPC["Soroban RPC"]
-    POOL["rotating_pool<br/>Soroban kontratı (API v11)"]
-    SAC["Havuz varlığı (SAC)<br/>USDC / demo varlığı"]
+    POOL["rotating_pool<br/>Soroban kontratı (Testnet v12)"]
+    SAC["Havuz varlığı (SAC)<br/>TRYT / demo varlığı"]
     HZ["Horizon"]
   end
-  subgraph Anchor["Anchor (şu an SDF test anchor'ı)"]
+  subgraph Anchor["Anchor (Stellar Testnet)"]
     TOML["stellar.toml"]
     AUTH["SEP-10 web auth"]
     S24["SEP-24 interaktif"]
@@ -38,8 +38,8 @@ flowchart LR
 
 | Bileşen | Sorumluluk | Dosya |
 |---|---|---|
-| Kontrat | Havuz, tur, katkı, doğrulayıcı onayı, satıcıya ödeme, iade | `contracts/rotating_pool/src/` |
-| Sözleşme istemcisi | 18 kontrat fonksiyonu (kura dahil), yeteneklerin zincirden okunması, `Result` çözme | `frontend/src/services/pool.ts` |
+| Kontrat | Havuz, tur, katkı, satıcıya ödeme, iade | `contracts/rotating_pool/src/` |
+| Sözleşme istemcisi | Sözleşme fonksiyonları (kura dahil), yeteneklerin zincirden okunması, `Result` çözme | `frontend/src/services/pool.ts` |
 | Anchor istemcisi | stellar.toml keşfi, SEP-10 doğrulaması ve imzası, SEP-24 oturumu | `frontend/src/lib/anchor.ts` |
 | Cüzdan | Bağlantı ve imza | `frontend/src/stores/wallet.ts` |
 | Arayüz | Adım adım rehber, kura sahnesi, hikâye simülatörü, 3B sahne | `frontend/src/views/`, `components/` |
@@ -68,7 +68,7 @@ stateDiagram-v2
   Grace --> AwaitingPurchase: eksik üye cure_payment ile ödedi (sabit sıra)
   Grace --> AwaitingDraw: eksik üye cure_payment ile ödedi (kura)
   AwaitingDraw --> AwaitingPurchase: draw_recipient (herkes çağırabilir)
-  AwaitingPurchase --> Settled: execute_round (doğrulayıcı eşiği + süre içinde)
+  AwaitingPurchase --> Settled: execute_round (alım kaydı + süre içinde)
   Settled --> Collecting: sonraki tur
   Grace --> [*]: abort_pool (iade)
   AwaitingDraw --> [*]: abort_pool (süre doldu, iade)
@@ -83,12 +83,10 @@ stateDiagram-v2
 sequenceDiagram
   participant M as Üye
   participant C as rotating_pool
-  participant V as Doğrulayıcılar
   participant S as Demo satıcısı
   M->>C: deposit (kendi tur katkısı)
   Note over C: Tur bazında ayrı muhasebe
   M->>C: propose_purchase (satıcı, tutar, belge SHA-256)
-  V->>C: approve_purchase (eşik: ceil(2/3))
   M->>C: execute_round (herkes çağırabilir)
   C->>S: yalnızca bu turun tutarı
   Note over C,M: Ödeme aksarsa: mark_overdue → abort_pool → claim_refund (yalnızca mevcut tur)
@@ -97,7 +95,7 @@ sequenceDiagram
 - Kurucuda serbest çekim, tek taraflı sıra/satıcı değiştirme veya kod yükseltme yetkisi yoktur.
 - Bir tur satıcıya ödenmeden önce `N × C` toplanmış ve tüm üyeler `paid` olmalıdır. Transfer ve durum değişimi atomiktir.
 - İade hakkı yalnızca **mevcut, ödenmemiş turdaki** bizzat yatırılmış katkıdır. Önceki turlara iade hakkı yazılmaz.
-- Satıcı yalnızca havuzda kayıtlı izinli demo satıcısıdır. Yeni alım önerisi eski onayları siler.
+- Satıcı yalnızca havuzda kayıtlı izinli demo satıcısıdır. Alım kaydı için ek doğrulayıcı onayı aranmaz.
 
 ## Anchor akışı (SEP-1 / 10 / 24)
 
@@ -131,7 +129,7 @@ sequenceDiagram
 | Sponsor yok | Riski gizleyen ayrı bir güvence modeli istemedik | Erken teslim alanın temerrüdü kontrat dışı bir sorun olarak kalır |
 | Yalnızca mevcut tur iadesi | Satıcıya giden para kontratta değil | Geçmiş tur ödemeleri geri alınamaz |
 | Zaman aşımı kendiliğinden işlem yapmaz | Soroban'da zamanlayıcı yok | Herkes ilgili fonksiyonu çağırmalı (`mark_overdue`, `abort_pool`) |
-| Belge zincire yazılmaz, SHA-256 özeti yazılır | Gizlilik ve maliyet | Belgeyi doğrulayıcılar zincir dışında kontrol eder |
+| Belge zincire yazılmaz, SHA-256 özeti yazılır | Gizlilik ve maliyet | Gerçek alım doğrulaması yapılmaz |
 | Yükseltilemez kontrat | Kurucu tek taraflı kod değiştiremesin | Her değişiklik yeni kontrat ID'si demektir |
 | Arayüz yetenekleri zincirden okur | Kontrat ve arayüz paralel gelişti | Uyumsuz sürümde işlem reddedilir |
 | Backend yok | Durum zincirde, fon yetkisi zincir dışında olmamalı | Zincir dışı bildirim ve AI raporu için ileride servis gerekir |

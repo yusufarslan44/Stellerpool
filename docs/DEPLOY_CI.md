@@ -57,14 +57,16 @@ Variables). Tanımsızsa varsayılanlar geçerlidir.
 
 | Değişken | Varsayılan | Ne zaman |
 |---|---|---|
-| `VITE_ROTATING_POOL_CONTRACT_ID` | güncel v11 kontratı | Yeni kontrat yayınlanınca |
+| `VITE_ROTATING_POOL_CONTRACT_ID` | v12 kontratı, workflow içinde sabit | Yeni kontrat yayınlanınca workflow güncellenir |
 | `VITE_MAX_MEMBERS` | `30` | Eski kontrata bağlanılırsa `12` |
-| `VITE_ANCHOR_HOME_DOMAIN` | SDF test anchor'ı | Kendi anchor'ımız ayağa kalkınca |
-| `VITE_POOL_ASSET_CODE` / `VITE_POOL_ASSET_ISSUER` | Testnet USDC | Havuz varlığı `TRYT` olunca |
+| `VITE_ANCHOR_HOME_DOMAIN` | `anchor-stellerpool.arslanyusuf.com`, workflow içinde sabit | Anchor adresi değişince workflow güncellenir |
+| `VITE_POOL_ASSET_CODE` / `VITE_POOL_ASSET_ISSUER` | `TRYT`, workflow içinde sabit | Demo varlığı değişince workflow güncellenir |
 
-Değişkeni değiştirdikten sonra siteye yansıması için workflow'u yeniden çalıştırmak gerekir (Run workflow).
+V12, TRYT ve anchor değerleri workflow içinde sabittir; eski GitHub repo Variables değerleri
+siteleri önceki kontrata geri döndüremez. `VITE_MAX_MEMBERS` değişikliği için workflow yeniden
+çalıştırılır (Run workflow).
 
 ## Elle geri alma
 
-Sunucudaki dosyalar doğrudan yazılır, yedek tutulmaz. Sorunlu bir sürümü geri almak için önceki commit'e
+Sunucudaki dosyalar doğrudan yazılır. V12 geçişinden önce `~/stellerpool/site-backup-before-v12-20260920` yedeği alınmıştır. Sorunlu bir sürümü geri almak için önceki commit'e
 dönüp (`git revert`) push'la ya da Actions'ta eski çalıştırmayı yeniden çalıştır.

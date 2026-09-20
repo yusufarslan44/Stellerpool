@@ -117,8 +117,8 @@ Settlement asset:    $ASSET_CODE issued by $ASSET_ISSUER
 ================================================================
 
 Reminder: contract-reported settlement is separate from real property
-or vehicle delivery. Only the off-chain verifier/legal layer confirms
-that a Testnet seller/document approval reflects anything real.
+or vehicle delivery. The Testnet seller and document digest do not confirm real ownership
+or delivery.
 SUMMARY
 
 if [[ "$WRITE_ENV" == "1" ]]; then

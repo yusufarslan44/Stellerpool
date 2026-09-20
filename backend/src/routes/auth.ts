@@ -16,7 +16,7 @@ const CHALLENGE_TIMEOUT_SECONDS = 300
 authRouter.get('/auth', (req, res) => {
   const account = String(req.query.account ?? '')
   if (!account.startsWith('G') || account.length !== 56) {
-    res.status(400).json({ error: 'Geçersiz veya eksik account parametresi.' })
+    res.status(400).json({ error: 'Invalid or missing account parameter.' })
     return
   }
   const transaction = WebAuth.buildChallengeTx(
@@ -34,7 +34,7 @@ authRouter.get('/auth', (req, res) => {
 authRouter.post('/auth', (req, res) => {
   const transaction = String(req.body?.transaction ?? '')
   if (!transaction) {
-    res.status(400).json({ error: 'transaction alanı zorunlu.' })
+    res.status(400).json({ error: 'The transaction field is required.' })
     return
   }
   try {
@@ -54,11 +54,11 @@ authRouter.post('/auth', (req, res) => {
       webAuthDomain,
     )
     if (!signersFound.includes(clientAccountID)) {
-      res.status(401).json({ error: 'İmza doğrulanamadı.' })
+      res.status(401).json({ error: 'The signature could not be verified.' })
       return
     }
     res.json({ token: issueToken(clientAccountID) })
   } catch (err) {
-    res.status(401).json({ error: err instanceof Error ? err.message : 'Challenge doğrulanamadı.' })
+    res.status(401).json({ error: err instanceof Error ? err.message : 'The challenge could not be verified.' })
   }
 })

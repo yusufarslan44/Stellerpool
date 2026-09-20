@@ -20,13 +20,13 @@ Testnet'te çalışan bir kuralın Türkiye'de müşteri fonları için kullanı
 
 AI; grup koşulları ile imzalanacak belge sürümleri arasındaki farkları, satıcı bilgisi ve ödeme talimatındaki tutarsızlıkları, mükerrer belgeleri, gecikme/iade kayıtlarını ve olağan dışı işlemleri inceleyebilir. Soroban kodu için yetkilendirme, muhasebe, TTL ve yükseltme yetkisi gibi riskleri geliştiriciye raporlayabilir. Her bulgu ilgili belge/kod sürümüne ve doğrulanabilir kurala dayanır. Modelin önerisi **inceleme gerektirir** durumudur; hukuki geçerlilik veya bağımsız güvenlik denetimi sertifikası değildir.
 
-- AI'a fon cüzdanı, banka ödeme talimatı, kontrat yöneticisi veya tek başına doğrulayıcı anahtarı verilmez. AI çıktısı tek başına tahsisatı açmaz, sözleşmeyi değiştirmez, iadeyi reddetmez veya süresiz dondurmaz.
+- AI'a fon cüzdanı, banka ödeme talimatı, kontrat yöneticisi yetkisi verilmez. AI çıktısı tek başına tahsisatı açmaz, sözleşmeyi değiştirmez, iadeyi reddetmez veya süresiz dondurmaz.
 - Tutar, yetkili satıcı, sürüm, süre, mükerrer ödeme ve iade yeterliliği gibi kesin şartlar deterministik kurallarla kontrol edilir. Belirsiz belge/kimlik bulgusu yetkili personele sevk edilir; mevzuattaki ödeme ve iade süreleri model yanıtı beklerken kaybolmaz.
-- Demo doğrulayıcıları ve gerçek üründe lisanslı şirketin yetkili personeli raporu ve dayanak belgeleri inceler. İtiraz ve düzeltme izi tutulur. AI kod incelemesi, testler ve bağımsız akıllı kontrat güvenlik denetimi ayrı kontrollerdir.
+- API v12 demosunda doğrulayıcı rolü yoktur. Gerçek üründe lisanslı şirketin yetkili personeli raporu ve dayanak belgeleri inceler. İtiraz ve düzeltme izi tutulur. AI kod incelemesi, testler ve bağımsız akıllı kontrat güvenlik denetimi ayrı kontrollerdir.
 - İnceleme kaydı `işlem ID + belge sürümü/özeti + kural sürümü + model sürümü + bulgu gerekçesi + insan kararı + zaman` bağlamını taşır. Gerçek kimlik ve finansal belgeler herkese açık zincire yazılmaz; hash/özetin kendisi de bağlama göre kişisel veri sayılabileceğinden KVKK değerlendirmesi gerekir.
 - Harici AI sağlayıcısına belge gönderimi, saklama, sınır ötesi aktarım ve üçüncü taraf erişimi çözülmeden gerçek müşteri verisi işlenmez. Özellikle tasarruf finansmanı, muhasebe/raporlama ve iç sistemlerin üçüncü tarafa devredilememesine ilişkin dış hizmet sınırı incelenir (Yönetmelik md. 32). En düşük riskli başlangıç, lisanslı şirketin kontrol ettiği ortamda yardımcı araçtır.
 
-**Testnet gösterimi:** İmzalanan demo şartlarıyla farklı satıcı/tutar girildiğinde AI gerekçeli uyarı üretebilir; doğrulayıcılar uyarıyı görür. Kontratın izin kontrolü AI'ın serbest metin sonucuna dayanmaz. AI entegrasyonu, model ve örnek gerçek işlem kanıtlarıyla çalıştırılmadan ürün özelliği olarak "tamamlandı" işaretlenmez.
+**Testnet gösterimi:** İmzalanan demo şartlarıyla farklı satıcı/tutar girildiğinde AI gerekçeli uyarı üretebilir; uyarı arayüzde gösterilebilir; çalışan AI entegrasyonu henüz yoktur. Kontratın izin kontrolü AI'ın serbest metin sonucuna dayanmaz. AI entegrasyonu, model ve örnek gerçek işlem kanıtlarıyla çalıştırılmadan ürün özelliği olarak "tamamlandı" işaretlenmez.
 
 ## 3. Gerçek sözleşme nasıl kurulabilir?
 

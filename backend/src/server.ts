@@ -25,5 +25,5 @@ app.listen(config.port, () => {
   console.log(`Stellerpool anchor dinliyor: http://localhost:${config.port}`)
   console.log(`Genel adres (PUBLIC_BASE_URL): ${config.publicBaseUrl}`)
   console.log(`stellar.toml: ${config.publicBaseUrl}/.well-known/stellar.toml`)
-  console.log(`Varlık: ${tryAsset.getCode()}:${tryAsset.getIssuer()}`)
+  console.log(`Asset: ${tryAsset.getCode()}:${tryAsset.getIssuer()}`)
 })

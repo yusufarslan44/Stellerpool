@@ -1,5 +1,7 @@
 # Teslim öncesi görev listesi — Pro Hackathon 2026
 
+> **Arşiv notu:** Bu liste önceki v10/v11 teslim hazırlığının kaydıdır. API v12 akışı ve dağıtım durumu için [plan.md](plan.md) ile [README](../README.md) esas alınır. Aşağıdaki `propose_terms` ve `approve_purchase` işlemleri yeni sürümde yoktur.
+
 **Kaynak:** bu belge, projenin Pro Hackathon 2026 el kitabına karşı yapılan uyumluluk
 analizinin (bkz. konuşma geçmişi / `docs/IMPLEMENTATION_LOG.md`) doğrudan sonucu.
 Amaç: kalan işi **frontend / backend / kontrat** arasında net, çakışmasız, kabul

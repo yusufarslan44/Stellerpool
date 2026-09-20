@@ -30,17 +30,6 @@ pub struct MemberJoined {
 }
 
 #[contractevent]
-pub struct TermsProposed {
-    #[topic]
-    pub pool_id: u64,
-    #[topic]
-    pub creator: Address,
-    pub version: u32,
-    pub verifier_count: u32,
-    pub approval_threshold: u32,
-}
-
-#[contractevent]
 pub struct TermsApproved {
     #[topic]
     pub pool_id: u64,
@@ -97,19 +86,6 @@ pub struct PurchaseProposed {
     pub asset: Address,
     pub amount: i128,
     pub doc_hash: BytesN<32>,
-    pub version: u32,
-}
-
-#[contractevent]
-pub struct PurchaseApproved {
-    #[topic]
-    pub pool_id: u64,
-    #[topic]
-    pub round: u32,
-    #[topic]
-    pub verifier: Address,
-    pub version: u32,
-    pub approval_count: u32,
 }
 
 #[contractevent]

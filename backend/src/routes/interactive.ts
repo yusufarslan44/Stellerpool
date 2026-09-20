@@ -24,29 +24,29 @@ function page(title: string, body: string): string {
 interactiveRouter.get('/sep24/interactive/:id', (req, res) => {
   const tx = getTx(req.params.id)
   if (!tx) {
-    res.status(404).send(page('Bulunamadı', '<h1>İşlem bulunamadı</h1>'))
+    res.status(404).send(page('Not found', '<h1>Transaction not found</h1>'))
     return
   }
   if (tx.status !== 'incomplete') {
-    res.send(page('Zaten işlendi', `<h1>Bu işlem zaten "${tx.status}" durumunda.</h1>`))
+    res.send(page('Already processed', `<h1>This transaction is already "${tx.status}".</h1>`))
     return
   }
   res.send(
     page(
-      'Stellerpool test anchor — TRY yatır',
-      `<h1>${config.assetCode} yatır (test)</h1>
-       <div class="warn">Bu, hackathon demo anchor'ıdır. <b>Gerçek Türk lirası veya banka
-       entegrasyonu yoktur.</b> "Yatırdım" butonu bankayı değil, bu sunucunun kendi onayını tetikler.</div>
+      'Stellarpool test anchor — deposit TRY',
+      `<h1>Deposit ${config.assetCode} (test)</h1>
+       <div class="warn">This is the hackathon demo anchor. <b>There is no real Turkish lira or bank
+       integration.</b> The "I deposited" button triggers this server's own confirmation, not a bank.</div>
        <form method="post" action="/sep24/interactive/${tx.id}/confirm">
          <label for="amount">Tutar (${config.assetCode})</label>
          <input id="amount" name="amount" type="number" min="10" max="100000" step="1" value="100" required>
-         <label for="account">Alıcı Stellar hesabı</label>
+         <label for="account">Recipient Stellar account</label>
          <input value="${tx.account}" disabled>
-         <button type="submit">TRY yatırdım, onayla (test)</button>
+         <button type="submit">I deposited TRY, confirm (test)</button>
        </form>
-       <p class="muted">Hesabınızda ${config.assetCode} için trustline yoksa (issuer
-       ${(tryAsset.getIssuer() ?? '').slice(0, 6)}…), onay sonrası ödeme "trustline bekleniyor" durumunda
-       kalır; trustline'ı açtığınızda arayüz bir sonraki kontrolde otomatik tamamlar.</p>`,
+       <p class="muted">If your account has no trustline for ${config.assetCode} (issuer
+       ${(tryAsset.getIssuer() ?? '').slice(0, 6)}…), after confirmation the payment stays in the "waiting for trustline" state;
+       once you open the trustline, the interface completes it automatically on its next check.</p>`,
     ),
   )
 })
@@ -54,12 +54,12 @@ interactiveRouter.get('/sep24/interactive/:id', (req, res) => {
 interactiveRouter.post('/sep24/interactive/:id/confirm', async (req, res) => {
   const tx = getTx(req.params.id)
   if (!tx) {
-    res.status(404).send(page('Bulunamadı', '<h1>İşlem bulunamadı</h1>'))
+    res.status(404).send(page('Not found', '<h1>Transaction not found</h1>'))
     return
   }
   const amount = String(req.body?.amount ?? '').trim()
   if (!amount || Number.isNaN(Number(amount)) || Number(amount) <= 0) {
-    res.status(400).send(page('Geçersiz tutar', '<h1>Geçerli bir tutar girin.</h1>'))
+    res.status(400).send(page('Invalid amount', '<h1>Enter a valid amount.</h1>'))
     return
   }
   updateTx(tx.id, { amount, status: 'pending_anchor' })
@@ -71,17 +71,17 @@ interactiveRouter.post('/sep24/interactive/:id/confirm', async (req, res) => {
     if (err instanceof NoTrustlineError) {
       updateTx(tx.id, { status: 'pending_trust' })
     } else {
-      updateTx(tx.id, { status: 'error', message: err instanceof Error ? err.message : 'Ödeme başarısız.' })
+      updateTx(tx.id, { status: 'error', message: err instanceof Error ? err.message : 'Payment failed.' })
     }
   }
 
   const finalTx = getTx(tx.id)!
   res.send(
     page(
-      'Onaylandı',
-      `<h1>${finalTx.status === 'completed' ? 'Tamamlandı' : finalTx.status === 'pending_trust' ? 'Trustline bekleniyor' : 'İşleniyor'}</h1>
+      'Confirmed',
+      `<h1>${finalTx.status === 'completed' ? 'Completed' : finalTx.status === 'pending_trust' ? 'Waiting for trustline' : 'Processing'}</h1>
        <p>Durum: <b>${finalTx.status}</b></p>
-       ${finalTx.status === 'pending_trust' ? '<p class="muted">Cüzdanınızda bu varlık için trustline açın, arayüz otomatik tamamlayacak.</p>' : ''}
+       ${finalTx.status === 'pending_trust' ? '<p class="muted">Open a trustline for this asset in your wallet; the interface will complete it automatically.</p>' : ''}
        <p class="muted">Bu pencereyi kapatabilirsiniz.</p>
        <script>
          try {

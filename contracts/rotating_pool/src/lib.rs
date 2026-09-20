@@ -13,11 +13,9 @@ pub use types::{
 
 use soroban_sdk::{contract, contractimpl, token, Address, BytesN, Env, Vec};
 
-pub const CONTRACT_VERSION: u32 = 11;
+pub const CONTRACT_VERSION: u32 = 12;
 pub const MIN_MEMBERS: u32 = 2;
 pub const MAX_MEMBERS: u32 = 30;
-pub const MIN_VERIFIERS: u32 = 2;
-pub const MAX_VERIFIERS: u32 = 10;
 
 #[contract]
 pub struct RotatingPoolContract;
@@ -70,8 +68,6 @@ impl RotatingPoolContract {
             down_payment,
             members: Vec::new(&env),
             recipient_order: Vec::new(&env),
-            verifiers: Vec::new(&env),
-            approval_threshold: 0,
             terms_version: 0,
             terms_approvals: Vec::new(&env),
             current_round: 0,
@@ -123,9 +119,6 @@ impl RotatingPoolContract {
         if member == pool.demo_seller {
             return Err(ContractError::SellerCannotBeParticipant);
         }
-        if is_address_in(&pool.verifiers, &member) {
-            return Err(ContractError::VerifierCannotBeParticipant);
-        }
 
         let joined_at = env.ledger().timestamp();
         let state = MemberState {
@@ -133,6 +126,16 @@ impl RotatingPoolContract {
             received: false,
         };
         pool.members.push_back(member.clone());
+        // Once full, the join order is the fixed delivery order. Draw pools have no order.
+        // Every member still approves the same terms before the pool can start.
+        if pool.members.len() == pool.member_limit {
+            pool.recipient_order = if pool.order_mode == OrderMode::Fixed {
+                pool.members.clone()
+            } else {
+                Vec::new(&env)
+            };
+            pool.terms_version = 1;
+        }
         storage::write_member(&env, pool_id, &member, &state);
         storage::write_pool(&env, &pool);
 
@@ -160,48 +163,6 @@ impl RotatingPoolContract {
         Ok(())
     }
 
-    pub fn propose_terms(
-        env: Env,
-        creator: Address,
-        pool_id: u64,
-        recipient_order: Vec<Address>,
-        verifiers: Vec<Address>,
-    ) -> Result<u32, ContractError> {
-        let mut pool = get_pool_or_error(&env, pool_id)?;
-        if creator != pool.creator {
-            return Err(ContractError::CreatorOnly);
-        }
-        creator.require_auth();
-        if pool.status != PoolStatus::Filling {
-            return Err(ContractError::InvalidPoolStatus);
-        }
-        validate_recipient_order(&pool, &recipient_order)?;
-        validate_verifier_policy(&env, &pool, &verifiers)?;
-        let approval_threshold = compute_quorum(verifiers.len());
-
-        let version = pool
-            .terms_version
-            .checked_add(1)
-            .ok_or(ContractError::ArithmeticOverflow)?;
-        pool.recipient_order = recipient_order;
-        let verifier_count = verifiers.len();
-        pool.verifiers = verifiers;
-        pool.approval_threshold = approval_threshold;
-        pool.terms_version = version;
-        pool.terms_approvals = Vec::new(&env);
-        storage::write_pool(&env, &pool);
-
-        TermsProposed {
-            pool_id,
-            creator,
-            version,
-            verifier_count,
-            approval_threshold,
-        }
-        .publish(&env);
-        Ok(version)
-    }
-
     pub fn approve_terms(
         env: Env,
         approver: Address,
@@ -214,7 +175,7 @@ impl RotatingPoolContract {
             return Err(ContractError::InvalidPoolStatus);
         }
         if pool.terms_version == 0 {
-            return Err(ContractError::TermsNotProposed);
+            return Err(ContractError::TermsNotReady);
         }
         if version != pool.terms_version {
             return Err(ContractError::TermsVersionMismatch);
@@ -253,15 +214,12 @@ impl RotatingPoolContract {
             return Err(ContractError::PoolNotFull);
         }
         if pool.terms_version == 0 {
-            return Err(ContractError::TermsNotProposed);
+            return Err(ContractError::TermsNotReady);
         }
         if pool.order_mode == OrderMode::Fixed && pool.recipient_order.len() != pool.member_limit {
             return Err(ContractError::InvalidRecipientOrder);
         }
         validate_recipient_order(&pool, &pool.recipient_order)?;
-        if !(MIN_VERIFIERS..=MAX_VERIFIERS).contains(&pool.verifiers.len()) {
-            return Err(ContractError::InvalidVerifierSet);
-        }
         // `terms_approvals` only grows through `approve_terms`, which requires the approver to
         // be an existing member and rejects a repeat approval for the same version, so it is a
         // duplicate-free subset of `pool.members`. Once its length equals `member_limit` (and
@@ -295,8 +253,6 @@ impl RotatingPoolContract {
             pot: 0,
             seller: None,
             doc_hash: None,
-            purchase_version: 0,
-            approvals: Vec::new(&env),
         };
 
         pool.status = PoolStatus::Active;
@@ -385,7 +341,7 @@ impl RotatingPoolContract {
         asset: Address,
         amount: i128,
         doc_hash: BytesN<32>,
-    ) -> Result<u32, ContractError> {
+    ) -> Result<(), ContractError> {
         member.require_auth();
         let pool = get_pool_or_error(&env, pool_id)?;
         if pool.status != PoolStatus::Active {
@@ -397,6 +353,7 @@ impl RotatingPoolContract {
         if round.phase != RoundPhase::AwaitingPurchase {
             return Err(ContractError::RoundNotReady);
         }
+        ensure_purchase_window(&env, &round)?;
         let recipient = round
             .recipient
             .clone()
@@ -418,14 +375,8 @@ impl RotatingPoolContract {
             return Err(ContractError::InvalidDocumentDigest);
         }
 
-        let version = round
-            .purchase_version
-            .checked_add(1)
-            .ok_or(ContractError::ArithmeticOverflow)?;
         round.seller = Some(seller.clone());
         round.doc_hash = Some(doc_hash.clone());
-        round.purchase_version = version;
-        round.approvals = Vec::new(&env);
         storage::write_round(&env, pool_id, &round);
 
         PurchaseProposed {
@@ -436,59 +387,9 @@ impl RotatingPoolContract {
             asset,
             amount,
             doc_hash,
-            version,
         }
         .publish(&env);
-        Ok(version)
-    }
-
-    pub fn approve_purchase(
-        env: Env,
-        verifier: Address,
-        pool_id: u64,
-        round: u32,
-        proposal_version: u32,
-    ) -> Result<u32, ContractError> {
-        verifier.require_auth();
-        let pool = get_pool_or_error(&env, pool_id)?;
-        if pool.status != PoolStatus::Active {
-            return Err(ContractError::InvalidPoolStatus);
-        }
-        if round != pool.current_round {
-            return Err(ContractError::WrongRound);
-        }
-        let mut round_state =
-            storage::read_round(&env, pool_id, round).ok_or(ContractError::WrongRound)?;
-        if round_state.phase != RoundPhase::AwaitingPurchase {
-            return Err(ContractError::RoundNotReady);
-        }
-        if round_state.purchase_version == 0 {
-            return Err(ContractError::PurchaseNotFound);
-        }
-        if proposal_version != round_state.purchase_version {
-            return Err(ContractError::PurchaseVersionMismatch);
-        }
-        if !is_address_in(&pool.verifiers, &verifier) {
-            return Err(ContractError::UnauthorizedVerifier);
-        }
-        if storage::has_purchase_approval(&env, pool_id, round, proposal_version, &verifier) {
-            return Err(ContractError::AlreadyApproved);
-        }
-
-        storage::write_purchase_approval(&env, pool_id, round, proposal_version, &verifier);
-        round_state.approvals.push_back(verifier.clone());
-        let approval_count = round_state.approvals.len();
-        storage::write_round(&env, pool_id, &round_state);
-
-        PurchaseApproved {
-            pool_id,
-            round,
-            verifier,
-            version: proposal_version,
-            approval_count,
-        }
-        .publish(&env);
-        Ok(approval_count)
+        Ok(())
     }
 
     /// Draw-mode only. Once every member has paid into the round (`AwaitingDraw`), anyone may
@@ -514,6 +415,7 @@ impl RotatingPoolContract {
         if round.phase != RoundPhase::AwaitingDraw {
             return Err(ContractError::RoundNotReady);
         }
+        ensure_purchase_window(&env, &round)?;
 
         let mut candidates: Vec<Address> = Vec::new(&env);
         for member in pool.members.iter() {
@@ -561,6 +463,7 @@ impl RotatingPoolContract {
         if round.phase != RoundPhase::AwaitingPurchase {
             return Err(ContractError::RoundNotReady);
         }
+        ensure_purchase_window(&env, &round)?;
 
         // The seller receives the round pot plus the recipient's own escrowed down payment.
         let payout_amount = purchase_amount(&pool)?;
@@ -576,28 +479,7 @@ impl RotatingPoolContract {
             return Err(ContractError::StorageInvariantViolation);
         }
 
-        let mut recorded_approvals = 0_u32;
-        for verifier in pool.verifiers.iter() {
-            if storage::has_purchase_approval(
-                &env,
-                pool_id,
-                round_index,
-                round.purchase_version,
-                &verifier,
-            ) {
-                recorded_approvals = recorded_approvals
-                    .checked_add(1)
-                    .ok_or(ContractError::ArithmeticOverflow)?;
-            }
-        }
-        if recorded_approvals != round.approvals.len() {
-            return Err(ContractError::StorageInvariantViolation);
-        }
-        if recorded_approvals < pool.approval_threshold {
-            return Err(ContractError::PurchaseNotApproved);
-        }
-
-        // `round.pot == payout_amount` (checked above) already implies exactly `member_limit`
+        // `round.pot == expected_pot` (checked above) already implies exactly `member_limit`
         // distinct deposits, since every deposit adds exactly `contribution_amount` and a
         // second deposit from the same member is rejected. `round.paid.len()` (already loaded,
         // no extra storage reads) confirms this cheaply even at 30 members instead of
@@ -646,8 +528,6 @@ impl RotatingPoolContract {
                 pot: 0,
                 seller: None,
                 doc_hash: None,
-                purchase_version: 0,
-                approvals: Vec::new(&env),
             })
         } else {
             None
@@ -855,16 +735,20 @@ impl RotatingPoolContract {
     ) -> Result<MemberStatusView, ContractError> {
         let pool = get_pool_or_error(&env, pool_id)?;
         let member_state = storage::read_member(&env, pool_id, &member);
-        let received = member_state.as_ref().map(|state| state.received).unwrap_or(false);
-        let refundable = if member_state.is_none() || storage::has_refund_claimed(&env, pool_id, &member) {
-            0
-        } else {
-            refundable_amount(
-                &pool,
-                storage::has_deposit(&env, pool_id, pool.current_round, &member),
-                received,
-            )?
-        };
+        let received = member_state
+            .as_ref()
+            .map(|state| state.received)
+            .unwrap_or(false);
+        let refundable =
+            if member_state.is_none() || storage::has_refund_claimed(&env, pool_id, &member) {
+                0
+            } else {
+                refundable_amount(
+                    &pool,
+                    storage::has_deposit(&env, pool_id, pool.current_round, &member),
+                    received,
+                )?
+            };
         Ok(MemberStatusView {
             refundable,
             received,
@@ -879,6 +763,16 @@ impl RotatingPoolContract {
         ensure_pool_exists(&env, pool_id)?;
         Ok(storage::has_refund_claimed(&env, pool_id, &member))
     }
+}
+
+fn ensure_purchase_window(env: &Env, round: &RoundState) -> Result<(), ContractError> {
+    let deadline = round
+        .purchase_deadline
+        .ok_or(ContractError::StorageInvariantViolation)?;
+    if env.ledger().timestamp() >= deadline {
+        return Err(ContractError::DeadlineReached);
+    }
+    Ok(())
 }
 
 fn apply_member_payment(
@@ -1054,40 +948,6 @@ fn validate_recipient_order(pool: &Pool, order: &Vec<Address>) -> Result<(), Con
         }
     }
     Ok(())
-}
-
-fn validate_verifier_policy(
-    env: &Env,
-    pool: &Pool,
-    verifiers: &Vec<Address>,
-) -> Result<(), ContractError> {
-    if !(MIN_VERIFIERS..=MAX_VERIFIERS).contains(&verifiers.len()) {
-        return Err(ContractError::InvalidVerifierSet);
-    }
-    for index in 0..verifiers.len() {
-        let candidate = verifiers
-            .get(index)
-            .ok_or(ContractError::InvalidVerifierSet)?;
-        if candidate == pool.creator
-            || candidate == pool.token
-            || candidate == pool.demo_seller
-            || candidate == env.current_contract_address()
-            || is_address_in(&pool.members, &candidate)
-        {
-            return Err(ContractError::VerifierCannotBeParticipant);
-        }
-        for previous in 0..index {
-            if verifiers.get(previous) == Some(candidate.clone()) {
-                return Err(ContractError::DuplicateVerifier);
-            }
-        }
-    }
-    Ok(())
-}
-
-/// Demo quorum: at least 2/3 of verifiers, rounded up.
-fn compute_quorum(verifier_count: u32) -> u32 {
-    (verifier_count.saturating_mul(2).saturating_add(2)) / 3
 }
 
 fn is_address_in(list: &Vec<Address>, candidate: &Address) -> bool {

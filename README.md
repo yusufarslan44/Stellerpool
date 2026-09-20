@@ -1,157 +1,169 @@
-# Stellerpool — şeffaf grup tasarruf havuzu (Stellar / Soroban)
+# Stellarpool — a transparent group savings pool (Soroban smart contract)
 
-> Birlikte biriktir. Her şeyi doğrula. — *Save together. Verify everything.*
+> Save together. Verify everything.
 
-Rise In x Stellar **Pro Hackathon 2026** projesi · Track: **Genesis** (teslimde seçilecek) · Ağ: **Stellar Testnet**
+Rise In x Stellar **Pro Hackathon 2026** project · Track: **Genesis** (to be selected at submission) · Network: **Stellar Testnet**
 
-## Neden? (Narrative "Why")
+## Why? (Narrative "Why")
 
-Türkiye'de ev, araç ya da ortak bir hedef için grup halinde birikim yapmak yaygındır: altın günleri, tasarruf finansman şirketlerinin (Eminevim, Fuzul gibi) çekilişli ya da sıralı grupları. Ortak sorun **güvendir**: para bir kişinin ya da bir kurumun elindedir, kurallar herkese görünmez, biri ödemeyi bırakınca ne olacağı belirsizdir.
+In Turkey, saving in a group for a home, a car or a shared goal is common: rotating "gold days" circles and the draw-based or ordered groups of savings-finance companies (such as Eminevim and Fuzul). The shared problem is **trust**: the money sits with one person or one institution, the rules are not visible to everyone, and it is unclear what happens when someone stops paying.
 
-Stellerpool bu koordinasyonu **Soroban akıllı sözleşmesine** taşır. Katkılar tur bazında kontratta kilitlenir, kurucunun ortak parayı çekme yetkisi yoktur, ödeme yalnızca üyelerin onayladığı kurallar ve doğrulayıcı onayı sonrası, önceden belirlenmiş satıcıya gider. Ödeme aksarsa tur durur ve yalnızca o turun katkıları sahiplerine iade edilir. **Hedef kullanıcı:** birbirini tanıyan, ortak bir alım için sırayla ya da kurayla birikim yapmak isteyen küçük gruplar.
+Stellarpool moves this coordination into a **Soroban smart contract**. Contributions are locked in the contract per round, the founder has no authority to withdraw the shared money, and payment goes to a predefined demo seller only after the rules the members approved are met, every contribution of the round is in, and the recipient has recorded the purchase. If payments stall, the round stops and only that round's contributions are refunded to their owners. **Target user:** small groups of people who know each other and want to save toward a shared purchase, by rotation or by draw.
 
-## Bugün ne çalışıyor, ne çalışmıyor?
+## Status of the new flow
 
-| Alan | Durum |
+**API v12** was developed in this repository, deployed to Testnet, and passes 33 contract tests. The verifier role and purchase approval were removed. In fixed order, the delivery order is created automatically from the join order once the pool is full; members still approve the starting terms. The entry point offers only Home, Car and Other: the term and the number of people are computed from the price, down payment and monthly installment. The quick demo keeps its own minute-scale schedule. The monthly schedule is set automatically, but every payment still needs the member's wallet signature.
+
+**The current Testnet contract is API v12:** [`CB5O6WCGCSA5PKH5HXWKO3WFEDHNEKJ5ZNW6EMNSERYDK6J4VYKLG46O`](https://stellar.expert/explorer/testnet/contract/CB5O6WCGCSA5PKH5HXWKO3WFEDHNEKJ5ZNW6EMNSERYDK6J4VYKLG46O). Old v11 pools stay in their own immutable contract; the same pool number in v12 can refer to a different pool. The v11/v10 proofs below belong to earlier contracts.
+
+## What works today, and what does not
+
+| Area | Status |
 |---|---|
-| Soroban kontratı (sponsorsuz, **API v11**: kura + 30 üye + **peşinat**) | ✅ Testnet'te yayında, 33 birim testi, canlı senaryolar koşuldu (kura + peşinat tam akış, iptal + iade, kurulamayan havuzun peşinat iadesi). Önceki v10 kanıtları aşağıda
-| Arayüz ↔ kontrat | ✅ Canlı kontrata karşı doğrulandı: üç havuz (sıralı, iptal, kura) okunup çiziliyor; `create_pool` (kura 24/30 üye, sıralı 4 üye) zincire gönderilmeden simüle edildi, 31 üye reddedildi. ⚠️ Cüzdan imzalı yazma akışı (havuz kur, öde, onayla, kura çek) bir cüzdanla uçtan uca henüz denenmedi |
-| Anchor | ✅ **Kendi işlettiğimiz SEP-1 / SEP-10 / SEP-24 anchor'ı** (`https://anchor-stellerpool.arslanyusuf.com`, Testnet, Node.js/TypeScript, kaynak: [`backend/`](backend/)). `TRYT` test varlığını basar (issuer `GBM3V2AHDEF3APOIKRCXCKVNW3UA2VWMSLTGELWRLBLIFSV7OVME6HOC`, SAC `CDATFFDUVSMP2OC6JKIRWJDUHFTNMWJ2ZXLUCDUTRD7FYXANOV7RXB3H`). Havuz sayfasında **katkı adımının içinde**: bakiyesi yetmeyen üye anchor ile havuzun kendi varlığını yükler. Uçtan uca doğrulandı (SEP-10 girişi, SEP-24 yatırma, gerçek on-chain TRYT transferi). ❌ **Türk lirası değil**: `TRYT` TRY'yi yalnızca temsil eden bir test varlığıdır, gerçek banka rayı yoktur. Cüzdan imzalı yatırma bir cüzdanla denenmedi |
-| Kura modu ve 30 üye | ✅ Kontratta canlı ([görev listesi](docs/CONTRACT_HANDOFF.md)); arayüzde "Kura" seçilebilir. Rastgelelik hackathon düzeyindedir |
-| Peşinat | ✅ Kontratta: üye başına, katılırken yatırılır, sıran gelince alımına eklenip satıcıya gider, iptalde harcanmamışsa iade edilir. Şirketlerdeki gibi birikime sayılmaz ve teminat değildir |
-| Mainnet | Salt okunur tanıtım derlemesi; cüzdan imzası veya fon işlemi yok |
-| Gerçek TL giriş/çıkışı | ❌ **Hackathon'un çekirdek gereksinimi karşılanmıyor**, doğrulanmış bir TRY anchor'ı bulunamadı ([ayrıntı](docs/altin-gunu-legal-boundary.md)) |
-| AI denetçisi | ❌ Çalışan entegrasyon yok, yol haritasında |
+| Soroban contract (sponsor-free, **API v12**: purchase without verifiers, automatic order, draw, 30 members, down payment) | ✅ Live on Testnet; 33 unit tests and v12 live scenarios. Earlier v11/v10 proofs are below |
+| Interface ↔ contract | ✅ The v12 interface was built against the new contract and checked with real Testnet reads. ⚠️ The wallet-signed write flow has not yet been tried end-to-end with a real Freighter |
+| Anchor | ✅ **Our own SEP-1 / SEP-10 / SEP-24 anchor** (`https://anchor-stellerpool.arslanyusuf.com`, Testnet, Node.js/TypeScript, source: [`backend/`](backend/)). It mints the `TRYT` test asset (issuer `GBM3V2AHDEF3APOIKRCXCKVNW3UA2VWMSLTGELWRLBLIFSV7OVME6HOC`, SAC `CDATFFDUVSMP2OC6JKIRWJDUHFTNMWJ2ZXLUCDUTRD7FYXANOV7RXB3H`). It sits **inside the contribution step** on the pool page: a member with insufficient balance loads the pool's own asset through the anchor. Verified end-to-end (SEP-10 login, SEP-24 deposit, a real on-chain TRYT transfer). ❌ **Not Turkish lira**: `TRYT` is only a test asset that represents TRY; there is no real banking rail. Wallet-signed deposit was not tried with a real wallet |
+| Draw mode and 30 members | ✅ Live in the contract ([task list](docs/CONTRACT_HANDOFF.md)); "Draw" can be selected in the interface. Randomness is hackathon-grade |
+| Down payment | ✅ In the contract: per member, paid on joining, added to your purchase and sent to the seller when your turn comes, refunded if unspent on cancellation. Unlike at companies it does not count toward savings and is not collateral |
+| Mainnet | Read-only showcase build; no wallet signing and no funds actions |
+| Real TRY in/out | ❌ **The hackathon's core requirement is not met**; no verified TRY anchor could be found ([details](docs/altin-gunu-legal-boundary.md)) |
+| AI reviewer | ❌ No working integration; on the roadmap |
 
-## Kontrat ve dağıtım kanıtı (Testnet)
+## Contract and deployment proof (Testnet)
 
-### Güncel kontrat: API v11 (kura + 30 üye + peşinat)
+### Current contract: API v12 (purchase without verifiers + automatic order)
 
-- **Kontrat ID:** [`CD23I5ZNVHOUBJOHODHHEW6NH7NB3FDBQ2DE2C2TST5BZM4KTJLBPK33`](https://stellar.expert/explorer/testnet/contract/CD23I5ZNVHOUBJOHODHHEW6NH7NB3FDBQ2DE2C2TST5BZM4KTJLBPK33) · API sürümü 11 · WASM SHA-256 `0f7ae90a…3b14` · 34.982 bayt · [yayın işlemi `7cc3648b…4dec`](https://stellar.expert/explorer/testnet/tx/7cc3648b7c6a6c163911a03eaa9406ecd075f8e9dcb9e4a63ac3af2417154dec)
-- **Değişiklik (v10 → v11):** `create_pool`'a `down_payment` (üye başına, 0 = kapalı) eklendi. `join_pool` peşinatı kontrata çeker; `propose_purchase` / `execute_round` alım tutarını *havuz + alıcının kendi peşinatı* olarak ister ve satıcıya bunu öder; `claim_refund` / `get_member_status` iade hakkına henüz harcanmamış peşinatı ekler; kurulamayan havuzda (`cancel_unstarted_pool`) katılanlar peşinatlarını geri alır. Yeni hata `InvalidDownPayment`. Peşinat 0 ise davranış v10 ile aynıdır.
-- **Birim testleri:** 33 (27 mevcut + 6 yeni): peşinatın katılırken çekilmesi ve alıma eklenmesi, kura modunda toz kalmaması, iptalde "mevcut tur katkısı + harcanmamış peşinat" iadesi, kurulamayan havuz iadesi, yetersiz bakiyeyle katılamama, negatif peşinat reddi.
-- **Canlı doğrulama (20 Eylül 2026, `TRYT` varlığı, arayüzün servis katmanı ve oluşturma formu, tek kullanımlık test anahtarlarıyla imzalı; gerçek Freighter ile deneme yapılmadı):**
-  - [Havuz #1](https://stellerpool.arslanyusuf.com/pool/1): 3 üyeli **kura + 6 TRYT peşinat**, oluşturma formundan kuruldu ve tamamlandı. Katılırken 3 × 6 TRYT kontrata çekildi; her turda yalnızca havuz tutarıyla (30) yapılan alım önerisi **reddedildi**, kazananın peşinatı eklenmiş tutarla (36) kabul edildi; satıcıya turda 36, toplam 108 gitti; kazananlar M2 → M3 → M1 (tekrar yok); sonunda kontrat bakiyesi **0**.
-  - [Havuz #3](https://stellerpool.arslanyusuf.com/pool/3): **iptal + iade**. 3 üye, peşinat 5, katkı 10. Tur 1'de M1 aldı, 2. turda M3 ödemedi → ek süre → iptal. İade hakları M1 = 10 (aldı, yalnızca bu tur), M2 = 15 (katkı + peşinat), M3 = 5 (yalnızca peşinat); üçü de tam aldı, ikinci iade reddedildi.
-  - [Havuz #4](https://stellerpool.arslanyusuf.com/pool/4): **kurulamayan havuz**. Kuruluş süresi doldu, iptal edildi, katılan iki üye 4 TRYT peşinatını tam geri aldı.
-  - Havuz #2, test sürelerinin kısa ayarlanması yüzünden yarım kalmış bir denemedir (iptal edilip iade ettirildi); kanıt sayılmaz.
+- **Contract ID:** [`CB5O6WCGCSA5PKH5HXWKO3WFEDHNEKJ5ZNW6EMNSERYDK6J4VYKLG46O`](https://stellar.expert/explorer/testnet/contract/CB5O6WCGCSA5PKH5HXWKO3WFEDHNEKJ5ZNW6EMNSERYDK6J4VYKLG46O) · API version 12 · WASM SHA-256 `aa6e0070f62199a7cbd2bd8ccc3ae7dfda3e5295924ba015a550f63a7c76692c` · 30,996 bytes · [WASM upload](https://stellar.expert/explorer/testnet/tx/39f74452ca7dd4d1bf97a661c91693fb1863417beae71ee55c3a0256e07e5e09) · [contract deployment](https://stellar.expert/explorer/testnet/tx/49c2a63e2b7ba13bf8904fc6b3cb93de847dc7d0b82fa1dcfd530b8ac47cd731).
+- **Flow:** In fixed order the order is written when the last member joins; members approve the terms. Everyone deposits their contribution, the recipient records the purchase, and within the deadline `execute_round` pays the demo seller. `propose_terms` and `approve_purchase` no longer exist. The normal schedule consists of 30-day rounds; every monthly contribution needs its own wallet signature. The quick demo uses 3-minute rounds.
+- **Testnet proof:** [Pool #2](https://stellar.expert/explorer/testnet/tx/6d8ccd206eb0222f88bb0b1113fe73e36c009a7c5bed538b28c464ae7a2d5acd) paid and completed both rounds in fixed order with no additional verifier (STLP test asset, no real delivery). `scripts/demo_testnet.sh` is used for the cancel/refund and draw scenarios.
 
-### Önceki sürüm: API v10 (kanıt olarak zincirde duruyor)
+### Previous contract: API v11 (draw + 30 members + down payment)
 
-- **Kontrat ID:** [`CC7W3SKQHBLZ2JPTGSK42H6IAJQ22A4PUK6CSN2T4PUJRY4LQ445GYMB`](https://stellar.expert/explorer/testnet/contract/CC7W3SKQHBLZ2JPTGSK42H6IAJQ22A4PUK6CSN2T4PUJRY4LQ445GYMB) · API sürümü 10 · WASM SHA-256 `6cc5e1a0…12b4` · 34.070 bayt
-- **Yükleme:** [`d0f9e5cb…7867`](https://stellar.expert/explorer/testnet/tx/d0f9e5cbbf023a9dde46ab2017b362f9ea8dc6a5ac643b109cabd304ba647867) · **Örnek oluşturma:** [`5c7ae114…91a1`](https://stellar.expert/explorer/testnet/tx/5c7ae11430ec06055f612027ab046888f88ddcd83d3addd6c6328bd92d7a91a1)
-- **Havuz #1 (sıralı, mutlu yol):** [`create_pool`](https://stellar.expert/explorer/testnet/tx/7f14ac89fcc63b43396c92a1770258fd9b4e9e1a6db5499c26e4c0d1fb3ee94e) → 1. tur [`RoundPaid`](https://stellar.expert/explorer/testnet/tx/78bc813cae56605d08dedf5cf303e158f5a0731517663e1ac2177ae2ef177d2b) → 2. tur [`RoundPaid + PoolCompleted`](https://stellar.expert/explorer/testnet/tx/ad5a8e6e9a379816c18fb23f84d6a49f497b42a54987f2c861c9968bb3993a01)
-- **Havuz #2 (kanonik risk senaryosu):** [`create_pool`](https://stellar.expert/explorer/testnet/tx/5c20843227aea3656ca45c6a1644b6bf95df1fec033e3e4d67514d13e23755cd) → 1. tur ödendi [`RoundPaid`](https://stellar.expert/explorer/testnet/tx/a00b3cf770d21634f64bebbbf75b46a897840061c20d6a2d3be33db06eb70ad6) → 2. turda yalnızca bir üye yatırdı [`deposit`](https://stellar.expert/explorer/testnet/tx/f513244596c4ba07d929fa8820d9aa92e1965b2ae5efdfe589b985528fa048fc) → süre aşımı, `mark_overdue`, `abort_pool` → yalnızca o üye iadesini çekti [`claim_refund`](https://stellar.expert/explorer/testnet/tx/d4171a4866f9e7fa15db371c00c26737ed132c33baba0b3363f482bcf4d60fd1); ilk turda alan üyenin payı geri alınamadı
-- **Havuz #3 (kura):** [`create_pool`](https://stellar.expert/explorer/testnet/tx/38dec31c1c9cfc2388ce1f6adda32ad7d97c1ecd77e245b9f6226a52d195e554) (`order_mode: Draw`) → iki üye yatırdı, tur kura bekliyor [`RoundAwaitingDraw`](https://stellar.expert/explorer/testnet/tx/b1b05c4dfc1c3d40eb5b12572b41fa640c1385e491b592a774a872798756f4d4) → **havuz üyesi olmayan bir hesap** kurayı çekti [`draw_recipient`](https://stellar.expert/explorer/testnet/tx/11845a01bbfe010755af7e74588b408b469066ee8f9247dd668d12fdd0ea2822) → [`execute_round`](https://stellar.expert/explorer/testnet/tx/a253b14aee6bbd21329eb085ac7532fb984cabe3a92ee44f0bda698961e82609) → 2. turda kalan tek aday deterministik seçildi [`draw_recipient`](https://stellar.expert/explorer/testnet/tx/a9266d236b33ab5b262942e5c9734f81e6dbcb641eb040d199866f7193ed74f9) → [`execute_round`](https://stellar.expert/explorer/testnet/tx/22b4c62efd755a75ca4c4d1f8a467c9a02f48890c49dba1f3796b50054bb72fa)
-- **30 üye kaynak ölçümü** (yerel test, gerçek Wasm ana bilgisayarı için alt sınır): `deposit` ≈ 1,1 M, `draw_recipient` ≈ 1,6 M, `execute_round` ≈ 1,4 M komut (Mainnet sınırı 400 M); okuma/yazma girdileri tek haneli. Gerçek 30 kişilik Testnet koşusu yapılmadı.
-- Canlı havuzlar #1–#3 kontrat ekibinin bastığı `STLP` demo varlığıyla kuruldu (SAC `CAOV35NPIJXHWA7QPXXERRJQ4ZTDUGAEHA7FKB6QIOTIOTI62B35ZNWI`). Canlı sitede yeni havuzlar anchor'ın `TRYT` varlığıyla kurulur; arayüz her havuzun kendi token'ını okur, etiket ve bakiye buna göre gösterilir.
-- Önceki üç kontrat örneği (iki sponsorlu, bir v9 sponsorsuz) zincirde durur; **teslimde geçerli olan güncel kontrat yukarıdaki v11'dir; v10 kanıt olarak durur.** Ayrıntı ve karar gerekçeleri: [IMPLEMENTATION_LOG.md](docs/IMPLEMENTATION_LOG.md) "Phase 12" ve "Phase 13".
-- **Demo URL:** https://stellerpool.arslanyusuf.com (Testnet, v11 kontratına bağlı; kura + peşinat kanıtı için `/pool/1`). Yalnızca Testnet, gerçek para yok.
-- **Uçtan uca arayüz doğrulaması (v10 kontratı, 20 Eylül 2026, `TRYT` ile; bu havuzlar v10 örneğindedir, canlı site artık v11'i gösterir):** Arayüzün kendi butonları ve servis katmanı, cüzdan uzantısı yerine **tek kullanımlık test anahtarlarıyla imzalatılarak** koşturuldu (gerçek Freighter ile deneme henüz yapılmadı):
-  - Havuz #5 (v10): 3 üyeli **kura** havuzu, oluşturma formundan kuruldu. Katıl → şartlar → onay → başlat → katkı → **kura** → alım önerisi → 2 doğrulayıcı onayı → tutar satıcıya. Kazananlar sırayla M1, M3, M2: her tur yalnızca henüz almamışlar arasından çıktı, tekrar yok. Üye M3'ün bakiyesi arayüzdeki anchor akışıyla (SEP-10 girişi + SEP-24 yatırma) 0'dan 40 TRYT'ye yüklendi. Sonda satıcı 90 TRYT aldı, kontrat bakiyesi 0.
-  - Havuz #6 (v10): 2 üyeli **sabit sıra** havuzu, onaylanan sıra birebir uygulandı, iki tur ödendi.
-  - Havuz #7 (v10): **iptal + iade**. Ödemeyen üye yüzünden katkı süresi doldu → ek süre → iptal; yalnızca ödeyen üye katkısını geri aldı, ödemeyen üyenin ve ikinci iade denemesi reddedildi, kontrat bakiyesi 0.
+- **Contract ID:** [`CD23I5ZNVHOUBJOHODHHEW6NH7NB3FDBQ2DE2C2TST5BZM4KTJLBPK33`](https://stellar.expert/explorer/testnet/contract/CD23I5ZNVHOUBJOHODHHEW6NH7NB3FDBQ2DE2C2TST5BZM4KTJLBPK33) · API version 11 · WASM SHA-256 `0f7ae90a…3b14` · 34,982 bytes · [deployment transaction `7cc3648b…4dec`](https://stellar.expert/explorer/testnet/tx/7cc3648b7c6a6c163911a03eaa9406ecd075f8e9dcb9e4a63ac3af2417154dec)
+- **Change (v10 → v11):** `create_pool` gained `down_payment` (per member, 0 = off). `join_pool` pulls the down payment into the contract; `propose_purchase` / `execute_round` require the purchase amount to be *pool + the recipient's own down payment* and pay that to the seller; `claim_refund` / `get_member_status` add the not-yet-spent down payment to the refund entitlement; in a pool that could not be set up (`cancel_unstarted_pool`), those who joined get their down payments back. New error `InvalidDownPayment`. With a down payment of 0, behavior is identical to v10.
+- **Unit tests:** 33 (27 existing + 6 new): the down payment being pulled on join and added to the purchase, no dust in draw mode, refund of "current-round contribution + unspent down payment" on cancellation, refund for a pool that could not be set up, being unable to join with too little balance, rejection of a negative down payment.
+- **Live verification (20 September 2026, `TRYT` asset, the interface's service layer and creation form, signed with single-use test keys; not tried with a real Freighter):**
+  - Pool #1 (v11): a 3-member **draw + 6 TRYT down payment**, created from the creation form and completed. On joining, 3 × 6 TRYT were pulled into the contract; each round a purchase proposal made with the pool amount alone (30) was **rejected**, and the amount including the winner's down payment (36) was accepted; the seller received 36 per round, 108 in total; winners were M2 → M3 → M1 (no repeats); the contract balance ended at **0**.
+  - Pool #3 (v11): **cancellation + refund**. 3 members, down payment 5, contribution 10. In round 1 M1 received; in round 2 M3 did not pay → grace period → cancellation. Refund entitlements were M1 = 10 (received, this round only), M2 = 15 (contribution + down payment), M3 = 5 (down payment only); all three were paid in full and a second refund was rejected.
+  - Pool #4 (v11): **a pool that could not be set up**. The setup period ended, it was cancelled, and the two members who had joined got their 4 TRYT down payments back in full. The on-chain records of older pools stay in the [v11 contract](https://stellar.expert/explorer/testnet/contract/CD23I5ZNVHOUBJOHODHHEW6NH7NB3FDBQ2DE2C2TST5BZM4KTJLBPK33).
+  - Pool #2 is an unfinished attempt caused by too-short test durations (it was cancelled and refunded); it does not count as proof.
 
-## Havuz kuralı
+### Previous version: API v10 (kept on-chain as proof)
 
-- Davetli, sabit üyeli grupta katkı, takvim ve sıra üyelerin aynı sürümü onaylamasıyla kilitlenir. Kurucu tek başına değiştiremez, fon çekemez.
-- Her turda herkes **kendi** katkısını yatırmadan o turun tahsisatı açılmaz. Ödeme gecikirse ek süre verilir; karşılanmazsa tur durdurulur.
-- O tur henüz satıcıya ödenmediyse yalnızca **o turda yatırılan katkılar** iade edilir. Satıcıya gitmiş katkılar kontrattan geri alınamaz.
-- Demo tahsisatı yalnızca izinli test satıcısına, alım önerisi ve doğrulayıcı eşiği (2/3) onayı sonrasında gider. Alım için ayrı son tarih vardır.
-- Ayrı sponsor, avans veya platform garantisi yoktur.
-- **Alıcı iki yolla belirlenir:** üyelerin onayladığı sabit sıra ya da **kura** (her tur, henüz teslim almamış üyeler arasından, tüm katkılar tamamlanınca; herkes çekebilir, kazanan zaten payını ödemiştir). Grup **2–30 üye**. Kura rastgeleliği hackathon düzeyindedir (`env.prng()`).
+- **Contract ID:** [`CC7W3SKQHBLZ2JPTGSK42H6IAJQ22A4PUK6CSN2T4PUJRY4LQ445GYMB`](https://stellar.expert/explorer/testnet/contract/CC7W3SKQHBLZ2JPTGSK42H6IAJQ22A4PUK6CSN2T4PUJRY4LQ445GYMB) · API version 10 · WASM SHA-256 `6cc5e1a0…12b4` · 34,070 bytes
+- **Upload:** [`d0f9e5cb…7867`](https://stellar.expert/explorer/testnet/tx/d0f9e5cbbf023a9dde46ab2017b362f9ea8dc6a5ac643b109cabd304ba647867) · **Sample creation:** [`5c7ae114…91a1`](https://stellar.expert/explorer/testnet/tx/5c7ae11430ec06055f612027ab046888f88ddcd83d3addd6c6328bd92d7a91a1)
+- **Pool #1 (ordered, happy path):** [`create_pool`](https://stellar.expert/explorer/testnet/tx/7f14ac89fcc63b43396c92a1770258fd9b4e9e1a6db5499c26e4c0d1fb3ee94e) → round 1 [`RoundPaid`](https://stellar.expert/explorer/testnet/tx/78bc813cae56605d08dedf5cf303e158f5a0731517663e1ac2177ae2ef177d2b) → round 2 [`RoundPaid + PoolCompleted`](https://stellar.expert/explorer/testnet/tx/ad5a8e6e9a379816c18fb23f84d6a49f497b42a54987f2c861c9968bb3993a01)
+- **Pool #2 (canonical risk scenario):** [`create_pool`](https://stellar.expert/explorer/testnet/tx/5c20843227aea3656ca45c6a1644b6bf95df1fec033e3e4d67514d13e23755cd) → round 1 paid [`RoundPaid`](https://stellar.expert/explorer/testnet/tx/a00b3cf770d21634f64bebbbf75b46a897840061c20d6a2d3be33db06eb70ad6) → in round 2 only one member deposited [`deposit`](https://stellar.expert/explorer/testnet/tx/f513244596c4ba07d929fa8820d9aa92e1965b2ae5efdfe589b985528fa048fc) → deadline missed, `mark_overdue`, `abort_pool` → only that member claimed their refund [`claim_refund`](https://stellar.expert/explorer/testnet/tx/d4171a4866f9e7fa15db371c00c26737ed132c33baba0b3363f482bcf4d60fd1); the share of the member who received in round 1 could not be recovered
+- **Pool #3 (draw):** [`create_pool`](https://stellar.expert/explorer/testnet/tx/38dec31c1c9cfc2388ce1f6adda32ad7d97c1ecd77e245b9f6226a52d195e554) (`order_mode: Draw`) → two members deposited, the round is waiting for the draw [`RoundAwaitingDraw`](https://stellar.expert/explorer/testnet/tx/b1b05c4dfc1c3d40eb5b12572b41fa640c1385e491b592a774a872798756f4d4) → **an account that is not a pool member** held the draw [`draw_recipient`](https://stellar.expert/explorer/testnet/tx/11845a01bbfe010755af7e74588b408b469066ee8f9247dd668d12fdd0ea2822) → [`execute_round`](https://stellar.expert/explorer/testnet/tx/a253b14aee6bbd21329eb085ac7532fb984cabe3a92ee44f0bda698961e82609) → in round 2 the only remaining candidate was chosen deterministically [`draw_recipient`](https://stellar.expert/explorer/testnet/tx/a9266d236b33ab5b262942e5c9734f81e6dbcb641eb040d199866f7193ed74f9) → [`execute_round`](https://stellar.expert/explorer/testnet/tx/22b4c62efd755a75ca4c4d1f8a467c9a02f48890c49dba1f3796b50054bb72fa)
+- **30-member resource measurement** (local test, a lower bound for a real Wasm host): `deposit` ≈ 1.1 M, `draw_recipient` ≈ 1.6 M, `execute_round` ≈ 1.4 M instructions (Mainnet limit 400 M); read/write entries are single-digit. No real 30-person Testnet run was made.
+- Live pools #1–#3 were created with the `STLP` demo asset minted by the contract team (SAC `CAOV35NPIJXHWA7QPXXERRJQ4ZTDUGAEHA7FKB6QIOTIOTI62B35ZNWI`). On the live site, new pools are created with the anchor's `TRYT` asset; the interface reads each pool's own token and shows labels and balances accordingly.
+- Earlier contract instances stay on-chain; **the current contract is the v12 above; v11 and v10 remain as proof.** Details and decision rationale: [IMPLEMENTATION_LOG.md](docs/IMPLEMENTATION_LOG.md) "Phase 12" and "Phase 13".
+- **Demo URL:** https://stellerpool.arslanyusuf.com (Testnet; new pools are on the v12 contract). Testnet only, no real money.
+- **End-to-end interface verification (v10 contract, 20 September 2026, with `TRYT`; these pools are on the v10 instance, and the live site now points to a newer contract):** The interface's own buttons and service layer were run, signed with **single-use test keys instead of a wallet extension** (not yet tried with a real Freighter):
+  - Pool #5 (v10): a 3-member **draw** pool, created from the creation form. Join → terms → approval → start → contribution → **draw** → purchase proposal → 2 verifier approvals → amount to the seller. Winners were M1, M3, M2 in turn: every round came only from those who had not yet received, with no repeats. Member M3's balance was loaded from 0 to 40 TRYT through the interface's anchor flow (SEP-10 login + SEP-24 deposit). At the end the seller received 90 TRYT and the contract balance was 0.
+  - Pool #6 (v10): a 2-member **fixed-order** pool; the approved order was applied exactly and two rounds were paid.
+  - Pool #7 (v10): **cancellation + refund**. The contribution deadline passed because a member did not pay → grace period → cancellation; only the paying member reclaimed their contribution, the non-paying member's claim and a second refund attempt were rejected, and the contract balance was 0.
 
-**Açık ekonomik risk:** Dört üye 10'ar birim yatırıp ilk turda 40 birim A'nın satıcısına ödenirse havuzda ilk turun parası kalmaz. A sonraki turda ödemezse yeni tur durur; B, C ve D'nin ilk tur katkıları kontrattan geri alınamaz. Üye sayısını büyütmek bunu çözmez. Bu risk arayüzde ve hikâye bölümünde görünür bırakıldı. [Ayrıntı](docs/plan.md).
+## Pool rules
 
-## Fuzul Ev / Oto ve Eminevim ile karşılaştırma
+- In an invite-only, fixed-membership group, the contribution, schedule and order are locked once the members approve the same version. The founder cannot change them alone and cannot withdraw funds.
+- In each round the round's allocation is not opened until everyone has deposited **their own** contribution. If a payment is late, a grace period is given; if it is not met, the round is stopped.
+- If the round has not yet been paid out to the seller, only **the contributions paid in that round** are refunded. Contributions that already went to a seller cannot be recovered from the contract.
+- In API v12 the demo allocation goes only to the allowed test seller, after the recipient's purchase record and after all contributions are complete. There is no extra verifier approval; there is a separate deadline for the purchase.
+- There is no separate sponsor, advance or platform guarantee.
+- **The recipient is determined in two ways:** a fixed order approved by the members, or a **draw** (each round, among members who have not yet received, once all contributions are complete; anyone can hold it, and the winner has already paid their share). The group is **2–30 members**. Draw randomness is hackathon-grade (`env.prng()`).
 
-Tasarruf finansman şirketleri faizsiz çalışır: müşteri sözleşme tutarını vadeye bölerek taksit öder, teslim sırası çekilişle ya da ödeme oranına göre belirlenir, şirket tahsisatı satıcıya öder. Maliyet faiz değil tek seferlik **organizasyon ücretidir**. Aşağıdaki şirket sütunu kamuya açık sayfalardan özetlenmiş **tipik** değerlerdir ([Fuzul Ev SSS](https://www.fuzulev.com.tr/merak-edilenler), [konut finansmanı](https://www.fuzulev.com.tr/ev-finansmani), [hesaplama rehberi](https://www.tasarruffinansmani.com/blog/fuzulev-hesaplama-rehberi)); oranlar kaynaklara ve sözleşmeye göre değişir, bu bir tavsiye değildir.
+**Open economic risk:** If four members deposit 10 units each and 40 units are paid to A's seller in round one, no round-one money is left in the pool. If A does not pay in the next round, the new round stops; B, C and D's round-one contributions cannot be recovered from the contract. Growing the number of members does not solve this. The risk is kept visible in the interface and in the story section. [Details](docs/plan.md).
 
-| | Tasarruf finansman şirketleri (tipik) | Stellerpool (Testnet prototipi) |
+## Comparison with Fuzul Ev / Oto and Eminevim
+
+Savings-finance companies work without interest: the customer pays installments by dividing the contract amount over the term, the delivery order is determined by draw or by payment ratio, and the company pays the allocation to the seller. The cost is not interest but a one-time **organization fee**. The company column below shows **typical** values summarized from public pages ([Fuzul Ev FAQ](https://www.fuzulev.com.tr/merak-edilenler), [home financing](https://www.fuzulev.com.tr/ev-finansmani), [calculation guide](https://www.tasarruffinansmani.com/blog/fuzulev-hesaplama-rehberi)); rates vary by source and contract, and this is not advice.
+
+| | Savings-finance companies (typical) | Stellarpool (Testnet prototype) |
 |---|---|---|
-| Fon | Şirketin ayrılmış fon havuzu | Soroban kontratında tur bazında kilitli, kurucu çekemez |
-| Taksit | (Sözleşme tutarı + organizasyon ücreti) ÷ vade | Hedef tutar ÷ kişi sayısı, ek ücret yok |
-| **Peşinat** | İsteğe bağlı; şirkete yatar, teslimi öne çeker ya da vadeyi kısaltır | **Kontratta, üye başına.** Katılırken yatırılır, sıran gelince alımına eklenip satıcıya gider, iptalde harcanmamışsa iade edilir. Yükseldikçe havuz hedefi küçülür, vade ve kişi sayısı azalır. Şirketlerdeki gibi birikime sayılmaz, teminat değildir |
-| **Ücret** | Tek seferlik organizasyon ücreti (yaklaşık %7–14), cayınca iade edilmez | **Yok**, kimseye pay ayrılmaz |
-| Vade ve grup büyüklüğü | Genelde 40–240 ay; grubu şirket belirler | Kişi sayısı kadar tur (2–30). **Otomatik:** havuz hedefi ÷ ödeyebileceğin taksit; istenirse elle belirlenir |
-| **Kura zamanı** | Çekilişli modelde her ay noter kontrolünde, ilk aydan itibaren; çekilişsizde teslim tarihi sözleşmede sabit | Her turda herkes taksidini yatırınca, herkesin çağırabileceği zincir işlemiyle; tarih sabit değil, noter yok |
-| Alıcı | Sıra ya da çekiliş | Onaylanan sabit sıra ya da kura (hackathon düzeyi rastgelelik) |
-| Kurallar | Sözleşme, şirkete bağlı | Herkese görünür, zincirde doğrulanabilir |
-| Teslim | Şirket tahsisatı hak edene öder | Doğrulayıcı onayıyla yalnızca izinli demo satıcısına |
-| Ödeme aksarsa | 6 aya kadar taksit dondurma, teslim erteleme | Ek süre → tur durur → mevcut tur iadesi |
-| Teslim sonrası güvence | İpotek/rehin, şirket taahhüdü | **Yok** (açık risk) |
-| Lisans | BDDK lisanslı (6361 sayılı Kanun) | **Yok**, Testnet, gerçek para yok |
+| Funds | The company's segregated fund pool | Locked in the Soroban contract per round, the founder cannot withdraw |
+| Installment | (Contract amount + organization fee) ÷ term | Target amount ÷ number of people, no extra fee |
+| **Down payment** | Optional; paid to the company, it brings delivery forward or shortens the term | **In the contract, per member.** Paid on joining, added to your purchase and sent to the seller when your turn comes, refunded if unspent on cancellation. The higher it is, the smaller the pool target and the fewer the terms and people. Unlike at companies it does not count toward savings and is not collateral |
+| **Fee** | One-time organization fee (about 7–14%), not refunded on withdrawal | **None**, no share is set aside for anyone |
+| Term and group size | Usually 40–240 months; the company decides the group | As many monthly rounds as people (2–30). **Automatic:** pool target ÷ the installment you can pay |
+| **Draw timing** | In the draw model, every month under notary supervision from the first month; in the non-draw model, the delivery date is fixed in the contract | Every round, once everyone has paid their installment, by an on-chain transaction anyone can call; the date is not fixed and there is no notary |
+| Recipient | Order or draw | The approved fixed order, or a draw (hackathon-grade randomness) |
+| Rules | A contract, tied to the company | Visible to everyone, verifiable on-chain |
+| Delivery | The company pays the allocation to the entitled member | Only to the allowed demo seller, after the purchase record |
+| If payment stalls | Installment freeze up to 6 months, delivery postponed | Grace period → the round stops → refund of the current round |
+| Post-delivery security | Mortgage/pledge, company commitment | **None** (an open risk) |
+| License | BDDK-licensed (Law No. 6361) | **None**, Testnet, no real money |
 
-Arayüzde bu fark oluşturma formunda ("Fuzul Ev / Oto gibi şirketlerden farkı ne?"), tur takviminde ("Bir tur nasıl geçer?") ve ana sayfa SSS'sinde anlatılır. **Organizasyon ücreti yoktur. Peşinat v11 kontratındadır ve yalnızca kendi alımına gider;** erken teslim alanın sonraki taksitleri bırakma riskini kapatmaz (teminat değildir). Yeni bir kontrat yayınında eski örnekler eski kontratta kalır, bu yüzden arayüz kontratın gerçek yeteneğini (`create_pool` girdileri) zincirden okur.
+In the interface, the user enters the total price, the down payment and the installment they can afford; the number of people and the term come out automatically, and the user is routed to an open pool with the same plan (if there is no suitable pool, a pool is opened first and then joined). **There is no organization fee. In the v12 contract the down payment goes only to the member's own purchase;** it does not close the risk of someone who received early stopping later installments (it is not collateral). When a new contract is published, old instances stay in the old contract, so the interface reads the contract's real capabilities (the `create_pool` inputs) from the chain.
 
-Bu bir lisanslı finansman ürününün yerine geçmez. Ayrıntı ve hukuki sınırlar: [altin-gunu-legal-boundary.md](docs/altin-gunu-legal-boundary.md), [legal-ai-path.md](docs/legal-ai-path.md).
+This does not replace a licensed financing product. Details and legal limits: [altin-gunu-legal-boundary.md](docs/altin-gunu-legal-boundary.md), [legal-ai-path.md](docs/legal-ai-path.md).
 
-## Akış ve mimari
+## Flow and architecture
 
-Mimari diyagram, bileşenler ve durum makinesi: [docs/architecture/architecture.md](docs/architecture/architecture.md).
+Architecture diagram, components and state machine: [docs/architecture/architecture.md](docs/architecture/architecture.md).
 
 ~~~mermaid
 flowchart TD
-  A[Havuz kurulur] --> B[Üyeler koşulları onaylar]
-  B --> C[Her üye bu turun katkısını yatırır]
-  C --> D{Tüm katkılar geldi mi?}
-  D -->|Hayır, ek süre doldu| E[Bu turun katkıları iade edilir]
-  D -->|Evet| F[Satıcı ve belge önerilir]
-  F --> G{Doğrulayıcı onayı ve süre uygun mu?}
-  G -->|Hayır| E
-  G -->|Evet| H[Bu turun tutarı demo satıcısına ödenir]
+  A[Pool is created] --> B[Members approve the terms]
+  B --> C[Each member deposits this round's contribution]
+  C --> D{Are all contributions in?}
+  D -->|No, grace period ended| E[This round's contributions are refunded]
+  D -->|Yes| F[Seller and document are proposed]
+  F --> G{Is the purchase record valid and in time?}
+  G -->|No| E
+  G -->|Yes| H[This round's amount is paid to the demo seller]
   H --> C
 ~~~
 
-## Teknoloji ve çalıştırma
+## Technology and running
 
-| Klasör | Amaç |
+| Folder | Purpose |
 |---|---|
-| `contracts/` | Rust/Soroban `rotating_pool` kontratı ve testleri |
+| `contracts/` | The Rust/Soroban `rotating_pool` contract and its tests |
 | `frontend/` | Vue 3, TypeScript, Vite, Tailwind, Stellar Wallets Kit, three.js |
-| `backend/` | Gerekirse zincir dışı doğrulama servisi (şu an boş) |
-| `scripts/` | Testnet dağıtım ve demo betikleri |
-| `docs/` | Ürün, hukuk, mimari ve devir belgeleri |
+| `backend/` | The SEP-1/10/24 anchor service (Node.js/TypeScript) |
+| `scripts/` | Testnet deployment and demo scripts |
+| `docs/` | Product, legal, architecture and handoff documents |
 
-**Arayüz:** `cd frontend && npm ci`, `.env` içine `VITE_ROTATING_POOL_CONTRACT_ID=<yukarıdaki ID>` yazın, `npm run dev`. Mainnet'e bağlanan işlemsiz tanıtım derlemesi için `VITE_STELLAR_NETWORK=mainnet npm run build`. İsteğe bağlı: `VITE_ANCHOR_HOME_DOMAIN` (varsayılan SDF test anchor'ı), `VITE_MAX_MEMBERS` (varsayılan 30; eski v9 kontratına bağlanıyorsanız 12).
-**Kontrat:** `cargo test --workspace`; Testnet dağıtımı için [scripts/README.md](scripts/README.md).
+**Interface:** `cd frontend && npm ci`, write `VITE_ROTATING_POOL_CONTRACT_ID=<the ID above>` into `.env`, then `npm run dev`. For the transaction-free showcase build that connects to Mainnet, use `VITE_STELLAR_NETWORK=mainnet npm run build`. Optional: `VITE_ANCHOR_HOME_DOMAIN` (default: the SDF test anchor), `VITE_MAX_MEMBERS` (default 30; use 12 if you connect to the old v9 contract).
+**Contract:** `cargo test --workspace`; for Testnet deployment see [scripts/README.md](scripts/README.md).
 
-## Stellar entegrasyonları
+## Stellar integrations
 
-- **Soroban akıllı kontrat** (Rust): havuz, tur ve iade muhasebesi, doğrulayıcı eşiği.
-- **Stellar Wallets Kit**: cüzdan bağlama ve imza.
-- **Anchor (SEP-1/10/24)**: kendi servisimiz (`backend/`, `anchor-stellerpool.arslanyusuf.com`). stellar.toml keşfi, cüzdan imzalı SEP-10 girişi, SEP-24 interaktif yatırma; ana sayfada tam anlatım, havuz sayfasında katkıdan önce "bakiye yükle" adımı olarak akışın içinde. Havuz varlığı yalnızca anchor aynı kod ve ihraççıyı sunuyorsa önerilir. Arayüz `TRYT`'yi gerçek TL olarak göstermez ("TRY temsili test varlığı · gerçek TL değil"). Bu bir demo anchor'ıdır: "TRY yatırdım" onayı bankayı değil sunucunun kendisini tetikler; gerçek bir lisanslı TRY anchor'ı bağlanınca yalnızca `VITE_ANCHOR_HOME_DOMAIN` değişir.
-- **Stellar Asset Contract (SAC)**: havuz varlığı (canlı sitede `TRYT`; eski canlı havuzlarda `STLP`; yapılandırmayla Testnet USDC).
-- **Stellar SDK 17 / Soroban RPC / Horizon**: sözleşme istemcisi ve hesap okumaları.
+- **Soroban smart contract** (Rust): pool, round and refund accounting, payment to the registered seller.
+- **Stellar Wallets Kit**: wallet connection and signing.
+- **Anchor (SEP-1/10/24)**: our own service (`backend/`, `anchor-stellerpool.arslanyusuf.com`). stellar.toml discovery, wallet-signed SEP-10 login, SEP-24 interactive deposit; fully explained on the home page and, on the pool page, built into the flow as a "load balance" step before contributing. The pool asset is suggested only if the anchor offers the same code and issuer. The interface does not present `TRYT` as real TRY ("test asset representing TRY · not real TRY"). This is a demo anchor: the "I deposited TRY" confirmation triggers the server itself, not a bank; when a real licensed TRY anchor is connected, only `VITE_ANCHOR_HOME_DOMAIN` changes.
+- **Stellar Asset Contract (SAC)**: the pool asset (`TRYT` on the live site; `STLP` in old live pools; Testnet USDC by configuration).
+- **Stellar SDK 17 / Soroban RPC / Horizon**: contract client and account reads.
 
-## Tasarım kararları ve çözülen zorluklar
+## Design decisions and problems solved
 
-- **Sponsor kaldırıldı:** İlk tasarım sponsor güvencesi içeriyordu; "para zaten kilitli" sezgisiyle çeliştiği için ve gerçek riski gizlediği için kaldırıldı. Yerine riski açıkça gösteren sponsorsuz model geldi.
-- **Yalnızca mevcut tur iade edilir:** Satıcıya ödenmiş turun parası kontratta değildir. Bu kısıt saklanmak yerine arayüzde kendiliğinden oynayan bir hikâyeyle ("Bir tur böyle işler") anlatılır.
-- **Arayüz ↔ kontrat uyumu:** Kontrat ve arayüz paralel geliştirildi. Arayüz, kontratın gerçek yeteneklerini zincirden okuyup uyumsuz sürümde (sponsorlu, kurasız) işlem göndermeyi reddeder. Canlı kontrata karşı testte stub'ın göstermediği iki şey bulundu ve düzeltildi: SDK'nın `Result` sarmalayıcısı (`Ok { value }`) ve kontratın `get_member_status.refundable` değerinin tamamlanmış havuzun son turunda da dolu dönmesi (para satıcıya gittiği için arayüz bunu sıfır gösterir; `claim_refund` yalnızca iptal edilmiş havuzda çalışır).
-- **Trade-off:** Kontrat yükseltilemez (yeni ID gerekir); zaman aşımı kendiliğinden işlem başlatmaz, herkes ilgili fonksiyonu çağırır.
+- **Sponsor removed:** The first design included a sponsor guarantee; it was removed because it contradicted the "the money is already locked" intuition and hid the real risk. It was replaced by a sponsor-free model that shows the risk openly.
+- **Only the current round is refunded:** The money of a round already paid to the seller is not in the contract. Instead of hiding this constraint, the interface explains it with a story that plays by itself ("This is how a round works").
+- **Interface ↔ contract compatibility:** The contract and the interface were developed in parallel. The interface reads the contract's real capabilities from the chain and refuses to send transactions on an incompatible version (sponsored, without draw). In testing against the live contract, two things the stub did not show were found and fixed: the SDK's `Result` wrapper (`Ok { value }`) and the contract's `get_member_status.refundable` value also being filled in the last round of a completed pool (because the money went to the seller, the interface shows it as zero; `claim_refund` works only on a cancelled pool).
+- **Trade-off:** The contract cannot be upgraded (a new ID is needed); a timeout does not start a transaction by itself, and anyone calls the relevant function.
 
-## Teslim durumu
+## Submission status
 
-- [x] Sponsorsuz kontrat (API v11: kura + 30 üye + peşinat), 33 birim testi, Testnet'te yayında ve canlı senaryolar koşuldu (kura + peşinat tam akış, iptal + iade, kurulamayan havuz)
-- [x] Kontrat ID ve dağıtım kanıtı (yukarıda)
-- [x] Arayüz kontrata bağlı: okuma canlı, `create_pool` simüle edildi, kura arayüzde seçilebilir
-- [x] Gerçek SEP-1/10/24 anchor istemcisi (test anchor'ı ile)
-- [x] Mainnet için işlemsiz, canlı ağ bilgisini okuyan tanıtım derlemesi
-- [x] Mimari diyagram ve teknik belgeler
-- [ ] Cüzdan imzalı yazma akışının (havuz kur/öde/onayla/kura çek) uçtan uca denemesi
-- [x] Herkese açık demo URL'i (https://stellerpool.arslanyusuf.com)
-- [ ] **Gerçek TL anchor giriş/çıkışı ve kullanılabilir bakiye** (hackathon çekirdek gereksinimi, karşılanmıyor)
-- [x] Kura modu ve 30 üye ([görev listesi](docs/CONTRACT_HANDOFF.md) uygulandı)
-- [ ] Sunum (resmi Stellar şablonu)
-- [ ] AI denetçisi için gerekçeli rapor ve insan kararı
+- [x] Sponsor-free contract (API v12: draw + 30 members + down payment + purchase without verifiers), 33 unit tests, live on Testnet with live scenarios run
+- [x] Contract ID and deployment proof (above)
+- [x] Interface connected to the contract: reads are live, `create_pool` was simulated, draw can be selected in the interface
+- [x] A real SEP-1/10/24 anchor client (with the test anchor) and our own anchor service
+- [x] A transaction-free showcase build for Mainnet that reads live network info
+- [x] Architecture diagram and technical documents
+- [ ] End-to-end trial of the wallet-signed write flow (create/pay/approve/draw)
+- [x] Public demo URL (https://stellerpool.arslanyusuf.com)
+- [ ] **Real TRY anchor in/out and usable balance** (a hackathon core requirement, not met)
+- [x] Draw mode and 30 members ([task list](docs/CONTRACT_HANDOFF.md) implemented)
+- [ ] Presentation (official Stellar template)
+- [ ] A reasoned report for the AI reviewer and a human decision
 
-## Yol haritası (hackathon sonrası)
+## Roadmap (after the hackathon)
 
-1. Commit-reveal veya harici kaynakla doğrulanabilir kura rastgeleliği; gerçek 30 kişilik yük denemesi.
-2. Doğrulanmış TRY anchor'ı ile gerçek TL giriş/çıkışı; çekme (Stellar → TRY) akışı.
-3. Passkey / akıllı cüzdan ile kripto bilgisi olmayan kullanıcı için giriş.
-4. AI destekli belge ve koşul tutarsızlığı raporu (fon yetkisi olmadan).
-5. Gerçek ürün için lisanslı ortaklık ve hukuki çerçeve (BDDK/SPK/TCMB değerlendirmesi).
+1. Verifiable draw randomness via commit-reveal or an external source; a real 30-person load test.
+2. Real TRY in/out with a verified TRY anchor; the withdrawal (Stellar → TRY) flow.
+3. Passkey / smart-wallet sign-in for users with no crypto background.
+4. An AI-assisted report on document and terms inconsistencies (without any funds authority).
+5. A licensed partnership and legal framework for a real product (BDDK/SPK/TCMB assessment).
 
-Bu belge ürün/teknik açıklamadır; hukuki görüş veya gerçek para güvencesi değildir.
+This document is a product/technical description; it is not legal advice or a guarantee of real money.
