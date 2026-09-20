@@ -35,6 +35,9 @@
                   ]
                 },
                 {
+                  "i128": "0"
+                },
+                {
                   "u64": "180"
                 },
                 {
@@ -408,6 +411,14 @@
                     },
                     "val": {
                       "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "down_payment"
+                    },
+                    "val": {
+                      "i128": "0"
                     }
                   },
                   {

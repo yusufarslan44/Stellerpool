@@ -13,7 +13,7 @@ pub use types::{
 
 use soroban_sdk::{contract, contractimpl, token, Address, BytesN, Env, Vec};
 
-pub const CONTRACT_VERSION: u32 = 10;
+pub const CONTRACT_VERSION: u32 = 11;
 pub const MIN_MEMBERS: u32 = 2;
 pub const MAX_MEMBERS: u32 = 30;
 pub const MIN_VERIFIERS: u32 = 2;
@@ -31,6 +31,7 @@ impl RotatingPoolContract {
         contribution_amount: i128,
         member_limit: u32,
         order_mode: OrderMode,
+        down_payment: i128,
         round_duration: u64,
         grace_duration: u64,
         purchase_duration: u64,
@@ -38,6 +39,9 @@ impl RotatingPoolContract {
         demo_seller: Address,
     ) -> Result<u64, ContractError> {
         creator.require_auth();
+        if down_payment < 0 {
+            return Err(ContractError::InvalidDownPayment);
+        }
         let created_at = env.ledger().timestamp();
         validate_pool_parameters(
             contribution_amount,
@@ -63,6 +67,7 @@ impl RotatingPoolContract {
             contribution_amount,
             member_limit,
             order_mode,
+            down_payment,
             members: Vec::new(&env),
             recipient_order: Vec::new(&env),
             verifiers: Vec::new(&env),
@@ -91,6 +96,7 @@ impl RotatingPoolContract {
             contribution_amount,
             member_limit,
             order_mode,
+            down_payment,
             round_duration,
             grace_duration,
             purchase_duration,
@@ -129,6 +135,21 @@ impl RotatingPoolContract {
         pool.members.push_back(member.clone());
         storage::write_member(&env, pool_id, &member, &state);
         storage::write_pool(&env, &pool);
+
+        // Down payment (peşinat): escrowed at join. Storage first, external token call last.
+        // It is spent on this member's own purchase, or refunded if the pool aborts / is cancelled
+        // before they receive (see `execute_round` and `claim_refund`).
+        if pool.down_payment > 0 {
+            let assigned_after = storage::read_pool_assigned_balance(&env, pool_id)
+                .checked_add(pool.down_payment)
+                .ok_or(ContractError::ArithmeticOverflow)?;
+            storage::write_pool_assigned_balance(&env, pool_id, assigned_after);
+            token::TokenClient::new(&env, &pool.token).transfer(
+                &member,
+                &env.current_contract_address(),
+                &pool.down_payment,
+            );
+        }
 
         MemberJoined {
             pool_id,
@@ -389,7 +410,7 @@ impl RotatingPoolContract {
         if asset != pool.token {
             return Err(ContractError::InvalidAsset);
         }
-        let expected_amount = expected_pot(&pool)?;
+        let expected_amount = purchase_amount(&pool)?;
         if amount != expected_amount {
             return Err(ContractError::InvalidPurchaseAmount);
         }
@@ -541,8 +562,9 @@ impl RotatingPoolContract {
             return Err(ContractError::RoundNotReady);
         }
 
-        let payout_amount = expected_pot(&pool)?;
-        if round.pot != payout_amount {
+        // The seller receives the round pot plus the recipient's own escrowed down payment.
+        let payout_amount = purchase_amount(&pool)?;
+        if round.pot != expected_pot(&pool)? {
             return Err(ContractError::StorageInvariantViolation);
         }
 
@@ -759,9 +781,8 @@ impl RotatingPoolContract {
         if pool.status != PoolStatus::Aborted {
             return Err(ContractError::RefundNotClaimable);
         }
-        if storage::read_member(&env, pool_id, &member).is_none() {
-            return Err(ContractError::NotMember);
-        }
+        let member_state =
+            storage::read_member(&env, pool_id, &member).ok_or(ContractError::NotMember)?;
         if storage::has_refund_claimed(&env, pool_id, &member) {
             return Err(ContractError::RefundAlreadyClaimed);
         }
@@ -770,11 +791,12 @@ impl RotatingPoolContract {
         // round already cleared its `RoundPhase` to `Settled` and advanced `current_round`, so
         // only the round active at abort time is ever refundable — matching the accepted risk
         // that an earlier round's payout cannot be recovered once it has settled.
-        let entitlement = if storage::has_deposit(&env, pool_id, pool.current_round, &member) {
-            pool.contribution_amount
-        } else {
-            0
-        };
+        // A down payment is refundable only while unspent, i.e. until the member has received.
+        let entitlement = refundable_amount(
+            &pool,
+            storage::has_deposit(&env, pool_id, pool.current_round, &member),
+            member_state.received,
+        )?;
         if entitlement <= 0 {
             return Err(ContractError::RefundNotClaimable);
         }
@@ -832,16 +854,17 @@ impl RotatingPoolContract {
         member: Address,
     ) -> Result<MemberStatusView, ContractError> {
         let pool = get_pool_or_error(&env, pool_id)?;
-        let refundable = if storage::has_refund_claimed(&env, pool_id, &member) {
+        let member_state = storage::read_member(&env, pool_id, &member);
+        let received = member_state.as_ref().map(|state| state.received).unwrap_or(false);
+        let refundable = if member_state.is_none() || storage::has_refund_claimed(&env, pool_id, &member) {
             0
-        } else if storage::has_deposit(&env, pool_id, pool.current_round, &member) {
-            pool.contribution_amount
         } else {
-            0
+            refundable_amount(
+                &pool,
+                storage::has_deposit(&env, pool_id, pool.current_round, &member),
+                received,
+            )?
         };
-        let received = storage::read_member(&env, pool_id, &member)
-            .map(|state| state.received)
-            .unwrap_or(false);
         Ok(MemberStatusView {
             refundable,
             received,
@@ -942,6 +965,31 @@ fn apply_member_payment(
         &amount,
     );
     Ok((round_index, amount, round.pot))
+}
+
+/// What the seller receives when a round settles: the round pot plus the recipient's down payment.
+fn purchase_amount(pool: &Pool) -> Result<i128, ContractError> {
+    expected_pot(pool)?
+        .checked_add(pool.down_payment)
+        .ok_or(ContractError::ArithmeticOverflow)
+}
+
+/// Refund entitlement of one member in an aborted pool: this round's contribution (if paid) plus
+/// their down payment (if not yet spent on their own purchase).
+fn refundable_amount(
+    pool: &Pool,
+    paid_current_round: bool,
+    received: bool,
+) -> Result<i128, ContractError> {
+    let round_part = if paid_current_round {
+        pool.contribution_amount
+    } else {
+        0
+    };
+    let down_part = if received { 0 } else { pool.down_payment };
+    round_part
+        .checked_add(down_part)
+        .ok_or(ContractError::ArithmeticOverflow)
 }
 
 fn expected_pot(pool: &Pool) -> Result<i128, ContractError> {

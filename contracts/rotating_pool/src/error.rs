@@ -57,4 +57,6 @@ pub enum ContractError {
     RoundNotFound = 63,
     /// `draw_recipient` was called on a `Fixed`-order pool.
     NotDrawPool = 64,
+    /// `create_pool` was given a negative `down_payment`.
+    InvalidDownPayment = 65,
 }

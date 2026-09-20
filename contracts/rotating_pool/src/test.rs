@@ -66,6 +66,7 @@ fn create_pool_with_mode(
         &contribution_amount,
         &member_limit,
         &order_mode,
+        &0,
         &ROUND_DURATION,
         &GRACE_DURATION,
         &PURCHASE_DURATION,
@@ -198,7 +199,7 @@ fn propose_and_approve_current_purchase(
 ) {
     let client = RotatingPoolContractClient::new(env, contract_id);
     let pool = client.get_pool(&pool_id);
-    let amount = pool.contribution_amount * (pool.member_limit as i128);
+    let amount = pool.contribution_amount * (pool.member_limit as i128) + pool.down_payment;
     client.propose_purchase(
         recipient,
         &pool_id,
@@ -256,6 +257,7 @@ fn create_pool_stores_fields_and_validates_parameters() {
     assert_eq!(pool.token, token_address);
     assert_eq!(pool.contribution_amount, 10);
     assert_eq!(pool.member_limit, 4);
+    assert_eq!(pool.down_payment, 0);
     assert_eq!(pool.members.len(), 0);
     assert_eq!(pool.round_duration, ROUND_DURATION);
     assert_eq!(pool.grace_duration, GRACE_DURATION);
@@ -275,6 +277,7 @@ fn create_pool_stores_fields_and_validates_parameters() {
             &0,
             &4,
             &OrderMode::Fixed,
+            &0,
             &ROUND_DURATION,
             &GRACE_DURATION,
             &PURCHASE_DURATION,
@@ -290,6 +293,7 @@ fn create_pool_stores_fields_and_validates_parameters() {
             &10,
             &(MAX_MEMBERS + 1),
             &OrderMode::Fixed,
+            &0,
             &ROUND_DURATION,
             &GRACE_DURATION,
             &PURCHASE_DURATION,
@@ -305,6 +309,7 @@ fn create_pool_stores_fields_and_validates_parameters() {
             &10,
             &4,
             &OrderMode::Fixed,
+            &0,
             &ROUND_DURATION,
             &GRACE_DURATION,
             &PURCHASE_DURATION,
@@ -320,6 +325,7 @@ fn create_pool_stores_fields_and_validates_parameters() {
             &10,
             &4,
             &OrderMode::Fixed,
+            &0,
             &ROUND_DURATION,
             &GRACE_DURATION,
             &PURCHASE_DURATION,
@@ -1064,6 +1070,7 @@ fn claim_functions_require_stored_role_auth() {
         &10,
         &2,
         &OrderMode::Fixed,
+        &0,
         &ROUND_DURATION,
         &GRACE_DURATION,
         &PURCHASE_DURATION,
@@ -1639,4 +1646,299 @@ fn thirty_member_round_operations_stay_within_mainnet_resource_limits() {
     std::println!("[30 members] execute_round: {:?}", execute_resources);
     assert!(execute_resources.write_entries <= 200);
     assert!(execute_resources.disk_read_entries <= 200);
+}
+
+
+// ---------------------------------------------------------------------------------------------
+// v11: down payment (peşinat)
+// ---------------------------------------------------------------------------------------------
+
+fn create_pool_with_down_payment(
+    env: &Env,
+    contract_id: &Address,
+    creator: &Address,
+    token: &Address,
+    demo_seller: &Address,
+    contribution_amount: i128,
+    member_limit: u32,
+    order_mode: OrderMode,
+    down_payment: i128,
+) -> u64 {
+    let setup_deadline = env.ledger().timestamp() + SETUP_WINDOW;
+    RotatingPoolContractClient::new(env, contract_id).create_pool(
+        creator,
+        token,
+        &contribution_amount,
+        &member_limit,
+        &order_mode,
+        &down_payment,
+        &ROUND_DURATION,
+        &GRACE_DURATION,
+        &PURCHASE_DURATION,
+        &setup_deadline,
+        demo_seller,
+    )
+}
+
+/// Joins `count` members who already hold `mint_each` tokens (the down payment is pulled at join).
+fn join_funded_members(
+    env: &Env,
+    contract_id: &Address,
+    pool_id: u64,
+    token_address: &Address,
+    count: u32,
+    mint_each: i128,
+) -> Vec<Address> {
+    let client = RotatingPoolContractClient::new(env, contract_id);
+    let token_admin = token::StellarAssetClient::new(env, token_address);
+    let mut members = Vec::new(env);
+    for _ in 0..count {
+        let member = Address::generate(env);
+        token_admin.mint(&member, &mint_each);
+        client.join_pool(&member, &pool_id);
+        members.push_back(member);
+    }
+    members
+}
+
+fn start_with_terms(
+    env: &Env,
+    contract_id: &Address,
+    creator: &Address,
+    pool_id: u64,
+    members: &Vec<Address>,
+    order_mode: OrderMode,
+) -> Vec<Address> {
+    let client = RotatingPoolContractClient::new(env, contract_id);
+    let verifiers = Vec::from_array(env, [Address::generate(env), Address::generate(env)]);
+    let order = match order_mode {
+        OrderMode::Fixed => members.clone(),
+        OrderMode::Draw => Vec::new(env),
+    };
+    let version = client.propose_terms(creator, &pool_id, &order, &verifiers);
+    for member in members.iter() {
+        client.approve_terms(&member, &pool_id, &version);
+    }
+    client.start_pool(&pool_id);
+    verifiers
+}
+
+#[test]
+fn negative_down_payment_is_rejected() {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.ledger().set_timestamp(NOW);
+    let creator = Address::generate(&env);
+    let demo_seller = Address::generate(&env);
+    let token_address = Address::generate(&env);
+    let contract_id = register_contract(&env);
+    let client = RotatingPoolContractClient::new(&env, &contract_id);
+    assert_eq!(
+        client.try_create_pool(
+            &creator,
+            &token_address,
+            &10,
+            &3,
+            &OrderMode::Fixed,
+            &-1,
+            &ROUND_DURATION,
+            &GRACE_DURATION,
+            &PURCHASE_DURATION,
+            &(NOW + SETUP_WINDOW),
+            &demo_seller,
+        ),
+        Err(Ok(ContractError::InvalidDownPayment))
+    );
+}
+
+#[test]
+fn down_payment_is_escrowed_at_join_and_added_to_each_recipients_purchase() {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.ledger().set_timestamp(NOW);
+    let creator = Address::generate(&env);
+    let demo_seller = Address::generate(&env);
+    let token_address = register_token(&env, &creator, 0);
+    let token_client = token::TokenClient::new(&env, &token_address);
+    let contract_id = register_contract(&env);
+    let client = RotatingPoolContractClient::new(&env, &contract_id);
+    let (contribution, down) = (10_i128, 5_i128);
+
+    let pool_id = create_pool_with_down_payment(
+        &env, &contract_id, &creator, &token_address, &demo_seller, contribution, 3, OrderMode::Fixed, down,
+    );
+    assert_eq!(client.get_pool(&pool_id).down_payment, down);
+    let members = join_funded_members(&env, &contract_id, pool_id, &token_address, 3, 100);
+    // Every member's down payment now sits in escrow; nobody has deposited a round yet.
+    assert_eq!(token_client.balance(&contract_id), 3 * down);
+    for member in members.iter() {
+        assert_eq!(token_client.balance(&member), 100 - down);
+    }
+    let verifiers = start_with_terms(&env, &contract_id, &creator, pool_id, &members, OrderMode::Fixed);
+
+    for round in 1..=3_u32 {
+        deposit_all(&env, &contract_id, pool_id, &members);
+        let recipient = members.get(round - 1).unwrap();
+        let pot = contribution * 3;
+
+        // The purchase must include the recipient's own down payment; the bare pot is rejected.
+        assert_eq!(
+            client.try_propose_purchase(
+                &recipient,
+                &pool_id,
+                &demo_seller,
+                &token_address,
+                &pot,
+                &BytesN::from_array(&env, &[7; 32]),
+            ),
+            Err(Ok(ContractError::InvalidPurchaseAmount))
+        );
+        propose_and_approve_current_purchase(
+            &env, &contract_id, pool_id, &recipient, &demo_seller, &token_address, &verifiers, round as u8,
+        );
+        assert_eq!(client.execute_round(&pool_id), pot + down);
+        assert_eq!(token_client.balance(&demo_seller), (round as i128) * (pot + down));
+    }
+
+    // Completed: every down payment was spent on its owner's purchase, nothing is left in escrow.
+    assert_eq!(client.get_pool(&pool_id).status, PoolStatus::Completed);
+    assert_eq!(token_client.balance(&demo_seller), 3 * (contribution * 3 + down));
+    assert_eq!(token_client.balance(&contract_id), 0);
+}
+
+#[test]
+fn down_payment_works_in_draw_mode_and_leaves_no_dust() {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.ledger().set_timestamp(NOW);
+    let creator = Address::generate(&env);
+    let demo_seller = Address::generate(&env);
+    let token_address = register_token(&env, &creator, 0);
+    let token_client = token::TokenClient::new(&env, &token_address);
+    let contract_id = register_contract(&env);
+    let client = RotatingPoolContractClient::new(&env, &contract_id);
+    let (contribution, down) = (10_i128, 7_i128);
+
+    let pool_id = create_pool_with_down_payment(
+        &env, &contract_id, &creator, &token_address, &demo_seller, contribution, 4, OrderMode::Draw, down,
+    );
+    let members = join_funded_members(&env, &contract_id, pool_id, &token_address, 4, 200);
+    let verifiers = start_with_terms(&env, &contract_id, &creator, pool_id, &members, OrderMode::Draw);
+    let winners =
+        run_draw_pool_to_completion(&env, &contract_id, pool_id, &members, &verifiers, &demo_seller, &token_address);
+
+    assert_eq!(winners.len(), 4);
+    assert_eq!(client.get_pool(&pool_id).status, PoolStatus::Completed);
+    assert_eq!(token_client.balance(&demo_seller), 4 * (contribution * 4 + down));
+    assert_eq!(token_client.balance(&contract_id), 0);
+}
+
+#[test]
+fn aborted_pool_refunds_current_round_plus_unspent_down_payments_only() {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.ledger().set_timestamp(NOW);
+    let creator = Address::generate(&env);
+    let demo_seller = Address::generate(&env);
+    let token_address = register_token(&env, &creator, 0);
+    let token_client = token::TokenClient::new(&env, &token_address);
+    let contract_id = register_contract(&env);
+    let client = RotatingPoolContractClient::new(&env, &contract_id);
+    let (contribution, down) = (10_i128, 5_i128);
+
+    let pool_id = create_pool_with_down_payment(
+        &env, &contract_id, &creator, &token_address, &demo_seller, contribution, 3, OrderMode::Fixed, down,
+    );
+    let members = join_funded_members(&env, &contract_id, pool_id, &token_address, 3, 100);
+    let (a, b, c) = (members.get(0).unwrap(), members.get(1).unwrap(), members.get(2).unwrap());
+    let verifiers = start_with_terms(&env, &contract_id, &creator, pool_id, &members, OrderMode::Fixed);
+
+    // Round 1 completes: A (first in order) receives, so A's down payment is spent.
+    deposit_all(&env, &contract_id, pool_id, &members);
+    propose_and_approve_current_purchase(
+        &env, &contract_id, pool_id, &a, &demo_seller, &token_address, &verifiers, 1,
+    );
+    client.execute_round(&pool_id);
+    assert_eq!(client.get_member_status(&pool_id, &a).refundable, 0);
+    // Before any abort, B and C would only be owed their still-unspent down payment.
+    assert_eq!(client.get_member_status(&pool_id, &b).refundable, down);
+
+    // Round 2: A and B pay, C does not -> Grace -> abort.
+    client.deposit(&a, &pool_id);
+    client.deposit(&b, &pool_id);
+    env.ledger().set_timestamp(NOW + ROUND_DURATION);
+    client.mark_overdue(&pool_id);
+    env.ledger().set_timestamp(NOW + ROUND_DURATION + GRACE_DURATION);
+    client.abort_pool(&pool_id);
+    assert_eq!(client.get_pool(&pool_id).status, PoolStatus::Aborted);
+
+    // A already received: only this round's contribution comes back. B: contribution + down payment.
+    // C never paid this round: only the unspent down payment.
+    assert_eq!(client.get_member_status(&pool_id, &a).refundable, contribution);
+    assert_eq!(client.get_member_status(&pool_id, &b).refundable, contribution + down);
+    assert_eq!(client.get_member_status(&pool_id, &c).refundable, down);
+    let before: [i128; 3] = [
+        token_client.balance(&a),
+        token_client.balance(&b),
+        token_client.balance(&c),
+    ];
+    assert_eq!(client.claim_refund(&a, &pool_id), contribution);
+    assert_eq!(client.claim_refund(&b, &pool_id), contribution + down);
+    assert_eq!(client.claim_refund(&c, &pool_id), down);
+    assert_eq!(token_client.balance(&a), before[0] + contribution);
+    assert_eq!(token_client.balance(&b), before[1] + contribution + down);
+    assert_eq!(token_client.balance(&c), before[2] + down);
+
+    // No double refunds, and the escrow is fully drained (round 1 already went to the seller).
+    assert_eq!(client.try_claim_refund(&b, &pool_id), Err(Ok(ContractError::RefundAlreadyClaimed)));
+    assert_eq!(token_client.balance(&contract_id), 0);
+}
+
+#[test]
+fn cancelled_unstarted_pool_refunds_down_payments() {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.ledger().set_timestamp(NOW);
+    let creator = Address::generate(&env);
+    let demo_seller = Address::generate(&env);
+    let token_address = register_token(&env, &creator, 0);
+    let token_client = token::TokenClient::new(&env, &token_address);
+    let contract_id = register_contract(&env);
+    let client = RotatingPoolContractClient::new(&env, &contract_id);
+    let down = 25_i128;
+
+    let pool_id = create_pool_with_down_payment(
+        &env, &contract_id, &creator, &token_address, &demo_seller, 10, 3, OrderMode::Fixed, down,
+    );
+    let members = join_funded_members(&env, &contract_id, pool_id, &token_address, 2, 100);
+    assert_eq!(token_client.balance(&contract_id), 2 * down);
+
+    env.ledger().set_timestamp(NOW + SETUP_WINDOW);
+    client.cancel_unstarted_pool(&pool_id);
+    let outsider = Address::generate(&env);
+    assert_eq!(client.try_claim_refund(&outsider, &pool_id), Err(Ok(ContractError::NotMember)));
+    for member in members.iter() {
+        assert_eq!(client.claim_refund(&member, &pool_id), down);
+        assert_eq!(token_client.balance(&member), 100);
+    }
+    assert_eq!(token_client.balance(&contract_id), 0);
+}
+
+#[test]
+fn join_without_enough_tokens_for_the_down_payment_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.ledger().set_timestamp(NOW);
+    let creator = Address::generate(&env);
+    let demo_seller = Address::generate(&env);
+    let token_address = register_token(&env, &creator, 0);
+    let contract_id = register_contract(&env);
+    let client = RotatingPoolContractClient::new(&env, &contract_id);
+    let pool_id = create_pool_with_down_payment(
+        &env, &contract_id, &creator, &token_address, &demo_seller, 10, 3, OrderMode::Fixed, 5,
+    );
+    let broke = Address::generate(&env);
+    token::StellarAssetClient::new(&env, &token_address).mint(&broke, &4);
+    assert!(client.try_join_pool(&broke, &pool_id).is_err());
+    assert_eq!(client.get_pool(&pool_id).members.len(), 0);
 }

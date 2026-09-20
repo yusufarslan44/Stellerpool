@@ -12,6 +12,7 @@ pub struct PoolCreated {
     pub contribution_amount: i128,
     pub member_limit: u32,
     pub order_mode: OrderMode,
+    pub down_payment: i128,
     pub round_duration: u64,
     pub grace_duration: u64,
     pub purchase_duration: u64,

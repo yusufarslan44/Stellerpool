@@ -77,6 +77,9 @@
                   ]
                 },
                 {
+                  "i128": "0"
+                },
+                {
                   "u64": "180"
                 },
                 {
@@ -306,6 +309,9 @@
                       "symbol": "Fixed"
                     }
                   ]
+                },
+                {
+                  "i128": "0"
                 },
                 {
                   "u64": "180"
@@ -1157,6 +1163,14 @@
                   },
                   {
                     "key": {
+                      "symbol": "down_payment"
+                    },
+                    "val": {
+                      "i128": "0"
+                    }
+                  },
+                  {
+                    "key": {
                       "symbol": "grace_duration"
                     },
                     "val": {
@@ -1385,6 +1399,14 @@
                     },
                     "val": {
                       "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "down_payment"
+                    },
+                    "val": {
+                      "i128": "0"
                     }
                   },
                   {

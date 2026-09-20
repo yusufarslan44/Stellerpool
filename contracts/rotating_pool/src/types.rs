@@ -50,6 +50,9 @@ pub struct Pool {
     pub contribution_amount: i128,
     pub member_limit: u32,
     pub order_mode: OrderMode,
+    /// Per-member down payment (peşinat), escrowed by `join_pool` and added to that member's own
+    /// purchase when their round settles. `0` disables it (v10 behaviour).
+    pub down_payment: i128,
     pub members: Vec<Address>,
     pub recipient_order: Vec<Address>,
     pub verifiers: Vec<Address>,
