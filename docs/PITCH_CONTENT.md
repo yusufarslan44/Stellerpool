@@ -138,6 +138,42 @@ açıp kapatan bir yetenek-algılama katmanı.
 
 ---
 
+## 8b. Anchor hakkında olası jüri soruları (hazırlık notu, sunuma girmez)
+
+⚠️ **Sunumdan hemen önce kontrol edin**: canlı site (`stellerpool.arslanyusuf.com`)
+şu an kendi backend'imize mi bağlı, yoksa hâlâ SDF'in genel test anchor'ına mı
+düşüyor (`frontend/src/lib/anchor.ts`'deki `usingTestAnchor` bayrağı bunu söyler —
+arayüzde muhtemelen bir rozet/uyarı olarak görünür). Bu belgenin yazıldığı an
+Yusuf'un sunucu deploy'u (`backend/DEPLOY.md`) henüz tamamlanmamıştı; tamamlandıysa
+aşağıdaki "kısa cevap" kullanılabilir, tamamlanmadıysa "henüz bağlanmadı" cevabını
+kullanın — ikisi de dürüst ve savunulabilir, önemli olan hangisinin doğru olduğunu
+bilip söylemek.
+
+**Kısa cevap (backend canlı siteye bağlandıysa):**
+> Kendi SEP-1/10/24 anchor sunucumuzu yazdık — SDF'in genel test anchor'ına bağımlı
+> kalmak yerine. Gerçek protokol akışı çalışıyor: SEP-10 girişi, SEP-24 interaktif
+> yatırma, TRY'yi temsil eden kendi test varlığımız (`TRYT`) gerçek on-chain
+> işlemlerle kullanıcıya ulaşıyor. Bunu hem kendi başına hem kontratımızla (gerçek
+> bir havuz üzerinden) uçtan uca, gerçek Testnet işlemleriyle doğruladık. Gerçek
+> olmayan tek kısım: "TRY yatırdım" onayı bir bankadan gelmiyor, sunucumuzun kendi
+> test onayı — gerçek banka entegrasyonu bilinçli olarak kapsam dışı, yol
+> haritamızın ilk adımı bu.
+
+**Eğer backend henüz canlı siteye bağlanmadıysa:**
+> Backend kodu yazıldı ve gerçek Testnet işlemleriyle (iki ayrı uçtan uca akış,
+> ayrıca kontratımızla birlikte) doğrulandı — [tx hash göster]. Canlı siteye
+> bağlanması operasyonel son adım, üzerinde çalışıyoruz.
+
+**Olası takip soruları:**
+
+| Soru | Cevap |
+|---|---|
+| Bu gerçek TL mi? | Hayır. `TRYT` TRY'yi temsil eden bir test varlığı. Gerçek TL, lisanslı bir anchor/banka entegrasyonu gerektirir — bilinçli olarak kapsam dışı, sonraki adımımız bu. |
+| Neden SDF'in test anchor'ını kullanmadınız? | El kitabı Anchor'ın ürünün çekirdeğinde olmasını ve en ağırlıklı kriter olduğunu belirtiyor. Genel bir üçüncü taraf test anchor'ına bağlanmak bunu göstermiyordu; kendi SEP altyapımızı kurup uçtan uca kanıtlamak daha güçlü bir teknik kanıt. |
+| Hangi SEP'leri destekliyor? | SEP-1 (stellar.toml), SEP-10 (kimlik doğrulama), SEP-24 (interaktif yatırma). SEP-12/KYC ve withdraw kapsam dışı, yol haritasında. |
+| Kontratla nasıl bağlanıyor? | Anchor'dan gelen bakiye havuzun kullandığı varlığın aynısı (kod + ihraççı eşleşmesi kontrol edilir) — kullanıcı önce yatırır, sonra o bakiyeyle doğrudan havuza katkı sağlar; ayrı bir vitrin değil, katkı adımının içinde. |
+| Hangi Stellar Skill'i kullandınız? | Anchors skill (SEP-1/6/10/12/24/31/38) — SEP-10/24 sunucu implementasyonumuzun doğrudan referansı; tam liste `docs/STELLAR_SKILLS_USED.md`'de. |
+
 ## 9. Takım
 
 *(İsimler, roller, iletişim bilgileri — submission formuyla aynı olmalı.)*
