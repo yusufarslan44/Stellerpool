@@ -1,0 +1,114 @@
+name: Deploy frontend
+
+# main'e frontend/ değişikliği push'lanınca siteyi derleyip https://stellerpool.arslanyusuf.com
+# adresine yükler. Elle de tetiklenebilir (Actions sekmesi -> Run workflow).
+#
+# Gerekli repo Secret'ları (Settings -> Secrets and variables -> Actions):
+#   DEPLOY_SSH_KEY      özel anahtar (yalnızca ~/stellerpool/site klasörüne yazabilen kısıtlı anahtar)
+#   DEPLOY_HOST         sunucu adresi (repo herkese açık olduğundan dosyaya yazılmaz)
+#   DEPLOY_USER         SSH kullanıcısı
+#   DEPLOY_KNOWN_HOSTS  sunucunun host anahtarı satırı (MITM'e karşı sabitlenmiş)
+# İsteğe bağlı repo Variables (yoksa varsayılan davranış): VITE_ANCHOR_HOME_DOMAIN,
+#   VITE_POOL_ASSET_CODE, VITE_POOL_ASSET_ISSUER, VITE_ROTATING_POOL_CONTRACT_ID, VITE_MAX_MEMBERS.
+# Kurulum ayrıntısı: docs/DEPLOY_CI.md
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/deploy-frontend.yml'
+  workflow_dispatch:
+
+# Aynı anda iki dağıtım çalışmasın; sıradaki bekler (yarım yüklemeyi önler).
+concurrency:
+  group: deploy-frontend
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SITE_URL: https://stellerpool.arslanyusuf.com
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Bağımlılıkları kur
+        working-directory: frontend
+        run: npm ci
+
+      # `npm run build` = vue-tsc (tip kontrolü) + vite build; tip hatası varsa dağıtım durur.
+      - name: Derle
+        working-directory: frontend
+        env:
+          VITE_STELLAR_NETWORK: testnet
+          VITE_ROTATING_POOL_CONTRACT_ID: ${{ vars.VITE_ROTATING_POOL_CONTRACT_ID || 'CC7W3SKQHBLZ2JPTGSK42H6IAJQ22A4PUK6CSN2T4PUJRY4LQ445GYMB' }}
+          VITE_MAX_MEMBERS: ${{ vars.VITE_MAX_MEMBERS || '30' }}
+          VITE_ANCHOR_HOME_DOMAIN: ${{ vars.VITE_ANCHOR_HOME_DOMAIN }}
+          VITE_POOL_ASSET_CODE: ${{ vars.VITE_POOL_ASSET_CODE }}
+          VITE_POOL_ASSET_ISSUER: ${{ vars.VITE_POOL_ASSET_ISSUER }}
+        run: npm run build
+
+      - name: Gizli anahtar sızıntısı taraması
+        run: |
+          if grep -rEl 'S[A-Z2-7]{55}' frontend/dist; then
+            echo "::error::Derleme çıktısında Stellar gizli anahtarı deseni bulundu, dağıtım durduruldu."
+            exit 1
+          fi
+
+      - name: SSH'ı hazırla
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          for v in DEPLOY_SSH_KEY DEPLOY_KNOWN_HOSTS DEPLOY_HOST DEPLOY_USER; do
+            if [ -z "${!v}" ]; then
+              echo "::error::Secret eksik: $v (bkz. docs/DEPLOY_CI.md)"
+              exit 1
+            fi
+          done
+          install -m 700 -d ~/.ssh
+          umask 077
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+      # Anahtar sunucuda `rrsync -wo ~/stellerpool/site` ile sınırlıdır: hedef yol bu klasöre göredir.
+      - name: Sunucuya yükle
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          rsync -az --delete \
+            -e "ssh -i $HOME/.ssh/deploy_key -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts" \
+            frontend/dist/ "$DEPLOY_USER@$DEPLOY_HOST:./"
+
+      # Yayındaki index.html, yeni derlemenin ana betiğine işaret edene kadar bekler.
+      - name: Yayını doğrula
+        run: |
+          expected=$(grep -o 'assets/index-[^"]*\.js' frontend/dist/index.html | head -1)
+          echo "Beklenen: $expected"
+          for i in $(seq 1 12); do
+            if curl -fsS -H 'Cache-Control: no-cache' "$SITE_URL/?ci=$GITHUB_RUN_ID" | grep -q "$expected"; then
+              echo "Yayında: $SITE_URL"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::$SITE_URL yeni derlemeyi göstermiyor (Cloudflare önbelleği ya da yükleme sorunu)."
+          exit 1
+
+      - name: SSH anahtarını sil
+        if: always()
+        run: rm -f ~/.ssh/deploy_key
