@@ -14,15 +14,29 @@ Stellerpool bu koordinasyonu **Soroban akıllı sözleşmesine** taşır. Katkı
 
 | Alan | Durum |
 |---|---|
-| Soroban kontratı (sponsorsuz, **API v10**: kura + 30 üye) | ✅ Testnet'te yayında, 27 birim testi, canlı senaryolar koşuldu (sıralı tam akış, temerrüt/iade, **kura**) |
+| Soroban kontratı (sponsorsuz, **API v11**: kura + 30 üye + **peşinat**) | ✅ Testnet'te yayında, 33 birim testi, canlı senaryolar koşuldu (kura + peşinat tam akış, iptal + iade, kurulamayan havuzun peşinat iadesi). Önceki v10 kanıtları aşağıda
 | Arayüz ↔ kontrat | ✅ Canlı kontrata karşı doğrulandı: üç havuz (sıralı, iptal, kura) okunup çiziliyor; `create_pool` (kura 24/30 üye, sıralı 4 üye) zincire gönderilmeden simüle edildi, 31 üye reddedildi. ⚠️ Cüzdan imzalı yazma akışı (havuz kur, öde, onayla, kura çek) bir cüzdanla uçtan uca henüz denenmedi |
 | Anchor | ✅ **Kendi işlettiğimiz SEP-1 / SEP-10 / SEP-24 anchor'ı** (`https://anchor-stellerpool.arslanyusuf.com`, Testnet, Node.js/TypeScript, kaynak: [`backend/`](backend/)). `TRYT` test varlığını basar (issuer `GBM3V2AHDEF3APOIKRCXCKVNW3UA2VWMSLTGELWRLBLIFSV7OVME6HOC`, SAC `CDATFFDUVSMP2OC6JKIRWJDUHFTNMWJ2ZXLUCDUTRD7FYXANOV7RXB3H`). Havuz sayfasında **katkı adımının içinde**: bakiyesi yetmeyen üye anchor ile havuzun kendi varlığını yükler. Uçtan uca doğrulandı (SEP-10 girişi, SEP-24 yatırma, gerçek on-chain TRYT transferi). ❌ **Türk lirası değil**: `TRYT` TRY'yi yalnızca temsil eden bir test varlığıdır, gerçek banka rayı yoktur. Cüzdan imzalı yatırma bir cüzdanla denenmedi |
 | Kura modu ve 30 üye | ✅ Kontratta canlı ([görev listesi](docs/CONTRACT_HANDOFF.md)); arayüzde "Kura" seçilebilir. Rastgelelik hackathon düzeyindedir |
+| Peşinat | ✅ Kontratta: üye başına, katılırken yatırılır, sıran gelince alımına eklenip satıcıya gider, iptalde harcanmamışsa iade edilir. Şirketlerdeki gibi birikime sayılmaz ve teminat değildir |
 | Mainnet | Salt okunur tanıtım derlemesi; cüzdan imzası veya fon işlemi yok |
 | Gerçek TL giriş/çıkışı | ❌ **Hackathon'un çekirdek gereksinimi karşılanmıyor**, doğrulanmış bir TRY anchor'ı bulunamadı ([ayrıntı](docs/altin-gunu-legal-boundary.md)) |
 | AI denetçisi | ❌ Çalışan entegrasyon yok, yol haritasında |
 
 ## Kontrat ve dağıtım kanıtı (Testnet)
+
+### Güncel kontrat: API v11 (kura + 30 üye + peşinat)
+
+- **Kontrat ID:** [`CD23I5ZNVHOUBJOHODHHEW6NH7NB3FDBQ2DE2C2TST5BZM4KTJLBPK33`](https://stellar.expert/explorer/testnet/contract/CD23I5ZNVHOUBJOHODHHEW6NH7NB3FDBQ2DE2C2TST5BZM4KTJLBPK33) · API sürümü 11 · WASM SHA-256 `0f7ae90a…3b14` · 34.982 bayt · [yayın işlemi `7cc3648b…4dec`](https://stellar.expert/explorer/testnet/tx/7cc3648b7c6a6c163911a03eaa9406ecd075f8e9dcb9e4a63ac3af2417154dec)
+- **Değişiklik (v10 → v11):** `create_pool`'a `down_payment` (üye başına, 0 = kapalı) eklendi. `join_pool` peşinatı kontrata çeker; `propose_purchase` / `execute_round` alım tutarını *havuz + alıcının kendi peşinatı* olarak ister ve satıcıya bunu öder; `claim_refund` / `get_member_status` iade hakkına henüz harcanmamış peşinatı ekler; kurulamayan havuzda (`cancel_unstarted_pool`) katılanlar peşinatlarını geri alır. Yeni hata `InvalidDownPayment`. Peşinat 0 ise davranış v10 ile aynıdır.
+- **Birim testleri:** 33 (27 mevcut + 6 yeni): peşinatın katılırken çekilmesi ve alıma eklenmesi, kura modunda toz kalmaması, iptalde "mevcut tur katkısı + harcanmamış peşinat" iadesi, kurulamayan havuz iadesi, yetersiz bakiyeyle katılamama, negatif peşinat reddi.
+- **Canlı doğrulama (20 Eylül 2026, `TRYT` varlığı, arayüzün servis katmanı ve oluşturma formu, tek kullanımlık test anahtarlarıyla imzalı; gerçek Freighter ile deneme yapılmadı):**
+  - [Havuz #1](https://stellerpool.arslanyusuf.com/pool/1): 3 üyeli **kura + 6 TRYT peşinat**, oluşturma formundan kuruldu ve tamamlandı. Katılırken 3 × 6 TRYT kontrata çekildi; her turda yalnızca havuz tutarıyla (30) yapılan alım önerisi **reddedildi**, kazananın peşinatı eklenmiş tutarla (36) kabul edildi; satıcıya turda 36, toplam 108 gitti; kazananlar M2 → M3 → M1 (tekrar yok); sonunda kontrat bakiyesi **0**.
+  - [Havuz #3](https://stellerpool.arslanyusuf.com/pool/3): **iptal + iade**. 3 üye, peşinat 5, katkı 10. Tur 1'de M1 aldı, 2. turda M3 ödemedi → ek süre → iptal. İade hakları M1 = 10 (aldı, yalnızca bu tur), M2 = 15 (katkı + peşinat), M3 = 5 (yalnızca peşinat); üçü de tam aldı, ikinci iade reddedildi.
+  - [Havuz #4](https://stellerpool.arslanyusuf.com/pool/4): **kurulamayan havuz**. Kuruluş süresi doldu, iptal edildi, katılan iki üye 4 TRYT peşinatını tam geri aldı.
+  - Havuz #2, test sürelerinin kısa ayarlanması yüzünden yarım kalmış bir denemedir (iptal edilip iade ettirildi); kanıt sayılmaz.
+
+### Önceki sürüm: API v10 (kanıt olarak zincirde duruyor)
 
 - **Kontrat ID:** [`CC7W3SKQHBLZ2JPTGSK42H6IAJQ22A4PUK6CSN2T4PUJRY4LQ445GYMB`](https://stellar.expert/explorer/testnet/contract/CC7W3SKQHBLZ2JPTGSK42H6IAJQ22A4PUK6CSN2T4PUJRY4LQ445GYMB) · API sürümü 10 · WASM SHA-256 `6cc5e1a0…12b4` · 34.070 bayt
 - **Yükleme:** [`d0f9e5cb…7867`](https://stellar.expert/explorer/testnet/tx/d0f9e5cbbf023a9dde46ab2017b362f9ea8dc6a5ac643b109cabd304ba647867) · **Örnek oluşturma:** [`5c7ae114…91a1`](https://stellar.expert/explorer/testnet/tx/5c7ae11430ec06055f612027ab046888f88ddcd83d3addd6c6328bd92d7a91a1)
@@ -31,12 +45,12 @@ Stellerpool bu koordinasyonu **Soroban akıllı sözleşmesine** taşır. Katkı
 - **Havuz #3 (kura):** [`create_pool`](https://stellar.expert/explorer/testnet/tx/38dec31c1c9cfc2388ce1f6adda32ad7d97c1ecd77e245b9f6226a52d195e554) (`order_mode: Draw`) → iki üye yatırdı, tur kura bekliyor [`RoundAwaitingDraw`](https://stellar.expert/explorer/testnet/tx/b1b05c4dfc1c3d40eb5b12572b41fa640c1385e491b592a774a872798756f4d4) → **havuz üyesi olmayan bir hesap** kurayı çekti [`draw_recipient`](https://stellar.expert/explorer/testnet/tx/11845a01bbfe010755af7e74588b408b469066ee8f9247dd668d12fdd0ea2822) → [`execute_round`](https://stellar.expert/explorer/testnet/tx/a253b14aee6bbd21329eb085ac7532fb984cabe3a92ee44f0bda698961e82609) → 2. turda kalan tek aday deterministik seçildi [`draw_recipient`](https://stellar.expert/explorer/testnet/tx/a9266d236b33ab5b262942e5c9734f81e6dbcb641eb040d199866f7193ed74f9) → [`execute_round`](https://stellar.expert/explorer/testnet/tx/22b4c62efd755a75ca4c4d1f8a467c9a02f48890c49dba1f3796b50054bb72fa)
 - **30 üye kaynak ölçümü** (yerel test, gerçek Wasm ana bilgisayarı için alt sınır): `deposit` ≈ 1,1 M, `draw_recipient` ≈ 1,6 M, `execute_round` ≈ 1,4 M komut (Mainnet sınırı 400 M); okuma/yazma girdileri tek haneli. Gerçek 30 kişilik Testnet koşusu yapılmadı.
 - Canlı havuzlar #1–#3 kontrat ekibinin bastığı `STLP` demo varlığıyla kuruldu (SAC `CAOV35NPIJXHWA7QPXXERRJQ4ZTDUGAEHA7FKB6QIOTIOTI62B35ZNWI`). Canlı sitede yeni havuzlar anchor'ın `TRYT` varlığıyla kurulur; arayüz her havuzun kendi token'ını okur, etiket ve bakiye buna göre gösterilir.
-- Önceki üç kontrat örneği (iki sponsorlu, bir v9 sponsorsuz) zincirde durur; **teslimde yalnızca yukarıdaki güncel kontrat geçerlidir.** Ayrıntı ve karar gerekçeleri: [IMPLEMENTATION_LOG.md](docs/IMPLEMENTATION_LOG.md) "Phase 12" ve "Phase 13".
-- **Demo URL:** https://stellerpool.arslanyusuf.com (Testnet, canlı kontrata bağlı; havuz #3 için `/pool/3`). Yalnızca Testnet, gerçek para yok.
-- **Uçtan uca arayüz doğrulaması (20 Eylül 2026, `TRYT` ile, canlı Testnet kontratı):** Arayüzün kendi butonları ve servis katmanı, cüzdan uzantısı yerine **tek kullanımlık test anahtarlarıyla imzalatılarak** koşturuldu (gerçek Freighter ile deneme henüz yapılmadı):
-  - [Havuz #5](https://stellerpool.arslanyusuf.com/pool/5): 3 üyeli **kura** havuzu, oluşturma formundan kuruldu. Katıl → şartlar → onay → başlat → katkı → **kura** → alım önerisi → 2 doğrulayıcı onayı → tutar satıcıya. Kazananlar sırayla M1, M3, M2: her tur yalnızca henüz almamışlar arasından çıktı, tekrar yok. Üye M3'ün bakiyesi arayüzdeki anchor akışıyla (SEP-10 girişi + SEP-24 yatırma) 0'dan 40 TRYT'ye yüklendi. Sonda satıcı 90 TRYT aldı, kontrat bakiyesi 0.
-  - [Havuz #6](https://stellerpool.arslanyusuf.com/pool/6): 2 üyeli **sabit sıra** havuzu, onaylanan sıra birebir uygulandı, iki tur ödendi.
-  - [Havuz #7](https://stellerpool.arslanyusuf.com/pool/7): **iptal + iade**. Ödemeyen üye yüzünden katkı süresi doldu → ek süre → iptal; yalnızca ödeyen üye katkısını geri aldı, ödemeyen üyenin ve ikinci iade denemesi reddedildi, kontrat bakiyesi 0.
+- Önceki üç kontrat örneği (iki sponsorlu, bir v9 sponsorsuz) zincirde durur; **teslimde geçerli olan güncel kontrat yukarıdaki v11'dir; v10 kanıt olarak durur.** Ayrıntı ve karar gerekçeleri: [IMPLEMENTATION_LOG.md](docs/IMPLEMENTATION_LOG.md) "Phase 12" ve "Phase 13".
+- **Demo URL:** https://stellerpool.arslanyusuf.com (Testnet, v11 kontratına bağlı; kura + peşinat kanıtı için `/pool/1`). Yalnızca Testnet, gerçek para yok.
+- **Uçtan uca arayüz doğrulaması (v10 kontratı, 20 Eylül 2026, `TRYT` ile; bu havuzlar v10 örneğindedir, canlı site artık v11'i gösterir):** Arayüzün kendi butonları ve servis katmanı, cüzdan uzantısı yerine **tek kullanımlık test anahtarlarıyla imzalatılarak** koşturuldu (gerçek Freighter ile deneme henüz yapılmadı):
+  - Havuz #5 (v10): 3 üyeli **kura** havuzu, oluşturma formundan kuruldu. Katıl → şartlar → onay → başlat → katkı → **kura** → alım önerisi → 2 doğrulayıcı onayı → tutar satıcıya. Kazananlar sırayla M1, M3, M2: her tur yalnızca henüz almamışlar arasından çıktı, tekrar yok. Üye M3'ün bakiyesi arayüzdeki anchor akışıyla (SEP-10 girişi + SEP-24 yatırma) 0'dan 40 TRYT'ye yüklendi. Sonda satıcı 90 TRYT aldı, kontrat bakiyesi 0.
+  - Havuz #6 (v10): 2 üyeli **sabit sıra** havuzu, onaylanan sıra birebir uygulandı, iki tur ödendi.
+  - Havuz #7 (v10): **iptal + iade**. Ödemeyen üye yüzünden katkı süresi doldu → ek süre → iptal; yalnızca ödeyen üye katkısını geri aldı, ödemeyen üyenin ve ikinci iade denemesi reddedildi, kontrat bakiyesi 0.
 
 ## Havuz kuralı
 
@@ -51,14 +65,24 @@ Stellerpool bu koordinasyonu **Soroban akıllı sözleşmesine** taşır. Katkı
 
 ## Fuzul Ev / Oto ve Eminevim ile karşılaştırma
 
-| | Tasarruf finansman şirketleri | Stellerpool (Testnet prototipi) |
+Tasarruf finansman şirketleri faizsiz çalışır: müşteri sözleşme tutarını vadeye bölerek taksit öder, teslim sırası çekilişle ya da ödeme oranına göre belirlenir, şirket tahsisatı satıcıya öder. Maliyet faiz değil tek seferlik **organizasyon ücretidir**. Aşağıdaki şirket sütunu kamuya açık sayfalardan özetlenmiş **tipik** değerlerdir ([Fuzul Ev SSS](https://www.fuzulev.com.tr/merak-edilenler), [konut finansmanı](https://www.fuzulev.com.tr/ev-finansmani), [hesaplama rehberi](https://www.tasarruffinansmani.com/blog/fuzulev-hesaplama-rehberi)); oranlar kaynaklara ve sözleşmeye göre değişir, bu bir tavsiye değildir.
+
+| | Tasarruf finansman şirketleri (tipik) | Stellerpool (Testnet prototipi) |
 |---|---|---|
 | Fon | Şirketin ayrılmış fon havuzu | Soroban kontratında tur bazında kilitli, kurucu çekemez |
-| Alıcı | Sıra veya çekiliş | Onaylanan sabit sıra ya da kura (hackathon düzeyi rastgelelik) |
+| Taksit | (Sözleşme tutarı + organizasyon ücreti) ÷ vade | Hedef tutar ÷ kişi sayısı, ek ücret yok |
+| **Peşinat** | İsteğe bağlı; şirkete yatar, teslimi öne çeker ya da vadeyi kısaltır | **Kontratta, üye başına.** Katılırken yatırılır, sıran gelince alımına eklenip satıcıya gider, iptalde harcanmamışsa iade edilir. Yükseldikçe havuz hedefi küçülür, vade ve kişi sayısı azalır. Şirketlerdeki gibi birikime sayılmaz, teminat değildir |
+| **Ücret** | Tek seferlik organizasyon ücreti (yaklaşık %7–14), cayınca iade edilmez | **Yok**, kimseye pay ayrılmaz |
+| Vade ve grup büyüklüğü | Genelde 40–240 ay; grubu şirket belirler | Kişi sayısı kadar tur (2–30). **Otomatik:** havuz hedefi ÷ ödeyebileceğin taksit; istenirse elle belirlenir |
+| **Kura zamanı** | Çekilişli modelde her ay noter kontrolünde, ilk aydan itibaren; çekilişsizde teslim tarihi sözleşmede sabit | Her turda herkes taksidini yatırınca, herkesin çağırabileceği zincir işlemiyle; tarih sabit değil, noter yok |
+| Alıcı | Sıra ya da çekiliş | Onaylanan sabit sıra ya da kura (hackathon düzeyi rastgelelik) |
 | Kurallar | Sözleşme, şirkete bağlı | Herkese görünür, zincirde doğrulanabilir |
-| Ödeme aksarsa | Taksit dondurma, teslim erteleme | Ek süre → tur durur → mevcut tur iadesi |
+| Teslim | Şirket tahsisatı hak edene öder | Doğrulayıcı onayıyla yalnızca izinli demo satıcısına |
+| Ödeme aksarsa | 6 aya kadar taksit dondurma, teslim erteleme | Ek süre → tur durur → mevcut tur iadesi |
 | Teslim sonrası güvence | İpotek/rehin, şirket taahhüdü | **Yok** (açık risk) |
-| Lisans | BDDK lisanslı | **Yok**, Testnet, gerçek para yok |
+| Lisans | BDDK lisanslı (6361 sayılı Kanun) | **Yok**, Testnet, gerçek para yok |
+
+Arayüzde bu fark oluşturma formunda ("Fuzul Ev / Oto gibi şirketlerden farkı ne?"), tur takviminde ("Bir tur nasıl geçer?") ve ana sayfa SSS'sinde anlatılır. **Organizasyon ücreti yoktur. Peşinat v11 kontratındadır ve yalnızca kendi alımına gider;** erken teslim alanın sonraki taksitleri bırakma riskini kapatmaz (teminat değildir). Yeni bir kontrat yayınında eski örnekler eski kontratta kalır, bu yüzden arayüz kontratın gerçek yeteneğini (`create_pool` girdileri) zincirden okur.
 
 Bu bir lisanslı finansman ürününün yerine geçmez. Ayrıntı ve hukuki sınırlar: [altin-gunu-legal-boundary.md](docs/altin-gunu-legal-boundary.md), [legal-ai-path.md](docs/legal-ai-path.md).
 
@@ -109,7 +133,7 @@ flowchart TD
 
 ## Teslim durumu
 
-- [x] Sponsorsuz kontrat (API v10: kura + 30 üye), 27 birim testi, Testnet'te yayında ve üç canlı senaryo koşuldu
+- [x] Sponsorsuz kontrat (API v11: kura + 30 üye + peşinat), 33 birim testi, Testnet'te yayında ve canlı senaryolar koşuldu (kura + peşinat tam akış, iptal + iade, kurulamayan havuz)
 - [x] Kontrat ID ve dağıtım kanıtı (yukarıda)
 - [x] Arayüz kontrata bağlı: okuma canlı, `create_pool` simüle edildi, kura arayüzde seçilebilir
 - [x] Gerçek SEP-1/10/24 anchor istemcisi (test anchor'ı ile)

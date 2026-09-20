@@ -1434,3 +1434,61 @@ gerçek bir SEP-1/10/24 anchor sunucusu kurmak — el kitabının en ağırlıkl
 ### Status
 
 NEEDS REVIEW
+
+## Phase 15 - Down Payment (Peşinat), API v11
+
+Bu faz frontend oturumunda, kullanıcının açık talebiyle (Fuzul Ev/Oto benzeri plan: toplam bedel,
+peşinat, taksit, otomatik kişi sayısı) yapıldı; kontrat ekibinin Faz 13/14 işine dokunmaz, üzerine ekler.
+
+### Goal
+
+Peşinatı arayüzde bir plan hesabı olmaktan çıkarıp kontratta zorunlu ve doğrulanabilir hale getirmek.
+
+### Changes (`contracts/rotating_pool`)
+
+- `create_pool(..., order_mode, down_payment, round_duration, ...)`: üye başına peşinat, `>= 0`
+  (yeni hata `InvalidDownPayment = 65`); `Pool.down_payment`, `PoolCreated.down_payment`.
+- `join_pool`: `down_payment > 0` ise tutarı üyeden kontrata çeker ve `PoolAssignedBalance`'a ekler
+  (önce depolama, sonra dış token çağrısı).
+- `propose_purchase` / `execute_round`: alım tutarı `purchase_amount = pot + down_payment`
+  (`pot = contribution_amount * member_limit`); satıcıya bu ödenir. Tur muhasebesi (`round.pot`) değişmez.
+- `claim_refund` / `get_member_status`: iade hakkı = mevcut tur katkısı (yatırdıysa) + peşinat
+  (`received == false` ise) — `refundable_amount()` yardımcısı. `cancel_unstarted_pool` sonrası katılanlar
+  peşinatlarını aynı yoldan geri alır.
+- `CONTRACT_VERSION = 11`. `down_payment = 0` ise davranış v10 ile aynıdır (mevcut 27 test yalnızca yeni
+  argümanı `0` olarak geçecek şekilde uyarlandı).
+
+### Tests
+
+`cargo test`: **33 test geçti** (27 mevcut + 6 yeni): negatif peşinat reddi; katılırken çekme + alıma ekleme
+(sıralı, 3 üye, çıplak havuz tutarıyla öneri `InvalidPurchaseAmount`, sonda kontrat bakiyesi 0); kura modunda
+tam akış ve toz kalmaması; iptalde "katkı + harcanmamış peşinat" iadesi (alan üyeye yalnızca katkı); kurulamayan
+havuzun peşinat iadesi; yetersiz bakiyeyle katılamama.
+
+### Live Testnet
+
+- Kontrat: `CD23I5ZNVHOUBJOHODHHEW6NH7NB3FDBQ2DE2C2TST5BZM4KTJLBPK33`, `version()` = 11, WASM SHA-256
+  `0f7ae90ae1b8caf803bccddba96ced1c633115fea5c2686ac8388be70cbd3b14`, yayın işlemi
+  `7cc3648b7c6a6c163911a03eaa9406ecd075f8e9dcb9e4a63ac3af2417154dec` (tek kullanımlık, Friendbot'la fonlanmış hesap;
+  `stellerpool-deployer` kimliği kullanılmadı, kontratın yönetici yetkisi yok).
+- Havuz #1 (arayüz formundan, kura + 6 TRYT peşinat, 3 üye): tamamlandı, satıcıya 3 × 36 = 108, kontrat bakiyesi 0.
+- Havuz #3 (sıralı, peşinat 5, iptal + iade): iade hakları 10 / 15 / 5, ikinci iade reddedildi.
+- Havuz #4 (kurulamayan havuz): peşinatlar tam iade edildi. Havuz #2: kısa süre yüzünden yarım kalan deneme, iptal + iade ile temizlendi.
+- Varlık `TRYT` (anchor'ın test varlığı, SAC `CDATFFDUVSMP2OC6JKIRWJDUHFTNMWJ2ZXLUCDUTRD7FYXANOV7RXB3H`).
+
+### Frontend
+
+`services/pool.ts` peşinat desteğini kontratın zincirdeki arayüzünden (`create_pool` girdileri) algılar; destek yoksa
+`down_payment` hiç gönderilmez ve peşinat yalnızca plan hesabı olarak gösterilir. Havuz sayfası peşinatı gösterir,
+katılma düğmesi tutarı belirtir ve alım tutarı `havuz + peşinat` olarak önerilir.
+
+### Known limits
+
+- Peşinat **teminat değildir**: alıcının kendi alımına harcanır, erken alanın sonraki taksitleri bırakma riskini kapatmaz.
+- Peşinat üye başına aynıdır ve havuz kurulurken sabitlenir; üye bazlı farklı peşinat yoktur.
+- `join_pool` artık token bakiyesi ve trustline ister (peşinat > 0 ise).
+- v10 örneği ve kanıtları zincirde durur; canlı site v11'e bağlıdır, eski havuz numaraları v11'de yoktur.
+
+### Status
+
+NEEDS REVIEW

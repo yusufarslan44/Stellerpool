@@ -57,7 +57,7 @@ Variables). Tanımsızsa varsayılanlar geçerlidir.
 
 | Değişken | Varsayılan | Ne zaman |
 |---|---|---|
-| `VITE_ROTATING_POOL_CONTRACT_ID` | güncel v10 kontratı | Yeni kontrat yayınlanınca |
+| `VITE_ROTATING_POOL_CONTRACT_ID` | güncel v11 kontratı | Yeni kontrat yayınlanınca |
 | `VITE_MAX_MEMBERS` | `30` | Eski kontrata bağlanılırsa `12` |
 | `VITE_ANCHOR_HOME_DOMAIN` | SDF test anchor'ı | Kendi anchor'ımız ayağa kalkınca |
 | `VITE_POOL_ASSET_CODE` / `VITE_POOL_ASSET_ISSUER` | Testnet USDC | Havuz varlığı `TRYT` olunca |

@@ -14,7 +14,7 @@ flowchart LR
   end
   subgraph Stellar["Stellar Testnet"]
     RPC["Soroban RPC"]
-    POOL["rotating_pool<br/>Soroban kontratı (API v10)"]
+    POOL["rotating_pool<br/>Soroban kontratı (API v11)"]
     SAC["Havuz varlığı (SAC)<br/>USDC / demo varlığı"]
     HZ["Horizon"]
   end
@@ -75,7 +75,7 @@ stateDiagram-v2
   AwaitingPurchase --> [*]: abort_pool (iade)
 ~~~
 
-**Kura modu (API v10, Testnet'te canlı):** alıcı tur başında belli değildir. Tüm üyeler kendi katkısını yatırınca tur `AwaitingDraw` olur ve alım süresi (`purchase_deadline`) burada başlar. `draw_recipient`, henüz teslim almamış üyeler arasından `env.prng()` ile bir alıcı seçer; herkes çağırabilir, kazanan zaten payını ödemiştir. Tek aday kalınca seçim deterministiktir. Rastgelelik hackathon düzeyindedir (bkz. [görev listesi](../CONTRACT_HANDOFF.md)).
+**Kura modu (API v10'dan beri, Testnet'te canlı):** alıcı tur başında belli değildir. Tüm üyeler kendi katkısını yatırınca tur `AwaitingDraw` olur ve alım süresi (`purchase_deadline`) burada başlar. `draw_recipient`, henüz teslim almamış üyeler arasından `env.prng()` ile bir alıcı seçer; herkes çağırabilir, kazanan zaten payını ödemiştir. Tek aday kalınca seçim deterministiktir. Rastgelelik hackathon düzeyindedir (bkz. [görev listesi](../CONTRACT_HANDOFF.md)).
 
 ## Fon akışı ve değişmezler
 
@@ -135,3 +135,7 @@ sequenceDiagram
 | Yükseltilemez kontrat | Kurucu tek taraflı kod değiştiremesin | Her değişiklik yeni kontrat ID'si demektir |
 | Arayüz yetenekleri zincirden okur | Kontrat ve arayüz paralel gelişti | Uyumsuz sürümde işlem reddedilir |
 | Backend yok | Durum zincirde, fon yetkisi zincir dışında olmamalı | Zincir dışı bildirim ve AI raporu için ileride servis gerekir |
+
+## Peşinat (API v11)
+
+`create_pool(..., down_payment, ...)` üye başına peşinat belirler (0 = kapalı, v10 ile aynı). `join_pool` bu tutarı üyeden kontrata çeker (havuz bakiyesine eklenir). Tur ödenirken satıcıya **havuz tutarı + alıcının kendi peşinatı** gider (`propose_purchase.amount` bunu ister). İptalde iade hakkı = mevcut tur katkısı (yatırdıysa) + peşinat (henüz almadıysa). Peşinat birikime sayılmaz ve teminat değildir: erken alanın sonraki taksitleri bırakma riskini kapatmaz. Arayüz, kontratın `create_pool` girdilerini zincirden okuyarak peşinat desteğini algılar; desteklemeyen eski kontratta peşinat yalnızca plan hesabıdır.
