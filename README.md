@@ -1,16 +1,52 @@
-# Stellarpool — a transparent group savings pool (Soroban smart contract)
+<div align="center">
 
-> Save together. Verify everything.
+# Stellarpool
 
-Rise In x Stellar **Pro Hackathon 2026** project · Track: **Genesis** (to be selected at submission) · Network: **Stellar Testnet**
+**Save together. Verify everything.**
 
-## Why? (Narrative "Why")
+A transparent group savings pool on Stellar, where the rules live in a Soroban smart contract instead of in someone's pocket.
 
-In Turkey, saving in a group for a home, a car or a shared goal is common: rotating "gold days" circles and the draw-based or ordered groups of savings-finance companies (such as Eminevim and Fuzul). The shared problem is **trust**: the money sits with one person or one institution, the rules are not visible to everyone, and it is unclear what happens when someone stops paying.
+[Live demo](https://stellerpool.arslanyusuf.com) · [Contract on Stellar Expert](https://stellar.expert/explorer/testnet/contract/CB5O6WCGCSA5PKH5HXWKO3WFEDHNEKJ5ZNW6EMNSERYDK6J4VYKLG46O) · [Architecture](docs/architecture/architecture.md) · [Plan](docs/plan.md)
 
-Stellarpool moves this coordination into a **Soroban smart contract**. Contributions are locked in the contract per round, the founder has no authority to withdraw the shared money, and payment goes to a predefined demo seller only after the rules the members approved are met, every contribution of the round is in, and the recipient has recorded the purchase. If payments stall, the round stops and only that round's contributions are refunded to their owners. **Target user:** small groups of people who know each other and want to save toward a shared purchase, by rotation or by draw.
+Rise In x Stellar **Pro Hackathon 2026** · Track: **Genesis** · Network: **Stellar Testnet** (no real money)
 
-## Status of the new flow
+</div>
+
+---
+
+## The idea in 30 seconds
+
+Friends, families and colleagues in Turkey have long saved together for a home, a car or a shared goal: "gold days" circles, and the draw-based or ordered groups run by savings-finance companies such as Eminevim and Fuzul. The shared problem is **trust**. The money sits with one person or one institution, the rules are not visible to everyone, and nobody knows what happens when a member stops paying.
+
+**Stellarpool moves that coordination into a Soroban smart contract.**
+
+- **Nobody holds the pot.** Contributions are locked in the contract per round. The founder cannot withdraw the shared money, and neither can we: the contract has no admin, upgrade, pause or fee function.
+- **Money goes to the seller, not to a person.** When it is a member's turn, the amount (the pool plus their own down payment) can only go to the registered seller, and only after every contribution of the round is in and the recipient has recorded the purchase.
+- **Fair turns.** The recipient comes from a fixed order (the join order) or from an on-chain **draw** among members who have not received yet. Groups of 2–30 members are supported.
+- **Failure is bounded and visible.** If someone stops paying, the round stops after a grace period and **only that round's contributions** (plus unspent down payments) are refunded to their owners. Anyone can trigger this; no administrator is needed.
+- **Anyone can verify.** Every rule and every payment is on-chain. You do not have to trust us, you can check.
+
+**Target user:** small groups of people who know each other and want to save toward a shared purchase, by rotation or by draw.
+
+## How it works
+
+1. **Join a pool.** Enter the total price, the down payment and the installment you can afford; the number of people and the term are worked out automatically, and you are routed to an open pool with the same plan (or a new one is opened).
+2. **The group fills.** Members join with their wallets and deposit their down payments. When the group is full, the join order becomes the delivery order (or a draw picks the recipient each round).
+3. **Rules lock in.** Everyone approves the same installment and schedule terms. Nobody, including the founder, can change them afterwards.
+4. **Everyone pays.** Every round each member deposits their own contribution into the contract. A member who is short of balance can load the pool asset through our SEP-1/10/24 anchor inside the same step.
+5. **The seller is paid.** The recipient records the seller and the purchase-document digest; anyone can then trigger the payment, and the amount goes straight to the seller.
+
+## Proof on-chain
+
+Everything below can be checked on Stellar Expert. This is the live v12 contract: a member joining a pool (`join_pool`), a purchase being recorded (`propose_purchase`) and the round being paid to the registered seller (`execute_round`). After the payout the contract's own balances are back to **0** for both assets, because the money went to the seller and none was kept.
+
+![Stellar Expert view of the live v12 pool contract on Testnet: join_pool, propose_purchase and execute_round calls, with zero contract balances](docs/images/stellar-expert-v12-contract.webp)
+
+*The v12 contract on Stellar Expert (Testnet): WASM hash `aa6e0070…7c76692c` (the same hash listed under [Contract and deployment proof](#contract-and-deployment-proof-testnet)), the `join_pool`, `propose_purchase` and `execute_round` calls, and the contract's STLP and TRYT balances at 0.*
+
+More proofs (cancel + refund, draw with a down payment, a pool that could not be set up, and the older v10/v11 contracts) are listed in [Contract and deployment proof](#contract-and-deployment-proof-testnet) below.
+
+## Status
 
 **API v12** was developed in this repository, deployed to Testnet, and passes 33 contract tests. The verifier role and purchase approval were removed. In fixed order, the delivery order is created automatically from the join order once the pool is full; members still approve the starting terms. The entry point offers only Home, Car and Other: the term and the number of people are computed from the price, down payment and monthly installment. The quick demo keeps its own minute-scale schedule. The monthly schedule is set automatically, but every payment still needs the member's wallet signature.
 
